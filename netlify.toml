@@ -1,0 +1,17 @@
+[build]
+  command   = "npm run build"
+  publish   = ".next"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Set secrets in the Netlify UI (Site configuration → Environment variables).
+# NEVER commit real keys here.
+# [context.production.environment]
+#   NEXT_PUBLIC_SUPABASE_URL      = "https://your-project.supabase.co"
+#   NEXT_PUBLIC_SUPABASE_ANON_KEY = "your-anon-key"
+#   NEXT_PUBLIC_SITE_URL          = "https://your-site.netlify.app"
