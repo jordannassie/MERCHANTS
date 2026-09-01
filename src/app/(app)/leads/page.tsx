@@ -1,0 +1,123 @@
+import { Metadata } from 'next'
+import { createClient } from '@/lib/supabase/server'
+import type { LeadsFilters, Lead } from '@/lib/types'
+import { LEADS_PER_PAGE } from '@/lib/types'
+import { DFW_COUNTIES } from '@/lib/constants'
+import { LeadsFiltersBar } from '@/components/leads/LeadsFiltersBar'
+import { LeadsTable } from '@/components/leads/LeadsTable'
+import { Pagination } from '@/components/ui/Pagination'
+
+export const metadata: Metadata = { title: 'Leads — Merchant Radar' }
+export const dynamic = 'force-dynamic'
+
+interface PageProps { searchParams: Promise<Record<string, string>> }
+
+export default async function LeadsPage({ searchParams }: PageProps) {
+  const sp = await searchParams
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const page = Math.max(1, Number(sp.page) || 1)
+  const from = (page - 1) * LEADS_PER_PAGE
+  const to = from + LEADS_PER_PAGE - 1
+
+  const filters: LeadsFilters = {
+    search: sp.search || '',
+    status: (sp.status as LeadsFilters['status']) || '',
+    priority: (sp.priority as LeadsFilters['priority']) || '',
+    county: sp.county || '',
+    city: sp.city || '',
+    permitDateFrom: sp.permitDateFrom || '',
+    permitDateTo: sp.permitDateTo || '',
+    firstSalesDateFrom: sp.firstSalesDateFrom || '',
+    firstSalesDateTo: sp.firstSalesDateTo || '',
+    openingSoon: sp.openingSoon === 'true',
+    neverContacted: sp.neverContacted === 'true',
+    followUpDue: sp.followUpDue === 'true',
+    starred: sp.starred === 'true',
+    sort: (sp.sort as LeadsFilters['sort']) || 'score',
+    order: (sp.order as 'asc' | 'desc') || 'desc',
+    page,
+  }
+
+  let query = supabase
+    .from('leads')
+    .select('*', { count: 'exact' })
+    .eq('owner_id', user.id)
+
+  if (filters.search) {
+    const s = `%${filters.search}%`
+    query = query.or(`display_name.ilike.${s},outlet_name.ilike.${s},taxpayer_name.ilike.${s},primary_phone.ilike.${s},outlet_city.ilike.${s},outlet_zip.ilike.${s},naics_code.ilike.${s}`)
+  }
+  if (filters.status) query = query.eq('status', filters.status)
+  if (filters.priority) query = query.eq('priority', filters.priority)
+  if (filters.county) query = query.eq('outlet_county_code', filters.county)
+  if (filters.city) query = query.ilike('outlet_city', `%${filters.city}%`)
+  if (filters.permitDateFrom) query = query.gte('permit_issue_date', filters.permitDateFrom)
+  if (filters.permitDateTo) query = query.lte('permit_issue_date', filters.permitDateTo)
+  if (filters.firstSalesDateFrom) query = query.gte('first_sales_date', filters.firstSalesDateFrom)
+  if (filters.firstSalesDateTo) query = query.lte('first_sales_date', filters.firstSalesDateTo)
+  if (filters.openingSoon) query = query.gte('first_sales_date', new Date().toISOString().slice(0, 10))
+  if (filters.neverContacted) query = query.is('last_contacted_at', null)
+  if (filters.followUpDue) query = query.lte('next_follow_up_at', new Date().toISOString())
+  if (filters.starred) query = query.eq('starred', true)
+
+  const sortCol = filters.sort === 'score' ? 'score'
+    : filters.sort === 'permit_issue_date' ? 'permit_issue_date'
+    : filters.sort === 'first_sales_date' ? 'first_sales_date'
+    : filters.sort === 'next_follow_up_at' ? 'next_follow_up_at'
+    : 'created_at'
+  query = query.order(sortCol, { ascending: filters.order === 'asc', nullsFirst: false })
+
+  const { data: leads, count } = await query.range(from, to)
+  const totalPages = Math.ceil((count ?? 0) / LEADS_PER_PAGE)
+
+  // Counties for filter dropdown
+  const { data: countyRows } = await supabase
+    .from('leads')
+    .select('outlet_county_code')
+    .eq('owner_id', user.id)
+    .not('outlet_county_code', 'is', null)
+
+  const counties = [...new Set((countyRows ?? []).map(r => r.outlet_county_code).filter(Boolean))]
+    .map(code => ({ code: code!, name: DFW_COUNTIES[code!] ?? code! }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+
+  return (
+    <div className="px-4 md:px-8 py-6 max-w-7xl mx-auto">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <div>
+          <h1 className="text-xl font-semibold text-gray-900">Leads</h1>
+          {count != null && (
+            <p className="text-sm text-gray-500 mt-0.5">{count.toLocaleString()} result{count !== 1 ? 's' : ''}</p>
+          )}
+        </div>
+        <a
+          href={`/api/leads/export?${new URLSearchParams(sp).toString()}`}
+          className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors"
+        >
+          Export CSV
+        </a>
+      </div>
+
+      <LeadsFiltersBar filters={filters} counties={counties} />
+
+      {leads && leads.length > 0 ? (
+        <>
+          <LeadsTable leads={leads as Lead[]} />
+          {totalPages > 1 && (
+            <div className="mt-4">
+              <Pagination currentPage={page} totalPages={totalPages} filters={sp} />
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
+          <p className="text-gray-500 font-medium">No leads match your filters</p>
+          <p className="text-sm text-gray-400 mt-1">Try adjusting your search or import Texas permits from the dashboard.</p>
+        </div>
+      )}
+    </div>
+  )
+}
