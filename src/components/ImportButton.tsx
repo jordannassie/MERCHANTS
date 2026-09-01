@@ -22,17 +22,13 @@ export function ImportButton({ territory, lastRun }: Props) {
   const [error, setError] = useState<string | null>(null)
 
   async function runImport() {
-    if (!territory) return
     setLoading(true)
     setError(null)
     setResult(null)
 
     try {
-      const res = await fetch('/api/import/manual', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ territoryId: territory.id }),
-      })
+      // No auth token or territory ID needed — server resolves workspace identity
+      const res = await fetch('/api/import/manual', { method: 'POST' })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Import failed')
       setResult(json.run)
@@ -43,6 +39,8 @@ export function ImportButton({ territory, lastRun }: Props) {
       setLoading(false)
     }
   }
+
+  const displayTerritory = territory
 
   return (
     <>
@@ -72,33 +70,29 @@ export function ImportButton({ territory, lastRun }: Props) {
           </div>
         ) : (
           <div className="space-y-4">
-            {territory ? (
-              <>
-                <div className="text-sm text-gray-700 space-y-2">
-                  <p><span className="text-gray-500">Territory:</span> <strong>{territory.name}</strong></p>
-                  <p><span className="text-gray-500">Date range:</span> <strong>Last {territory.days_to_import} days</strong></p>
-                  <p><span className="text-gray-500">Counties:</span>{' '}
-                    <span className="text-gray-900">
-                      {territory.county_codes.map(c => DFW_COUNTIES[c] ?? c).join(', ')}
-                    </span>
-                  </p>
-                  {lastRun && (
-                    <p className="text-gray-400 text-xs">Last run: {fmtRelative(lastRun.started_at)}</p>
-                  )}
-                </div>
-                {error && (
-                  <p className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</p>
-                )}
-                <div className="flex gap-2">
-                  <Button variant="secondary" className="flex-1" onClick={() => setOpen(false)} disabled={loading}>Cancel</Button>
-                  <Button variant="primary" className="flex-1" onClick={runImport} loading={loading}>
-                    {loading ? 'Importing…' : 'Run Import'}
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-gray-500">No active territory found. Configure one in Settings.</p>
+            <div className="text-sm text-gray-700 space-y-2">
+              <p><span className="text-gray-500">Territory:</span> <strong>{displayTerritory?.name ?? 'Dallas–Fort Worth'}</strong></p>
+              <p><span className="text-gray-500">Date range:</span> <strong>Last {displayTerritory?.days_to_import ?? 14} days</strong></p>
+              {displayTerritory?.county_codes && (
+                <p><span className="text-gray-500">Counties:</span>{' '}
+                  <span className="text-gray-900">
+                    {displayTerritory.county_codes.map(c => DFW_COUNTIES[c] ?? c).join(', ')}
+                  </span>
+                </p>
+              )}
+              {lastRun && (
+                <p className="text-gray-400 text-xs">Last run: {fmtRelative(lastRun.started_at)}</p>
+              )}
+            </div>
+            {error && (
+              <p className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</p>
             )}
+            <div className="flex gap-2">
+              <Button variant="secondary" className="flex-1" onClick={() => setOpen(false)} disabled={loading}>Cancel</Button>
+              <Button variant="primary" className="flex-1" onClick={runImport} loading={loading}>
+                {loading ? 'Importing…' : 'Run Import'}
+              </Button>
+            </div>
           </div>
         )}
       </Dialog>

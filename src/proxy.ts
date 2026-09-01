@@ -1,6 +1,11 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+/**
+ * Session-refresh middleware. No authentication gating — Merchant Radar is
+ * a private single-user tool secured at the server/API layer, not the URL layer.
+ * /login redirects directly to /dashboard.
+ */
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request })
 
@@ -8,6 +13,14 @@ export async function proxy(request: NextRequest) {
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!supabaseUrl || !supabaseKey) return response
 
+  // /login → /dashboard
+  if (request.nextUrl.pathname === '/login') {
+    const url = request.nextUrl.clone()
+    url.pathname = '/dashboard'
+    return NextResponse.redirect(url)
+  }
+
+  // Refresh Supabase session cookie if present (keeps any existing session alive)
   const supabase = createServerClient(supabaseUrl, supabaseKey, {
     cookies: {
       getAll: () => request.cookies.getAll(),

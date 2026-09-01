@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
+import { getWorkspaceOwnerId } from '@/lib/workspace'
 import { z } from 'zod'
 
 const schema = z.object({
@@ -16,9 +17,8 @@ const schema = z.object({
 })
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const db = createServiceClient()
+  const ownerId = await getWorkspaceOwnerId()
 
   const body = await request.json()
   const parsed = schema.safeParse(body)
@@ -26,18 +26,16 @@ export async function POST(request: NextRequest) {
 
   const { leadId, ...rest } = parsed.data
 
-  // Verify lead ownership
-  const { data: lead } = await supabase.from('leads').select('id').eq('id', leadId).eq('owner_id', user.id).single()
+  const { data: lead } = await db.from('leads').select('id').eq('id', leadId).eq('owner_id', ownerId).single()
   if (!lead) return NextResponse.json({ error: 'Lead not found' }, { status: 404 })
 
-  // If setting primary, clear others
   if (rest.is_primary) {
-    await supabase.from('contacts').update({ is_primary: false }).eq('lead_id', leadId).eq('owner_id', user.id)
+    await db.from('contacts').update({ is_primary: false }).eq('lead_id', leadId).eq('owner_id', ownerId)
   }
 
-  const { data: contact, error } = await supabase
+  const { data: contact, error } = await db
     .from('contacts')
-    .insert({ ...rest, lead_id: leadId, owner_id: user.id, source_type: 'manual' })
+    .insert({ ...rest, lead_id: leadId, owner_id: ownerId, source_type: 'manual' })
     .select()
     .single()
 

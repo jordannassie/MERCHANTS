@@ -1,5 +1,6 @@
 import { Metadata } from 'next'
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
+import { getWorkspaceOwnerId } from '@/lib/workspace'
 import type { LeadsFilters, Lead } from '@/lib/types'
 import { LEADS_PER_PAGE } from '@/lib/types'
 import { DFW_COUNTIES } from '@/lib/constants'
@@ -14,9 +15,8 @@ interface PageProps { searchParams: Promise<Record<string, string>> }
 
 export default async function LeadsPage({ searchParams }: PageProps) {
   const sp = await searchParams
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
+  const supabase = createServiceClient()
+  const ownerId = await getWorkspaceOwnerId()
 
   const page = Math.max(1, Number(sp.page) || 1)
   const from = (page - 1) * LEADS_PER_PAGE
@@ -44,7 +44,7 @@ export default async function LeadsPage({ searchParams }: PageProps) {
   let query = supabase
     .from('leads')
     .select('*', { count: 'exact' })
-    .eq('owner_id', user.id)
+    .eq('owner_id', ownerId)
 
   if (filters.search) {
     const s = `%${filters.search}%`
@@ -77,7 +77,7 @@ export default async function LeadsPage({ searchParams }: PageProps) {
   const { data: countyRows } = await supabase
     .from('leads')
     .select('outlet_county_code')
-    .eq('owner_id', user.id)
+    .eq('owner_id', ownerId)
     .not('outlet_county_code', 'is', null)
 
   const counties = [...new Set((countyRows ?? []).map(r => r.outlet_county_code).filter(Boolean))]

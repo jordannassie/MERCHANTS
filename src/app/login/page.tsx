@@ -1,5 +1,2 @@
 import { redirect } from 'next/navigation'
-
-export default function LoginPage() {
-  redirect('/dashboard')
-}
+export default function LoginPage() { redirect('/dashboard') }

@@ -1,48 +1,214 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { z } from 'zod'
+import { createServiceClient } from '@/lib/supabase/service'
+import { ensureWorkspaceTerritory, getWorkspaceOwnerId } from '@/lib/workspace'
+import { scoreLead } from '@/lib/scoring'
+import { normalize, parseDate, validateCountyCodes, buildSoQLWhere, buildCutoffIso, DFW_COUNTY_ALLOWLIST } from '@/lib/importer-utils'
 
-const schema = z.object({ territoryId: z.string().uuid() })
+const TEXAS_API = 'https://data.texas.gov/resource/jrea-zgmq.json'
+const PAGE_SIZE = 1000
+const MAX_RECORDS = 10_000
 
-export async function POST(request: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-  if (!user || authError) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+const TEXAS_FIELDS = [
+  'taxpayer_number','taxpayer_name','taxpayer_address','taxpayer_city','taxpayer_state',
+  'taxpayer_zip_code','taxpayer_county_code','taxpayer_organization_type',
+  'outlet_number','outlet_name','outlet_address','outlet_city','outlet_state',
+  'outlet_zip_code','outlet_county_code','outlet_naics_code',
+  'outlet_inside_outside_city_limits_indicator','outlet_permit_issue_date','outlet_first_sales_date',
+].join(',')
 
-  const body = await request.json()
-  const parsed = schema.safeParse(body)
-  if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
+// Simple in-memory rate limit: one import at a time
+let importInProgress = false
 
-  // Verify territory ownership
-  const { data: territory } = await supabase
-    .from('territories')
-    .select('*')
-    .eq('id', parsed.data.territoryId)
-    .eq('owner_id', user.id)
+export async function POST(_req: NextRequest) {
+  if (importInProgress) {
+    return NextResponse.json({ error: 'An import is already running. Please wait.' }, { status: 429 })
+  }
+
+  const db = createServiceClient()
+  let ownerId: string
+  let territory: Awaited<ReturnType<typeof ensureWorkspaceTerritory>>
+
+  try {
+    ownerId = await getWorkspaceOwnerId()
+    territory = await ensureWorkspaceTerritory()
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error('[import/manual] workspace error:', msg)
+    return NextResponse.json({ error: `Workspace not ready: ${msg}` }, { status: 500 })
+  }
+
+  const validCodes = validateCountyCodes(territory.county_codes, DFW_COUNTY_ALLOWLIST)
+  if (!validCodes.length) {
+    return NextResponse.json({ error: 'No valid county codes in territory.' }, { status: 400 })
+  }
+
+  const cutoffIso = buildCutoffIso(territory.days_to_import)
+  const whereClause = buildSoQLWhere(cutoffIso, validCodes)
+
+  // Create import run
+  const { data: run, error: runErr } = await db
+    .from('import_runs')
+    .insert({
+      owner_id: ownerId,
+      territory_id: territory.id,
+      source: 'texas_sales_tax_permits',
+      status: 'running',
+      requested_start_date: cutoffIso.slice(0, 10),
+      county_codes: validCodes,
+    })
+    .select()
     .single()
 
-  if (!territory) return NextResponse.json({ error: 'Territory not found' }, { status: 404 })
+  if (runErr || !run) {
+    return NextResponse.json({ error: 'Failed to create import run.' }, { status: 500 })
+  }
 
-  // Get access token for the edge function call
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return NextResponse.json({ error: 'No session' }, { status: 401 })
+  importInProgress = true
+  let fetched = 0, inserted = 0, updated = 0, duplicates = 0, skipped = 0
+  let errorMessage: string | null = null
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  if (!supabaseUrl) return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 })
+  try {
+    let offset = 0
+    const abortAt = Date.now() + 90_000 // 90s server-side timeout
 
-  const edgeUrl = `${supabaseUrl}/functions/v1/import-texas-leads`
+    while (fetched < MAX_RECORDS) {
+      if (Date.now() > abortAt) { errorMessage = `Timed out after ${fetched} records`; break }
 
-  const res = await fetch(edgeUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${session.access_token}`,
-    },
-    body: JSON.stringify({ territoryId: territory.id }),
-    signal: AbortSignal.timeout(120_000),
+      const params = new URLSearchParams({
+        '$select': TEXAS_FIELDS,
+        '$where': whereClause,
+        '$order': 'outlet_permit_issue_date ASC,taxpayer_number,outlet_number',
+        '$limit': String(PAGE_SIZE),
+        '$offset': String(offset),
+      })
+
+      const resp = await fetch(`${TEXAS_API}?${params}`, { signal: AbortSignal.timeout(30_000) })
+      if (!resp.ok) { errorMessage = `Texas API HTTP ${resp.status}`; break }
+
+      const page: Record<string, string>[] = await resp.json()
+      fetched += page.length
+
+      for (const raw of page) {
+        const taxpayerNum = normalize(raw.taxpayer_number)
+        const outletNum = normalize(raw.outlet_number)
+        const permitDate = parseDate(raw.outlet_permit_issue_date)
+        const outletCounty = normalize(raw.outlet_county_code)
+
+        if (!taxpayerNum || !outletNum || !permitDate || !outletCounty || !DFW_COUNTY_ALLOWLIST.has(outletCounty)) {
+          skipped++; continue
+        }
+
+        const firstSalesDate = parseDate(raw.outlet_first_sales_date)
+        const outletName = normalize(raw.outlet_name)
+        const taxpayerName = normalize(raw.taxpayer_name)
+        const displayName = outletName ?? taxpayerName ?? null
+
+        const scored = scoreLead({
+          naicsCode: normalize(raw.outlet_naics_code),
+          permitIssueDate: permitDate,
+          firstSalesDate,
+          businessName: displayName,
+          outletAddress: normalize(raw.outlet_address),
+          taxpayerOrganizationType: normalize(raw.taxpayer_organization_type),
+        })
+
+        const sourceFields = {
+          taxpayer_number: taxpayerNum,
+          outlet_number: outletNum,
+          taxpayer_name: taxpayerName,
+          taxpayer_address: normalize(raw.taxpayer_address),
+          taxpayer_city: normalize(raw.taxpayer_city),
+          taxpayer_state: normalize(raw.taxpayer_state),
+          taxpayer_zip: normalize(raw.taxpayer_zip_code),
+          taxpayer_county_code: normalize(raw.taxpayer_county_code),
+          taxpayer_organization_type: normalize(raw.taxpayer_organization_type),
+          outlet_name: outletName,
+          outlet_address: normalize(raw.outlet_address),
+          outlet_city: normalize(raw.outlet_city),
+          outlet_state: normalize(raw.outlet_state),
+          outlet_zip: normalize(raw.outlet_zip_code),
+          outlet_county_code: outletCounty,
+          naics_code: normalize(raw.outlet_naics_code),
+          inside_outside_city: normalize(raw.outlet_inside_outside_city_limits_indicator),
+          permit_issue_date: permitDate,
+          first_sales_date: firstSalesDate,
+          raw_record: raw,
+          last_seen_at: new Date().toISOString(),
+        }
+
+        const { data: existing } = await db
+          .from('leads')
+          .select('id,status,score,priority')
+          .eq('owner_id', ownerId)
+          .eq('source', 'texas_sales_tax_permits')
+          .eq('taxpayer_number', taxpayerNum)
+          .eq('outlet_number', outletNum)
+          .maybeSingle()
+
+        if (existing) {
+          const advanced = new Set(['connected','follow_up','appointment','won'])
+          const { error: upErr } = await db.from('leads').update({
+            ...sourceFields,
+            score: advanced.has(existing.status) ? existing.score : scored.score,
+            priority: advanced.has(existing.status) ? existing.priority : scored.priority,
+            score_reasons: scored.reasons,
+          }).eq('id', existing.id)
+          if (upErr) { skipped++; continue }
+          updated++
+        } else {
+          const { error: insErr } = await db.from('leads').insert({
+            owner_id: ownerId,
+            territory_id: territory.id,
+            source: 'texas_sales_tax_permits',
+            ...sourceFields,
+            display_name: displayName,
+            score: scored.score,
+            priority: scored.priority,
+            score_reasons: scored.reasons,
+            status: 'new',
+            starred: false,
+          })
+          if (insErr) {
+            if (insErr.code === '23505') { duplicates++; continue }
+            skipped++
+          } else { inserted++ }
+        }
+      }
+
+      if (page.length < PAGE_SIZE) break
+      offset += PAGE_SIZE
+    }
+  } catch (e) {
+    errorMessage = e instanceof Error ? e.message : String(e)
+  } finally {
+    importInProgress = false
+  }
+
+  const finalStatus = errorMessage
+    ? (inserted + updated > 0 ? 'partial' : 'failed')
+    : 'completed'
+
+  await db.from('import_runs').update({
+    status: finalStatus,
+    fetched_count: fetched,
+    inserted_count: inserted,
+    updated_count: updated,
+    duplicate_count: duplicates,
+    skipped_count: skipped,
+    error_message: errorMessage,
+    completed_at: new Date().toISOString(),
+  }).eq('id', run.id)
+
+  return NextResponse.json({
+    run: {
+      id: run.id,
+      status: finalStatus,
+      fetched_count: fetched,
+      inserted_count: inserted,
+      updated_count: updated,
+      duplicate_count: duplicates,
+      skipped_count: skipped,
+      error_message: errorMessage,
+    }
   })
-
-  const json = await res.json()
-  if (!res.ok) return NextResponse.json({ error: json.error ?? 'Import failed' }, { status: res.status })
-  return NextResponse.json(json)
 }

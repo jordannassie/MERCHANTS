@@ -1,12 +1,12 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
+import { getWorkspaceOwnerId } from '@/lib/workspace'
 import type { Lead } from '@/lib/types'
 
 export async function updateLeadCRM(leadId: string, data: Partial<Lead>): Promise<Partial<Lead> | null> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
+  const db = createServiceClient()
+  const ownerId = await getWorkspaceOwnerId()
 
   const safe = {
     display_name: data.display_name,
@@ -20,11 +20,11 @@ export async function updateLeadCRM(leadId: string, data: Partial<Lead>): Promis
     google_maps_url: data.google_maps_url,
   }
 
-  const { data: updated } = await supabase
+  const { data: updated } = await db
     .from('leads')
     .update(safe)
     .eq('id', leadId)
-    .eq('owner_id', user.id)
+    .eq('owner_id', ownerId)
     .select()
     .single()
 
@@ -32,25 +32,13 @@ export async function updateLeadCRM(leadId: string, data: Partial<Lead>): Promis
 }
 
 export async function updateLeadStatus(leadId: string, status: Lead['status']): Promise<void> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return
-
-  await supabase
-    .from('leads')
-    .update({ status })
-    .eq('id', leadId)
-    .eq('owner_id', user.id)
+  const db = createServiceClient()
+  const ownerId = await getWorkspaceOwnerId()
+  await db.from('leads').update({ status }).eq('id', leadId).eq('owner_id', ownerId)
 }
 
 export async function starLead(leadId: string, starred: boolean): Promise<void> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return
-
-  await supabase
-    .from('leads')
-    .update({ starred })
-    .eq('id', leadId)
-    .eq('owner_id', user.id)
+  const db = createServiceClient()
+  const ownerId = await getWorkspaceOwnerId()
+  await db.from('leads').update({ starred }).eq('id', leadId).eq('owner_id', ownerId)
 }

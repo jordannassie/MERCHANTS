@@ -1,7 +1,16 @@
 import { AppNav } from '@/components/AppNav'
+import { ensureWorkspaceProfile, ensureWorkspaceTerritory } from '@/lib/workspace'
 import { createServiceClient } from '@/lib/supabase/service'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  // Bootstrap profile + territory idempotently on every load
+  try {
+    await ensureWorkspaceProfile()
+    await ensureWorkspaceTerritory()
+  } catch {
+    // If Supabase isn't configured yet, continue to show the UI
+  }
+
   const supabase = createServiceClient()
   const { data: profile } = await supabase
     .from('profiles')
@@ -9,7 +18,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .limit(1)
     .maybeSingle()
 
-  const userName = profile?.full_name?.split(' ')[0] ?? 'Jordan'
+  const userName = profile?.full_name ?? 'Jordan'
 
   return (
     <div className="min-h-screen bg-gray-50">

@@ -1,6 +1,7 @@
 import { Metadata } from 'next'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
+import { getWorkspaceOwnerId } from '@/lib/workspace'
 import type { Lead } from '@/lib/types'
 import { fmtDateTime, fmtPhone, STATUS_COLORS, PRIORITY_COLORS } from '@/lib/utils'
 import { Phone, ChevronRight, AlertCircle, Clock, Calendar, CheckCircle2 } from 'lucide-react'
@@ -11,9 +12,10 @@ export const dynamic = 'force-dynamic'
 type Section = 'overdue' | 'today' | 'tomorrow' | 'next7' | 'later'
 
 export default async function FollowUpsPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
+  const supabase = createServiceClient()
+  const ownerId = await getWorkspaceOwnerId()
+  
+  
 
   const now = new Date()
   const todayStart = new Date(now); todayStart.setHours(0,0,0,0)
@@ -25,7 +27,7 @@ export default async function FollowUpsPage() {
   const { data: leads } = await supabase
     .from('leads')
     .select('id,display_name,outlet_name,outlet_city,primary_phone,status,priority,next_follow_up_at,last_contacted_at')
-    .eq('owner_id', user.id)
+    .eq('owner_id', ownerId)
     .not('next_follow_up_at', 'is', null)
     .not('status', 'in', '(won,lost,do_not_contact)')
     .order('next_follow_up_at')

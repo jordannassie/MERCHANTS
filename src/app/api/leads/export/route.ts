@@ -1,18 +1,17 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
+import { getWorkspaceOwnerId } from '@/lib/workspace'
 import { toCSV } from '@/lib/utils'
 
 export async function GET(request: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
+  const db = createServiceClient()
+  const ownerId = await getWorkspaceOwnerId()
   const sp = request.nextUrl.searchParams
 
-  let query = supabase
+  let query = db
     .from('leads')
     .select('display_name,outlet_city,outlet_county_code,outlet_address,outlet_zip,naics_code,primary_phone,primary_email,website,owner_name,status,priority,score,permit_issue_date,first_sales_date,last_contacted_at,next_follow_up_at,taxpayer_number,outlet_number')
-    .eq('owner_id', user.id)
+    .eq('owner_id', ownerId)
 
   const search = sp.get('search')
   if (search) {
@@ -24,7 +23,7 @@ export async function GET(request: NextRequest) {
   const county = sp.get('county'); if (county) query = query.eq('outlet_county_code', county)
   const permitFrom = sp.get('permitDateFrom'); if (permitFrom) query = query.gte('permit_issue_date', permitFrom)
   const permitTo = sp.get('permitDateTo'); if (permitTo) query = query.lte('permit_issue_date', permitTo)
-  if (sp.get('openingSoon') === 'true') query = query.gte('first_sales_date', new Date().toISOString().slice(0,10))
+  if (sp.get('openingSoon') === 'true') query = query.gte('first_sales_date', new Date().toISOString().slice(0, 10))
   if (sp.get('starred') === 'true') query = query.eq('starred', true)
 
   query = query.order('score', { ascending: false }).limit(5000)
@@ -36,7 +35,7 @@ export async function GET(request: NextRequest) {
   return new NextResponse(csv, {
     headers: {
       'Content-Type': 'text/csv',
-      'Content-Disposition': `attachment; filename="merchant-radar-leads-${new Date().toISOString().slice(0,10)}.csv"`,
+      'Content-Disposition': `attachment; filename="merchant-radar-leads-${new Date().toISOString().slice(0, 10)}.csv"`,
     },
   })
 }
