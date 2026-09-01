@@ -1,9 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-const PROTECTED_PREFIXES = ['/dashboard', '/leads', '/pipeline', '/follow-ups', '/settings']
-const AUTH_PATHS = ['/login']
-
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request })
 
@@ -24,27 +21,7 @@ export async function proxy(request: NextRequest) {
     },
   })
 
-  const { data: { user } } = await supabase.auth.getUser()
-  const { pathname } = request.nextUrl
-
-  const isProtected = PROTECTED_PREFIXES.some(p => pathname.startsWith(p))
-  const isAuthPath = AUTH_PATHS.includes(pathname)
-
-  if (!user && isProtected) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/login'
-    url.searchParams.set('next', pathname)
-    return NextResponse.redirect(url)
-  }
-
-  if (user && isAuthPath) {
-    const next = request.nextUrl.searchParams.get('next') ?? '/dashboard'
-    const url = request.nextUrl.clone()
-    url.pathname = next.startsWith('/') ? next : '/dashboard'
-    url.search = ''
-    return NextResponse.redirect(url)
-  }
-
+  await supabase.auth.getUser()
   return response
 }
 

@@ -1,194 +1,272 @@
 import { Metadata } from 'next'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
-import { fmtDate, fmtRelative, STATUS_COLORS, PRIORITY_COLORS } from '@/lib/utils'
-import { Badge } from '@/components/ui/Badge'
+import { createServiceClient } from '@/lib/supabase/service'
+import { fmtDate, fmtPhone } from '@/lib/utils'
 import { ImportButton } from '@/components/ImportButton'
-import { Flame, Calendar, Trophy, Star, Clock, RefreshCw, ChevronRight, AlertCircle } from 'lucide-react'
+import { Users, Flame, CalendarClock, Calendar, Phone, ArrowDown, Pencil, ChevronsRight } from 'lucide-react'
 
 export const metadata: Metadata = { title: 'Dashboard — Merchant Radar' }
-
 export const dynamic = 'force-dynamic'
 
+function greeting() {
+  const h = new Date().getHours()
+  if (h < 12) return 'Good morning'
+  if (h < 17) return 'Good afternoon'
+  return 'Good evening'
+}
+
+function ScoreBadge({ score, priority }: { score: number; priority: string }) {
+  const cfg = priority === 'hot'
+    ? 'bg-red-500 text-white'
+    : priority === 'good'
+    ? 'bg-orange-400 text-white'
+    : 'bg-gray-300 text-gray-700'
+
+  const label = priority === 'hot' ? 'HOT' : priority === 'good' ? 'GOOD' : priority === 'low' ? 'OKAY' : 'SKIP'
+
+  return (
+    <div className="flex flex-col items-center gap-0.5 w-12">
+      <span className={`text-sm font-bold w-9 h-9 rounded-full flex items-center justify-center ${cfg}`}>{score}</span>
+      <span className={`text-[10px] font-semibold tracking-wide ${priority === 'hot' ? 'text-red-500' : priority === 'good' ? 'text-orange-400' : 'text-gray-400'}`}>{label}</span>
+    </div>
+  )
+}
+
 export default async function DashboardPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
+  const db = createServiceClient()
+
+  const now = new Date()
+  const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0)
+  const todayEnd = new Date(now); todayEnd.setHours(23, 59, 59, 999)
 
   const [
     { count: totalLeads },
     { count: hotLeads },
     { count: followUpsDue },
     { count: appointments },
-    { count: wonAccounts },
-    { data: topHot },
+    { data: topLeads },
     { data: todayFollowUps },
-    { data: lastImport },
+    { data: lastImportArr },
     { data: territory },
-    { data: openingSoon },
+    { data: profile },
   ] = await Promise.all([
-    supabase.from('leads').select('*', { count: 'exact', head: true }).eq('owner_id', user.id),
-    supabase.from('leads').select('*', { count: 'exact', head: true }).eq('owner_id', user.id).eq('priority', 'hot').not('status', 'in', '(won,lost,do_not_contact)'),
-    supabase.from('leads').select('*', { count: 'exact', head: true }).eq('owner_id', user.id).lte('next_follow_up_at', new Date().toISOString()).not('status', 'in', '(won,lost,do_not_contact)'),
-    supabase.from('leads').select('*', { count: 'exact', head: true }).eq('owner_id', user.id).eq('status', 'appointment'),
-    supabase.from('leads').select('*', { count: 'exact', head: true }).eq('owner_id', user.id).eq('status', 'won'),
-    supabase.from('leads').select('id,display_name,outlet_city,priority,status,score,primary_phone,next_follow_up_at').eq('owner_id', user.id).eq('priority', 'hot').not('status', 'in', '(won,lost,do_not_contact)').order('score', { ascending: false }).limit(5),
-    supabase.from('leads').select('id,display_name,outlet_city,primary_phone,next_follow_up_at,status').eq('owner_id', user.id).lte('next_follow_up_at', new Date(new Date().setHours(23,59,59,999)).toISOString()).gte('next_follow_up_at', new Date(new Date().setHours(0,0,0,0)).toISOString()).order('next_follow_up_at').limit(10),
-    supabase.from('import_runs').select('*').eq('owner_id', user.id).order('started_at', { ascending: false }).limit(1),
-    supabase.from('territories').select('*').eq('owner_id', user.id).eq('is_active', true).limit(1),
-    supabase.from('leads').select('id,display_name,outlet_city,first_sales_date,score').eq('owner_id', user.id).gte('first_sales_date', new Date().toISOString().slice(0,10)).order('first_sales_date').limit(5),
+    db.from('leads').select('*', { count: 'exact', head: true }),
+    db.from('leads').select('*', { count: 'exact', head: true }).eq('priority', 'hot').not('status', 'in', '(won,lost,do_not_contact)'),
+    db.from('leads').select('*', { count: 'exact', head: true }).lte('next_follow_up_at', todayEnd.toISOString()).not('status', 'in', '(won,lost,do_not_contact)'),
+    db.from('leads').select('*', { count: 'exact', head: true }).eq('status', 'appointment'),
+    db.from('leads').select('id,display_name,outlet_city,outlet_state,priority,status,score,primary_phone,permit_issue_date,first_sales_date,naics_code').not('status', 'in', '(won,lost,do_not_contact)').order('score', { ascending: false }).limit(5),
+    db.from('leads').select('id,display_name,outlet_city,outlet_state,primary_phone,next_follow_up_at,status,naics_code').lte('next_follow_up_at', todayEnd.toISOString()).gte('next_follow_up_at', todayStart.toISOString()).order('next_follow_up_at').limit(6),
+    db.from('import_runs').select('*').order('started_at', { ascending: false }).limit(1),
+    db.from('territories').select('*').eq('is_active', true).limit(1),
+    db.from('profiles').select('full_name').limit(1).maybeSingle(),
   ])
 
-  const stats = [
-    { label: 'Hot Leads', value: hotLeads ?? 0, icon: Flame, href: '/leads?priority=hot', color: 'text-red-500' },
-    { label: 'Follow-ups Due', value: followUpsDue ?? 0, icon: Clock, href: '/follow-ups', color: 'text-orange-500' },
-    { label: 'Appointments', value: appointments ?? 0, icon: Calendar, href: '/pipeline', color: 'text-purple-500' },
-    { label: 'Won Accounts', value: wonAccounts ?? 0, icon: Trophy, href: '/leads?status=won', color: 'text-green-500' },
-  ]
+  const firstName = profile?.full_name?.split(' ')[0] ?? 'Jordan'
+  const lastRun = lastImportArr?.[0] ?? null
+  const activeTerritory = territory?.[0] ?? null
 
-  const lastRun = lastImport?.[0]
-  const activeTerritory = territory?.[0]
+  const stats = [
+    { label: 'New Leads', value: totalLeads ?? 0, icon: Users, color: 'text-blue-500', bg: 'bg-blue-50', href: '/leads' },
+    { label: 'Hot Leads', value: hotLeads ?? 0, icon: Flame, color: 'text-orange-500', bg: 'bg-orange-50', href: '/leads?priority=hot' },
+    { label: 'Follow-ups Today', value: followUpsDue ?? 0, icon: CalendarClock, color: 'text-blue-500', bg: 'bg-blue-50', href: '/follow-ups' },
+    { label: 'Appointments', value: appointments ?? 0, icon: Calendar, color: 'text-purple-500', bg: 'bg-purple-50', href: '/pipeline' },
+  ]
 
   return (
     <div className="px-4 md:px-8 py-6 max-w-7xl mx-auto space-y-6">
+
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">Dashboard</h1>
-          {totalLeads != null && (
-            <p className="text-sm text-gray-500 mt-0.5">{totalLeads.toLocaleString()} total leads</p>
-          )}
-        </div>
-        <ImportButton territory={activeTerritory ?? null} lastRun={lastRun ?? null} />
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold text-gray-900">{greeting()}, {firstName}</h1>
+        <ImportButton territory={activeTerritory} lastRun={lastRun} />
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {stats.map(stat => (
-          <Link key={stat.label} href={stat.href} className="bg-white rounded-xl border border-gray-200 p-4 hover:border-blue-300 transition-colors">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm text-gray-500">{stat.label}</p>
-                <p className="text-2xl font-semibold text-gray-900 mt-0.5">{stat.value}</p>
-              </div>
-              <stat.icon size={20} className={stat.color} />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {stats.map(s => (
+          <Link key={s.label} href={s.href}
+            className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4 hover:border-blue-200 transition-colors">
+            <div className={`${s.bg} p-3 rounded-xl`}>
+              <s.icon size={20} className={s.color} />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">{s.label}</p>
+              <p className="text-2xl font-bold text-gray-900">{s.value}</p>
             </div>
           </Link>
         ))}
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6">
-        {/* Top Hot Leads */}
-        <div className="bg-white rounded-xl border border-gray-200">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-            <h2 className="font-medium text-gray-900 flex items-center gap-2">
-              <Flame size={14} className="text-red-500" /> Top Hot Leads
-            </h2>
-            <Link href="/leads?priority=hot" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
-              View all <ChevronRight size={12} />
-            </Link>
+      {/* Main grid */}
+      <div className="grid md:grid-cols-5 gap-6">
+
+        {/* Today's Best Leads — 3/5 width */}
+        <div className="md:col-span-3 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
+            <h2 className="font-semibold text-gray-900">Today&apos;s Best Leads</h2>
+            <Link href="/leads" className="text-xs text-blue-600 hover:underline">View all leads →</Link>
           </div>
-          {topHot && topHot.length > 0 ? (
-            <ul className="divide-y divide-gray-50">
-              {topHot.map(lead => (
-                <li key={lead.id}>
-                  <Link href={`/leads/${lead.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{lead.display_name || '(Unnamed)'}</p>
-                      <p className="text-xs text-gray-500">{lead.outlet_city} · Score {lead.score}</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${STATUS_COLORS[lead.status as keyof typeof STATUS_COLORS] ?? 'bg-gray-100 text-gray-600'}`}>
-                        {lead.status.replace('_', ' ')}
-                      </span>
-                      <ChevronRight size={14} className="text-gray-400" />
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
+
+          {topLeads && topLeads.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs text-gray-400 uppercase tracking-wide border-b border-gray-50">
+                    <th className="px-5 py-3 text-left">Score</th>
+                    <th className="px-3 py-3 text-left">Business</th>
+                    <th className="px-3 py-3 text-left">City</th>
+                    <th className="px-3 py-3 text-left">Permit Issued</th>
+                    <th className="px-3 py-3 text-left">First Sale</th>
+                    <th className="px-3 py-3 text-left">Status</th>
+                    <th className="px-3 py-3" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {topLeads.map(lead => (
+                    <tr key={lead.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-5 py-3">
+                        <ScoreBadge score={lead.score} priority={lead.priority} />
+                      </td>
+                      <td className="px-3 py-3">
+                        <Link href={`/leads/${lead.id}`} className="hover:text-blue-600">
+                          <p className="font-medium text-gray-900 truncate max-w-[140px]">{lead.display_name || '—'}</p>
+                          <p className="text-xs text-gray-400 truncate max-w-[140px]">{lead.naics_code ? `NAICS ${lead.naics_code}` : ''}</p>
+                        </Link>
+                      </td>
+                      <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{lead.outlet_city}{lead.outlet_state ? `, ${lead.outlet_state}` : ''}</td>
+                      <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{fmtDate(lead.permit_issue_date)}</td>
+                      <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{lead.first_sales_date ? fmtDate(lead.first_sales_date) : '—'}</td>
+                      <td className="px-3 py-3">
+                        <StatusDot status={lead.status} />
+                      </td>
+                      <td className="px-3 py-3">
+                        {lead.primary_phone ? (
+                          <a href={`tel:${lead.primary_phone}`}
+                            className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
+                            <Phone size={12} /> Call
+                          </a>
+                        ) : (
+                          <Link href={`/leads/${lead.id}`}
+                            className="inline-flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
+                            View
+                          </Link>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
-            <p className="px-4 py-6 text-sm text-gray-500 text-center">No hot leads yet. Import Texas permits to get started.</p>
+            <p className="px-5 py-10 text-sm text-gray-400 text-center">No leads yet — import Texas permits to get started.</p>
           )}
         </div>
 
-        {/* Today's Follow-ups */}
-        <div className="bg-white rounded-xl border border-gray-200">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-            <h2 className="font-medium text-gray-900 flex items-center gap-2">
-              <Clock size={14} className="text-orange-500" /> Today&apos;s Follow-ups
-            </h2>
-            <Link href="/follow-ups" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
-              View all <ChevronRight size={12} />
-            </Link>
+        {/* Right column — 2/5 width */}
+        <div className="md:col-span-2 space-y-4">
+
+          {/* Follow Up Today */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
+              <h2 className="font-semibold text-gray-900">Follow Up Today</h2>
+              <Link href="/follow-ups" className="text-xs text-blue-600 hover:underline">View all →</Link>
+            </div>
+
+            {todayFollowUps && todayFollowUps.length > 0 ? (
+              <ul className="divide-y divide-gray-50">
+                {todayFollowUps.map(lead => (
+                  <li key={lead.id}>
+                    <Link href={`/leads/${lead.id}`} className="flex items-start gap-3 px-5 py-3 hover:bg-gray-50 transition-colors">
+                      <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
+                        <span className="text-blue-700 text-xs font-bold">{(lead.display_name || 'L')[0].toUpperCase()}</span>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-gray-900 truncate">{lead.display_name || '(Unnamed)'}</p>
+                        <p className="text-xs text-gray-500">{lead.outlet_city}{lead.outlet_state ? `, ${lead.outlet_state}` : ''}</p>
+                        {lead.primary_phone && (
+                          <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                            <Phone size={10} /> {fmtPhone(lead.primary_phone)}
+                          </p>
+                        )}
+                      </div>
+                      {lead.next_follow_up_at && (
+                        <span className="text-xs text-gray-400 shrink-0">
+                          {new Date(lead.next_follow_up_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                        </span>
+                      )}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="px-5 py-6 text-sm text-gray-400 text-center">No follow-ups due today.</p>
+            )}
           </div>
-          {todayFollowUps && todayFollowUps.length > 0 ? (
-            <ul className="divide-y divide-gray-50">
-              {todayFollowUps.map(lead => (
-                <li key={lead.id}>
-                  <Link href={`/leads/${lead.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{lead.display_name || '(Unnamed)'}</p>
-                      <p className="text-xs text-gray-500">{lead.primary_phone || lead.outlet_city}</p>
-                    </div>
-                    <ChevronRight size={14} className="text-gray-400 shrink-0" />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="px-4 py-6 text-sm text-gray-500 text-center">No follow-ups due today.</p>
+
+          {/* Latest Texas Import */}
+          {lastRun && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold text-gray-900">Latest Texas Import</h2>
+                <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
+                  lastRun.status === 'completed' ? 'bg-green-100 text-green-700' :
+                  lastRun.status === 'failed' ? 'bg-red-100 text-red-700' :
+                  'bg-yellow-100 text-yellow-700'
+                }`}>
+                  {lastRun.status.charAt(0).toUpperCase() + lastRun.status.slice(1)}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="text-center">
+                  <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-1">
+                    <ArrowDown size={14} className="text-blue-500" />
+                  </div>
+                  <p className="text-lg font-bold text-gray-900">{lastRun.inserted_count ?? 0}</p>
+                  <p className="text-xs text-gray-400">Imported</p>
+                </div>
+                <div className="text-center">
+                  <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-1">
+                    <Pencil size={14} className="text-green-500" />
+                  </div>
+                  <p className="text-lg font-bold text-gray-900">{lastRun.updated_count ?? 0}</p>
+                  <p className="text-xs text-gray-400">Updated</p>
+                </div>
+                <div className="text-center">
+                  <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center mx-auto mb-1">
+                    <ChevronsRight size={14} className="text-gray-400" />
+                  </div>
+                  <p className="text-lg font-bold text-gray-900">{lastRun.skipped_count ?? 0}</p>
+                  <p className="text-xs text-gray-400">Skipped</p>
+                </div>
+              </div>
+              <p className="text-xs text-gray-400">
+                {new Date(lastRun.started_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                {activeTerritory ? ` · ${activeTerritory.name}` : ''}
+              </p>
+            </div>
           )}
         </div>
       </div>
-
-      {/* Opening Soon */}
-      {openingSoon && openingSoon.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-            <h2 className="font-medium text-gray-900 flex items-center gap-2">
-              <Star size={14} className="text-yellow-500" /> Opening Soon
-            </h2>
-            <Link href="/leads?openingSoon=true" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
-              View all <ChevronRight size={12} />
-            </Link>
-          </div>
-          <ul className="divide-y divide-gray-50">
-            {openingSoon.map(lead => (
-              <li key={lead.id}>
-                <Link href={`/leads/${lead.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{lead.display_name || '(Unnamed)'}</p>
-                    <p className="text-xs text-gray-500">{lead.outlet_city}</p>
-                  </div>
-                  <span className="text-xs text-green-600 font-medium shrink-0">
-                    Opens {fmtDate(lead.first_sales_date)}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Last Import */}
-      {lastRun && (
-        <div className={`rounded-xl border p-4 flex items-start gap-3 ${lastRun.status === 'failed' ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
-          {lastRun.status === 'failed'
-            ? <AlertCircle size={16} className="text-red-500 shrink-0 mt-0.5" />
-            : <RefreshCw size={16} className="text-gray-500 shrink-0 mt-0.5" />}
-          <div className="text-sm">
-            <p className="font-medium text-gray-900">Last import — {lastRun.status}</p>
-            <p className="text-gray-500 mt-0.5">
-              {fmtRelative(lastRun.started_at)} ·{' '}
-              Fetched {lastRun.fetched_count} · Inserted {lastRun.inserted_count} · Updated {lastRun.updated_count} · Skipped {lastRun.skipped_count}
-            </p>
-            {lastRun.error_message && (
-              <p className="text-red-600 mt-1">{lastRun.error_message}</p>
-            )}
-          </div>
-        </div>
-      )}
     </div>
+  )
+}
+
+function StatusDot({ status }: { status: string }) {
+  const cfg: Record<string, { color: string; label: string }> = {
+    new:            { color: 'bg-gray-400',   label: 'New Lead' },
+    attempted:      { color: 'bg-yellow-400', label: 'Attempted' },
+    connected:      { color: 'bg-blue-500',   label: 'Connected' },
+    follow_up:      { color: 'bg-orange-400', label: 'Follow-up' },
+    appointment:    { color: 'bg-purple-500', label: 'Appointment' },
+    won:            { color: 'bg-green-500',  label: 'Won' },
+    lost:           { color: 'bg-red-400',    label: 'Lost' },
+    do_not_contact: { color: 'bg-red-600',    label: 'DNC' },
+  }
+  const { color, label } = cfg[status] ?? { color: 'bg-gray-300', label: status }
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs text-gray-600 whitespace-nowrap">
+      <span className={`w-2 h-2 rounded-full ${color}`} />
+      {label}
+    </span>
   )
 }
