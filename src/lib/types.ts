@@ -28,7 +28,6 @@ export interface Profile {
 
 export interface Territory {
   id: string
-  owner_id: string
   name: string
   county_codes: string[]
   days_to_import: number
@@ -39,7 +38,6 @@ export interface Territory {
 
 export interface Lead {
   id: string
-  owner_id: string
   territory_id: string | null
   source: string
   taxpayer_number: string
@@ -79,16 +77,24 @@ export interface Lead {
   google_maps_url: string | null
   enrichment_status: 'pending' | 'running' | 'completed' | 'failed' | null
   enriched_at: string | null
+  enrichment_error: string | null
   last_contacted_at: string | null
   next_follow_up_at: string | null
   est_monthly_processing: string | null
+  // Google Places enrichment
+  google_place_id: string | null
+  international_phone: string | null
+  business_status: string | null
+  google_primary_type: string | null
+  contact_match_confidence: number | null
+  contact_source: string | null
+  contact_source_urls: unknown | null
   created_at: string
   updated_at: string
 }
 
 export interface Contact {
   id: string
-  owner_id: string
   lead_id: string
   full_name: string
   title: string | null
@@ -106,7 +112,6 @@ export interface Contact {
 
 export interface Activity {
   id: string
-  owner_id: string
   lead_id: string
   contact_id: string | null
   activity_type: ActivityType
@@ -120,7 +125,6 @@ export interface Activity {
 
 export interface ImportRun {
   id: string
-  owner_id: string
   territory_id: string | null
   source: string
   status: 'running' | 'completed' | 'partial' | 'failed'
@@ -172,6 +176,12 @@ export interface LeadsFilters {
   neverContacted?: boolean
   followUpDue?: boolean
   starred?: boolean
+  hasPhone?: boolean
+  missingPhone?: boolean
+  hasWebsite?: boolean
+  missingWebsite?: boolean
+  enriched?: boolean
+  needsReview?: boolean
   sort?: LeadSortField
   order?: 'asc' | 'desc'
   page?: number

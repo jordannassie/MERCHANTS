@@ -1,16 +1,14 @@
 #!/usr/bin/env node
 /**
- * Applies the global workspace migration to the Supabase project.
+ * Applies pending Supabase migrations at Netlify build time.
+ *
+ * Migrations applied (idempotent — safe to re-run):
+ *   005_global_workspace.sql
+ *   006_contact_enrichment.sql
  *
  * Requires:
  *   NEXT_PUBLIC_SUPABASE_URL   - Supabase project URL
  *   SUPABASE_SERVICE_ROLE_KEY  - Service-role JWT (never exposed to browser)
- *
- * Usage:
- *   node scripts/apply-migration.js
- *
- * Or from Netlify build:
- *   The Netlify build environment has access to these env vars.
  */
 
 const fs = require('fs')
@@ -22,29 +20,32 @@ const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
   console.error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY')
-  console.error('Set these environment variables and retry.')
   process.exit(1)
 }
 
-const migrationFile = path.join(__dirname, '../supabase/migrations/005_global_workspace.sql')
-const sql = fs.readFileSync(migrationFile, 'utf8')
-
-// Extract project ref from URL: https://REF.supabase.co
 const match = SUPABASE_URL.match(/https:\/\/([^.]+)\.supabase\.co/)
 if (!match) {
   console.error('Cannot extract project ref from URL:', SUPABASE_URL)
   process.exit(1)
 }
 const projectRef = match[1]
+console.log(`Applying migrations to Supabase project: ${projectRef}`)
 
-console.log(`Applying migration to Supabase project: ${projectRef}`)
-console.log('Migration file:', path.basename(migrationFile))
+const migrations = [
+  '005_global_workspace.sql',
+  '006_contact_enrichment.sql',
+]
 
-/**
- * Try the Supabase Management API (api.supabase.com).
- * Works with service-role key when the JWT matches the project ref.
- */
-async function applyViaMgmtAPI() {
+function readMigration(filename) {
+  const p = path.join(__dirname, '../supabase/migrations', filename)
+  if (!fs.existsSync(p)) {
+    console.warn(`Migration file not found: ${p} — skipping`)
+    return null
+  }
+  return fs.readFileSync(p, 'utf8')
+}
+
+async function runSQL(sql) {
   const apiUrl = `https://api.supabase.com/v1/projects/${projectRef}/database/query`
   const body = JSON.stringify({ query: sql })
 
@@ -63,11 +64,7 @@ async function applyViaMgmtAPI() {
       let data = ''
       res.on('data', chunk => { data += chunk })
       res.on('end', () => {
-        if (res.statusCode === 200 || res.statusCode === 201) {
-          resolve({ ok: true, data })
-        } else {
-          resolve({ ok: false, status: res.statusCode, data })
-        }
+        resolve({ ok: res.statusCode >= 200 && res.statusCode < 300, status: res.statusCode, data })
       })
     })
     req.on('error', reject)
@@ -76,59 +73,67 @@ async function applyViaMgmtAPI() {
   })
 }
 
-/**
- * Fallback: split into individual statements and run each as an RPC call.
- * Only works for statements that map to PostgREST capabilities.
- */
-async function checkTablesExist() {
-  const checkUrl = `${SUPABASE_URL}/rest/v1/territories?select=id&limit=1`
-  const res = await fetch(checkUrl, {
-    headers: {
-      'apikey': SERVICE_ROLE_KEY,
-      'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
-    }
-  })
-  // 200 means table exists, anything else means it doesn't
-  return res.status === 200
-}
-
-async function main() {
+async function tablesExist() {
   try {
-    // First check if tables already exist
-    const exists = await checkTablesExist()
-    if (exists) {
-      console.log('✓ Tables already exist in Supabase. Migration already applied.')
-      process.exit(0)
-    }
-
-    console.log('Tables not found. Attempting to apply migration...')
-
-    // Try Management API
-    const result = await applyViaMgmtAPI()
-    if (result.ok) {
-      console.log('✓ Migration applied successfully via Management API.')
-      process.exit(0)
-    }
-
-    console.log(`Management API returned ${result.status}: ${result.data}`)
-    console.log('')
-    console.log('═══════════════════════════════════════════════════════════')
-    console.log('MANUAL STEP REQUIRED')
-    console.log('═══════════════════════════════════════════════════════════')
-    console.log('The migration must be applied manually.')
-    console.log('')
-    console.log('1. Open: https://supabase.com/dashboard/project/' + projectRef + '/sql/new')
-    console.log('2. Paste the contents of: supabase/migrations/005_global_workspace.sql')
-    console.log('3. Click "Run"')
-    console.log('')
-    console.log('After applying the migration, re-deploy or restart the app.')
-    console.log('═══════════════════════════════════════════════════════════')
-    // Exit 0 so the Netlify build doesn't fail
-    process.exit(0)
-  } catch (err) {
-    console.error('Migration script error:', err.message)
-    process.exit(0) // Non-fatal — app will show setup page
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/territories?select=id&limit=1`, {
+      headers: { 'apikey': SERVICE_ROLE_KEY, 'Authorization': `Bearer ${SERVICE_ROLE_KEY}` }
+    })
+    return res.status === 200
+  } catch {
+    return false
   }
 }
 
-main()
+async function enrichmentColumnsExist() {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/leads?select=google_place_id&limit=0`, {
+      headers: { 'apikey': SERVICE_ROLE_KEY, 'Authorization': `Bearer ${SERVICE_ROLE_KEY}` }
+    })
+    return res.status === 200
+  } catch {
+    return false
+  }
+}
+
+async function main() {
+  const [tablesOk, enrichmentOk] = await Promise.all([tablesExist(), enrichmentColumnsExist()])
+
+  const toApply = []
+  if (!tablesOk) toApply.push('005_global_workspace.sql')
+  if (!enrichmentOk) toApply.push('006_contact_enrichment.sql')
+
+  if (!toApply.length) {
+    console.log('✓ All migrations already applied.')
+    return
+  }
+
+  for (const filename of migrations) {
+    if (!toApply.includes(filename)) {
+      console.log(`✓ ${filename} — already applied, skipping.`)
+      continue
+    }
+
+    const sql = readMigration(filename)
+    if (!sql) continue
+
+    console.log(`Applying ${filename}…`)
+    const result = await runSQL(sql)
+    if (result.ok) {
+      console.log(`✓ ${filename} applied.`)
+    } else {
+      console.log(`⚠ ${filename}: Management API returned ${result.status}: ${result.data}`)
+      console.log('')
+      console.log('═══════════════════════════════════════════════════════════')
+      console.log('MANUAL STEP REQUIRED')
+      console.log(`1. Open: https://supabase.com/dashboard/project/${projectRef}/sql/new`)
+      console.log(`2. Paste: supabase/migrations/${filename}`)
+      console.log('3. Click "Run"')
+      console.log('═══════════════════════════════════════════════════════════')
+    }
+  }
+}
+
+main().catch(err => {
+  console.error('Migration script error:', err.message)
+  process.exit(0) // Non-fatal — build continues
+})

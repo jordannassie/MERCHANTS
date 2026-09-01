@@ -5,6 +5,7 @@ import { LEADS_PER_PAGE } from '@/lib/types'
 import { DFW_COUNTIES } from '@/lib/constants'
 import { LeadsFiltersBar } from '@/components/leads/LeadsFiltersBar'
 import { LeadsTable } from '@/components/leads/LeadsTable'
+import { BulkEnrichBar } from '@/components/leads/BulkEnrichBar'
 import { Pagination } from '@/components/ui/Pagination'
 
 export const metadata: Metadata = { title: 'Leads — Merchant Radar' }
@@ -34,6 +35,12 @@ export default async function LeadsPage({ searchParams }: PageProps) {
     neverContacted: sp.neverContacted === 'true',
     followUpDue: sp.followUpDue === 'true',
     starred: sp.starred === 'true',
+    hasPhone: sp.hasPhone === 'true',
+    missingPhone: sp.missingPhone === 'true',
+    hasWebsite: sp.hasWebsite === 'true',
+    missingWebsite: sp.missingWebsite === 'true',
+    enriched: sp.enriched === 'true',
+    needsReview: sp.needsReview === 'true',
     sort: (sp.sort as LeadsFilters['sort']) || 'score',
     order: (sp.order as 'asc' | 'desc') || 'desc',
     page,
@@ -61,6 +68,12 @@ export default async function LeadsPage({ searchParams }: PageProps) {
   if (filters.neverContacted) query = query.is('last_contacted_at', null)
   if (filters.followUpDue) query = query.lte('next_follow_up_at', new Date().toISOString())
   if (filters.starred) query = query.eq('starred', true)
+  if (filters.hasPhone) query = query.not('primary_phone', 'is', null)
+  if (filters.missingPhone) query = query.is('primary_phone', null)
+  if (filters.hasWebsite) query = query.not('website', 'is', null)
+  if (filters.missingWebsite) query = query.is('website', null)
+  if (filters.enriched) query = query.eq('enrichment_status', 'completed')
+  if (filters.needsReview) query = query.eq('enrichment_status', 'pending')
 
   const sortCol =
     filters.sort === 'score' ? 'score'
@@ -118,6 +131,10 @@ export default async function LeadsPage({ searchParams }: PageProps) {
       </div>
 
       <LeadsFiltersBar filters={filters} counties={counties} />
+
+      <div className="mb-4">
+        <BulkEnrichBar />
+      </div>
 
       {leads && leads.length > 0 ? (
         <>

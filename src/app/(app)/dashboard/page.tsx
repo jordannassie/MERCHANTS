@@ -53,7 +53,7 @@ export default async function DashboardPage() {
     db.from('leads').select('*', { count: 'exact', head: true }).eq('priority', 'hot').not('status', 'in', '(won,lost,do_not_contact)'),
     db.from('leads').select('*', { count: 'exact', head: true }).lte('next_follow_up_at', todayEnd.toISOString()).not('status', 'in', '(won,lost,do_not_contact)'),
     db.from('leads').select('*', { count: 'exact', head: true }).eq('status', 'appointment'),
-    db.from('leads').select('id,display_name,outlet_city,outlet_state,priority,status,score,primary_phone,permit_issue_date,first_sales_date,naics_code').not('status', 'in', '(won,lost,do_not_contact)').order('score', { ascending: false }).limit(5),
+    db.from('leads').select('id,display_name,outlet_name,outlet_city,outlet_state,priority,status,score,primary_phone,permit_issue_date,first_sales_date,naics_code,google_place_id,enrichment_status,category').not('status', 'in', '(won,lost,do_not_contact)').order('score', { ascending: false }).limit(5),
     db.from('leads').select('id,display_name,outlet_city,outlet_state,primary_phone,next_follow_up_at,status,naics_code').lte('next_follow_up_at', todayEnd.toISOString()).gte('next_follow_up_at', todayStart.toISOString()).order('next_follow_up_at').limit(6),
     db.from('import_runs').select('*').order('started_at', { ascending: false }).limit(1),
     db.from('territories').select('*').eq('is_active', true).limit(1),
@@ -102,59 +102,86 @@ export default async function DashboardPage() {
         <div className="md:col-span-3 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
             <h2 className="font-semibold text-gray-900">Today&apos;s Best Leads</h2>
-            <Link href="/leads" className="text-xs text-blue-600 hover:underline">View all leads →</Link>
+            <Link href="/leads" className="text-xs text-blue-600 hover:underline">View all →</Link>
           </div>
 
           {topLeads && topLeads.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-xs text-gray-400 uppercase tracking-wide border-b border-gray-50">
-                    <th className="px-5 py-3 text-left">Score</th>
-                    <th className="px-3 py-3 text-left">Business</th>
-                    <th className="px-3 py-3 text-left">City</th>
-                    <th className="px-3 py-3 text-left">Permit Issued</th>
-                    <th className="px-3 py-3 text-left">First Sale</th>
-                    <th className="px-3 py-3 text-left">Status</th>
-                    <th className="px-3 py-3" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {topLeads.map(lead => (
-                    <tr key={lead.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-5 py-3">
-                        <ScoreBadge score={lead.score} priority={lead.priority} />
-                      </td>
-                      <td className="px-3 py-3">
-                        <Link href={`/leads/${lead.id}`} className="hover:text-blue-600">
-                          <p className="font-medium text-gray-900 truncate max-w-[140px]">{lead.display_name || '—'}</p>
-                          <p className="text-xs text-gray-400 truncate max-w-[140px]">{lead.naics_code ? `NAICS ${lead.naics_code}` : ''}</p>
+            <table className="w-full text-sm table-fixed">
+              <colgroup>
+                <col className="w-[52px]" />
+                <col />
+                <col className="w-[80px]" />
+                <col className="w-[72px]" />
+                <col className="w-[110px]" />
+                <col className="w-[80px]" />
+              </colgroup>
+              <thead>
+                <tr className="text-xs text-gray-400 uppercase tracking-wide border-b border-gray-50">
+                  <th className="px-3 py-3 text-left">Score</th>
+                  <th className="px-3 py-3 text-left">Business</th>
+                  <th className="px-3 py-3 text-left">City</th>
+                  <th className="px-3 py-3 text-left">First Sale</th>
+                  <th className="px-3 py-3 text-left">Contact</th>
+                  <th className="px-3 py-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {topLeads.map(lead => (
+                  <tr key={lead.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-3 py-3">
+                      <ScoreBadge score={lead.score} priority={lead.priority} />
+                    </td>
+                    <td className="px-3 py-3 min-w-0">
+                      <Link href={`/leads/${lead.id}`} className="hover:text-blue-600 block">
+                        <p className="font-medium text-gray-900 leading-snug line-clamp-2 break-words">
+                          {lead.display_name || lead.outlet_name || '—'}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-0.5 truncate">
+                          {lead.category || (lead.naics_code ? `NAICS ${lead.naics_code}` : '')}
+                        </p>
+                      </Link>
+                    </td>
+                    <td className="px-3 py-3 text-xs text-gray-600 leading-snug">
+                      <span className="line-clamp-2">{lead.outlet_city}</span>
+                    </td>
+                    <td className="px-3 py-3 text-xs text-gray-600 whitespace-nowrap">
+                      {lead.first_sales_date ? (
+                        <span className={new Date(lead.first_sales_date) >= new Date() ? 'text-green-600 font-medium' : ''}>
+                          {fmtDate(lead.first_sales_date)}
+                        </span>
+                      ) : '—'}
+                    </td>
+                    <td className="px-3 py-3">
+                      {lead.primary_phone ? (
+                        <a href={`tel:${lead.primary_phone}`}
+                          className="flex items-center gap-1 text-xs text-blue-600 hover:underline">
+                          <Phone size={11} /> {fmtPhone(lead.primary_phone)}
+                        </a>
+                      ) : (
+                        <Link href={`/leads/${lead.id}`}
+                          className="text-xs text-gray-400 hover:text-blue-600 flex items-center gap-1">
+                          <Phone size={10} className="opacity-40" />
+                          Find Contact
                         </Link>
-                      </td>
-                      <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{lead.outlet_city}{lead.outlet_state ? `, ${lead.outlet_state}` : ''}</td>
-                      <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{fmtDate(lead.permit_issue_date)}</td>
-                      <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{lead.first_sales_date ? fmtDate(lead.first_sales_date) : '—'}</td>
-                      <td className="px-3 py-3">
-                        <StatusDot status={lead.status} />
-                      </td>
-                      <td className="px-3 py-3">
-                        {lead.primary_phone ? (
-                          <a href={`tel:${lead.primary_phone}`}
-                            className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
-                            <Phone size={12} /> Call
-                          </a>
-                        ) : (
-                          <Link href={`/leads/${lead.id}`}
-                            className="inline-flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
-                            View
-                          </Link>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      )}
+                    </td>
+                    <td className="px-3 py-3 text-right">
+                      {lead.primary_phone ? (
+                        <a href={`tel:${lead.primary_phone}`}
+                          className="inline-flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors whitespace-nowrap">
+                          <Phone size={11} /> Call
+                        </a>
+                      ) : (
+                        <Link href={`/leads/${lead.id}`}
+                          className="inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors whitespace-nowrap">
+                          Find
+                        </Link>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           ) : (
             <p className="px-5 py-10 text-sm text-gray-400 text-center">No leads yet — import Texas permits to get started.</p>
           )}
@@ -249,22 +276,3 @@ export default async function DashboardPage() {
   )
 }
 
-function StatusDot({ status }: { status: string }) {
-  const cfg: Record<string, { color: string; label: string }> = {
-    new:            { color: 'bg-gray-400',   label: 'New Lead' },
-    attempted:      { color: 'bg-yellow-400', label: 'Attempted' },
-    connected:      { color: 'bg-blue-500',   label: 'Connected' },
-    follow_up:      { color: 'bg-orange-400', label: 'Follow-up' },
-    appointment:    { color: 'bg-purple-500', label: 'Appointment' },
-    won:            { color: 'bg-green-500',  label: 'Won' },
-    lost:           { color: 'bg-red-400',    label: 'Lost' },
-    do_not_contact: { color: 'bg-red-600',    label: 'DNC' },
-  }
-  const { color, label } = cfg[status] ?? { color: 'bg-gray-300', label: status }
-  return (
-    <span className="inline-flex items-center gap-1.5 text-xs text-gray-600 whitespace-nowrap">
-      <span className={`w-2 h-2 rounded-full ${color}`} />
-      {label}
-    </span>
-  )
-}

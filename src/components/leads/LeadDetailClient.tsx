@@ -7,15 +7,15 @@ import type { Lead, Contact, Activity } from '@/lib/types'
 import { fmtDate, fmtDateTime, fmtRelative, fmtPhone, STATUS_COLORS, PRIORITY_COLORS, safeUrl, buildMapsUrl } from '@/lib/utils'
 import { DFW_COUNTIES } from '@/lib/constants'
 import { Button } from '@/components/ui/Button'
-import { Badge } from '@/components/ui/Badge'
 import { Dialog } from '@/components/ui/Dialog'
 import { LogCallDialog } from './LogCallDialog'
 import { ContactsSection } from './ContactsSection'
 import {
   Phone, Globe, MapPin, Star, ChevronLeft, Copy, ExternalLink,
-  MessageSquare, Clock, Edit2, Check, X, Info, Briefcase,
+  MessageSquare, Clock, Edit2, Check, Info, Briefcase,
 } from 'lucide-react'
 import { updateLeadCRM, starLead, updateLeadStatus } from '@/lib/actions/leads'
+import { ContactPanel } from './ContactPanel'
 
 interface Props {
   lead: Lead
@@ -25,7 +25,7 @@ interface Props {
 
 export function LeadDetailClient({ lead: initialLead, contacts: initialContacts, activities: initialActivities }: Props) {
   const router = useRouter()
-  const [isPending, startTransition] = useTransition()
+  const [isPending] = useTransition()
   const [lead, setLead] = useState(initialLead)
   const [contacts, setContacts] = useState(initialContacts)
   const [activities, setActivities] = useState(initialActivities)
@@ -161,6 +161,9 @@ export function LeadDetailClient({ lead: initialLead, contacts: initialContacts,
           </div>
         )}
       </div>
+
+      {/* Contact Panel — shown prominently before permit data */}
+      <ContactPanel lead={lead} />
 
       <div className="grid md:grid-cols-2 gap-4">
         {/* Texas Permit Data */}

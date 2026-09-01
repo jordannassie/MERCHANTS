@@ -2,7 +2,7 @@ import { Metadata } from 'next'
 import Link from 'next/link'
 import { createServiceClient } from '@/lib/supabase/service'
 import type { Lead } from '@/lib/types'
-import { fmtDateTime, fmtPhone, STATUS_COLORS, PRIORITY_COLORS } from '@/lib/utils'
+import { fmtDateTime, STATUS_COLORS, PRIORITY_COLORS } from '@/lib/utils'
 import { Phone, ChevronRight, AlertCircle, Clock, Calendar, CheckCircle2 } from 'lucide-react'
 
 export const metadata: Metadata = { title: 'Follow-ups — Merchant Radar' }

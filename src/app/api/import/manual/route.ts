@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { ensureWorkspaceTerritory } from '@/lib/workspace'
 import { scoreLead } from '@/lib/scoring'
@@ -28,7 +28,7 @@ const TEXAS_FIELDS = [
 // Simple in-memory rate limit: one import at a time
 let importInProgress = false
 
-export async function POST(_req: NextRequest) {
+export async function POST() {
   if (importInProgress) {
     return NextResponse.json(
       { error: 'An import is already running. Please wait.' },

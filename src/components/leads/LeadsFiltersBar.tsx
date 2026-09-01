@@ -46,6 +46,12 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
       if (next.neverContacted) params.set('neverContacted', 'true')
       if (next.followUpDue) params.set('followUpDue', 'true')
       if (next.starred) params.set('starred', 'true')
+      if (next.hasPhone) params.set('hasPhone', 'true')
+      if (next.missingPhone) params.set('missingPhone', 'true')
+      if (next.hasWebsite) params.set('hasWebsite', 'true')
+      if (next.missingWebsite) params.set('missingWebsite', 'true')
+      if (next.enriched) params.set('enriched', 'true')
+      if (next.needsReview) params.set('needsReview', 'true')
       if (next.sort && next.sort !== 'score') params.set('sort', next.sort)
       if (next.order && next.order !== 'desc') params.set('order', next.order)
       return params
@@ -81,7 +87,9 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
     filters.search || filters.status || filters.priority || filters.county ||
     filters.city || filters.permitDateFrom || filters.permitDateTo ||
     filters.firstSalesDateFrom || filters.firstSalesDateTo ||
-    filters.openingSoon || filters.neverContacted || filters.followUpDue || filters.starred
+    filters.openingSoon || filters.neverContacted || filters.followUpDue || filters.starred ||
+    filters.hasPhone || filters.missingPhone || filters.hasWebsite || filters.missingWebsite ||
+    filters.enriched || filters.needsReview
   )
 
   return (
@@ -207,6 +215,12 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
           { key: 'neverContacted' as const, label: 'Never contacted' },
           { key: 'followUpDue' as const, label: 'Follow-up due' },
           { key: 'starred' as const, label: '⭐ Starred' },
+          { key: 'hasPhone' as const, label: '📞 Has phone' },
+          { key: 'missingPhone' as const, label: 'Missing phone' },
+          { key: 'hasWebsite' as const, label: '🌐 Has website' },
+          { key: 'missingWebsite' as const, label: 'Missing website' },
+          { key: 'enriched' as const, label: '✓ Contact found' },
+          { key: 'needsReview' as const, label: '⚑ Needs review' },
         ].map(({ key, label }) => (
           <button
             key={key}
