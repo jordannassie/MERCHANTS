@@ -1,0 +1,15 @@
+# Supabase project configuration
+# Reference: https://supabase.com/docs/guides/cli/config
+
+[functions.import-texas-leads]
+# The function implements its own authentication for both:
+#   - authenticated users  (Authorization: Bearer <supabase-jwt>)
+#   - scheduled cron jobs  (x-cron-secret: <MERCHANT_RADAR_CRON_SECRET>)
+# Supabase's built-in JWT gate must be disabled so that cron requests
+# (which carry no Supabase JWT) can reach the function's own auth layer.
+verify_jwt = false
+
+[functions.enrich-leads]
+# Enrichment function is called with a user Bearer token only.
+# JWT verification is handled by the function itself after getUser().
+verify_jwt = false
