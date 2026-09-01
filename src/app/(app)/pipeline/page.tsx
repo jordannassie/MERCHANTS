@@ -1,6 +1,5 @@
 import { Metadata } from 'next'
 import { createServiceClient } from '@/lib/supabase/service'
-import { getWorkspaceOwnerId } from '@/lib/workspace'
 import type { Lead } from '@/lib/types'
 import { PIPELINE_STATUSES } from '@/lib/constants'
 import { PipelineColumn } from '@/components/pipeline/PipelineColumn'
@@ -15,14 +14,10 @@ const COLUMN_LABELS: Record<string, string> = {
 
 export default async function PipelinePage() {
   const supabase = createServiceClient()
-  const ownerId = await getWorkspaceOwnerId()
-  
-  
 
   const { data: leads } = await supabase
     .from('leads')
     .select('id,display_name,outlet_name,taxpayer_name,outlet_city,priority,status,score,primary_phone,next_follow_up_at,starred')
-    .eq('owner_id', ownerId)
     .in('status', [...PIPELINE_STATUSES])
     .order('score', { ascending: false })
 

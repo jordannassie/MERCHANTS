@@ -1,12 +1,13 @@
 'use server'
 
 import { createServiceClient } from '@/lib/supabase/service'
-import { getWorkspaceOwnerId } from '@/lib/workspace'
 import type { Lead } from '@/lib/types'
 
-export async function updateLeadCRM(leadId: string, data: Partial<Lead>): Promise<Partial<Lead> | null> {
+export async function updateLeadCRM(
+  leadId: string,
+  data: Partial<Lead>
+): Promise<Partial<Lead> | null> {
   const db = createServiceClient()
-  const ownerId = await getWorkspaceOwnerId()
 
   const safe = {
     display_name: data.display_name,
@@ -24,21 +25,21 @@ export async function updateLeadCRM(leadId: string, data: Partial<Lead>): Promis
     .from('leads')
     .update(safe)
     .eq('id', leadId)
-    .eq('owner_id', ownerId)
     .select()
     .single()
 
   return updated
 }
 
-export async function updateLeadStatus(leadId: string, status: Lead['status']): Promise<void> {
+export async function updateLeadStatus(
+  leadId: string,
+  status: Lead['status']
+): Promise<void> {
   const db = createServiceClient()
-  const ownerId = await getWorkspaceOwnerId()
-  await db.from('leads').update({ status }).eq('id', leadId).eq('owner_id', ownerId)
+  await db.from('leads').update({ status }).eq('id', leadId)
 }
 
 export async function starLead(leadId: string, starred: boolean): Promise<void> {
   const db = createServiceClient()
-  const ownerId = await getWorkspaceOwnerId()
-  await db.from('leads').update({ starred }).eq('id', leadId).eq('owner_id', ownerId)
+  await db.from('leads').update({ starred }).eq('id', leadId)
 }

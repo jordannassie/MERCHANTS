@@ -48,7 +48,6 @@ export default async function DashboardPage() {
     { data: todayFollowUps },
     { data: lastImportArr },
     { data: territory },
-    { data: profile },
   ] = await Promise.all([
     db.from('leads').select('*', { count: 'exact', head: true }),
     db.from('leads').select('*', { count: 'exact', head: true }).eq('priority', 'hot').not('status', 'in', '(won,lost,do_not_contact)'),
@@ -58,10 +57,9 @@ export default async function DashboardPage() {
     db.from('leads').select('id,display_name,outlet_city,outlet_state,primary_phone,next_follow_up_at,status,naics_code').lte('next_follow_up_at', todayEnd.toISOString()).gte('next_follow_up_at', todayStart.toISOString()).order('next_follow_up_at').limit(6),
     db.from('import_runs').select('*').order('started_at', { ascending: false }).limit(1),
     db.from('territories').select('*').eq('is_active', true).limit(1),
-    db.from('profiles').select('full_name').limit(1).maybeSingle(),
   ])
 
-  const firstName = profile?.full_name?.split(' ')[0] ?? 'Jordan'
+  const firstName = 'Jordan'
   const lastRun = lastImportArr?.[0] ?? null
   const activeTerritory = territory?.[0] ?? null
 

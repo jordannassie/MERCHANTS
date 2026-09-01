@@ -1,6 +1,5 @@
 import { Metadata } from 'next'
 import { createServiceClient } from '@/lib/supabase/service'
-import { getWorkspaceOwnerId } from '@/lib/workspace'
 import { TerritoryForm } from '@/components/settings/TerritoryForm'
 import { ImportHistory } from '@/components/settings/ImportHistory'
 import { ImportButton } from '@/components/ImportButton'
@@ -11,13 +10,10 @@ export const dynamic = 'force-dynamic'
 
 export default async function SettingsPage() {
   const supabase = createServiceClient()
-  const ownerId = await getWorkspaceOwnerId()
-  
-  
 
   const [{ data: territories }, { data: importRuns }] = await Promise.all([
-    supabase.from('territories').select('*').eq('owner_id', ownerId).order('created_at'),
-    supabase.from('import_runs').select('*, territory:territories(name)').eq('owner_id', ownerId).order('started_at', { ascending: false }).limit(20),
+    supabase.from('territories').select('*').eq('is_active', true).order('created_at'),
+    supabase.from('import_runs').select('*, territory:territories(name)').order('started_at', { ascending: false }).limit(20),
   ])
 
   const primary = (territories ?? [])[0] as Territory | undefined

@@ -1,6 +1,5 @@
 import { Metadata } from 'next'
 import { createServiceClient } from '@/lib/supabase/service'
-import { getWorkspaceOwnerId } from '@/lib/workspace'
 import type { LeadsFilters, Lead } from '@/lib/types'
 import { LEADS_PER_PAGE } from '@/lib/types'
 import { DFW_COUNTIES } from '@/lib/constants'
@@ -16,7 +15,6 @@ interface PageProps { searchParams: Promise<Record<string, string>> }
 export default async function LeadsPage({ searchParams }: PageProps) {
   const sp = await searchParams
   const supabase = createServiceClient()
-  const ownerId = await getWorkspaceOwnerId()
 
   const page = Math.max(1, Number(sp.page) || 1)
   const from = (page - 1) * LEADS_PER_PAGE
@@ -44,11 +42,12 @@ export default async function LeadsPage({ searchParams }: PageProps) {
   let query = supabase
     .from('leads')
     .select('*', { count: 'exact' })
-    .eq('owner_id', ownerId)
 
   if (filters.search) {
     const s = `%${filters.search}%`
-    query = query.or(`display_name.ilike.${s},outlet_name.ilike.${s},taxpayer_name.ilike.${s},primary_phone.ilike.${s},outlet_city.ilike.${s},outlet_zip.ilike.${s},naics_code.ilike.${s}`)
+    query = query.or(
+      `display_name.ilike.${s},outlet_name.ilike.${s},taxpayer_name.ilike.${s},primary_phone.ilike.${s},outlet_city.ilike.${s},outlet_zip.ilike.${s},naics_code.ilike.${s}`
+    )
   }
   if (filters.status) query = query.eq('status', filters.status)
   if (filters.priority) query = query.eq('priority', filters.priority)
@@ -63,7 +62,8 @@ export default async function LeadsPage({ searchParams }: PageProps) {
   if (filters.followUpDue) query = query.lte('next_follow_up_at', new Date().toISOString())
   if (filters.starred) query = query.eq('starred', true)
 
-  const sortCol = filters.sort === 'score' ? 'score'
+  const sortCol =
+    filters.sort === 'score' ? 'score'
     : filters.sort === 'permit_issue_date' ? 'permit_issue_date'
     : filters.sort === 'first_sales_date' ? 'first_sales_date'
     : filters.sort === 'next_follow_up_at' ? 'next_follow_up_at'
@@ -73,24 +73,40 @@ export default async function LeadsPage({ searchParams }: PageProps) {
   const { data: leads, count } = await query.range(from, to)
   const totalPages = Math.ceil((count ?? 0) / LEADS_PER_PAGE)
 
+  // Check whether any leads exist at all (for empty-state messaging)
+  const hasAnyLeads = (count ?? 0) > 0 || Object.values({
+    search: filters.search,
+    status: filters.status,
+    priority: filters.priority,
+    county: filters.county,
+  }).some(Boolean)
+
   // Counties for filter dropdown
   const { data: countyRows } = await supabase
     .from('leads')
     .select('outlet_county_code')
-    .eq('owner_id', ownerId)
     .not('outlet_county_code', 'is', null)
 
-  const counties = [...new Set((countyRows ?? []).map(r => r.outlet_county_code).filter(Boolean))]
+  const counties = [
+    ...new Set((countyRows ?? []).map(r => r.outlet_county_code).filter(Boolean)),
+  ]
     .map(code => ({ code: code!, name: DFW_COUNTIES[code!] ?? code! }))
     .sort((a, b) => a.name.localeCompare(b.name))
+
+  // Total count without filters (to detect zero-import state)
+  const { count: totalAll } = await supabase
+    .from('leads')
+    .select('*', { count: 'exact', head: true })
 
   return (
     <div className="px-4 md:px-8 py-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Leads</h1>
-          {count != null && (
-            <p className="text-sm text-gray-500 mt-0.5">{count.toLocaleString()} result{count !== 1 ? 's' : ''}</p>
+          {count != null && hasAnyLeads && (
+            <p className="text-sm text-gray-500 mt-0.5">
+              {count.toLocaleString()} result{count !== 1 ? 's' : ''}
+            </p>
           )}
         </div>
         <a
@@ -112,10 +128,15 @@ export default async function LeadsPage({ searchParams }: PageProps) {
             </div>
           )}
         </>
+      ) : totalAll === 0 ? (
+        <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
+          <p className="text-gray-700 font-semibold text-lg">No leads yet</p>
+          <p className="text-sm text-gray-400 mt-2">Import Texas leads to begin — click &quot;Import Texas Leads&quot; on the Dashboard.</p>
+        </div>
       ) : (
         <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
-          <p className="text-gray-500 font-medium">No leads match your filters</p>
-          <p className="text-sm text-gray-400 mt-1">Try adjusting your search or import Texas permits from the dashboard.</p>
+          <p className="text-gray-500 font-medium">No matching leads</p>
+          <p className="text-sm text-gray-400 mt-1">Try adjusting your search or filters.</p>
         </div>
       )}
     </div>

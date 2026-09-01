@@ -1,19 +1,28 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
-import { ensureWorkspaceTerritory, getWorkspaceOwnerId } from '@/lib/workspace'
+import { ensureWorkspaceTerritory } from '@/lib/workspace'
 import { scoreLead } from '@/lib/scoring'
-import { normalize, parseDate, validateCountyCodes, buildSoQLWhere, buildCutoffIso, DFW_COUNTY_ALLOWLIST } from '@/lib/importer-utils'
+import {
+  normalize,
+  parseDate,
+  validateCountyCodes,
+  buildSoQLWhere,
+  buildCutoffIso,
+  DFW_COUNTY_ALLOWLIST,
+} from '@/lib/importer-utils'
 
 const TEXAS_API = 'https://data.texas.gov/resource/jrea-zgmq.json'
 const PAGE_SIZE = 1000
 const MAX_RECORDS = 10_000
 
 const TEXAS_FIELDS = [
-  'taxpayer_number','taxpayer_name','taxpayer_address','taxpayer_city','taxpayer_state',
-  'taxpayer_zip_code','taxpayer_county_code','taxpayer_organization_type',
-  'outlet_number','outlet_name','outlet_address','outlet_city','outlet_state',
-  'outlet_zip_code','outlet_county_code','outlet_naics_code',
-  'outlet_inside_outside_city_limits_indicator','outlet_permit_issue_date','outlet_first_sales_date',
+  'taxpayer_number', 'taxpayer_name', 'taxpayer_address', 'taxpayer_city',
+  'taxpayer_state', 'taxpayer_zip_code', 'taxpayer_county_code',
+  'taxpayer_organization_type', 'outlet_number', 'outlet_name',
+  'outlet_address', 'outlet_city', 'outlet_state', 'outlet_zip_code',
+  'outlet_county_code', 'outlet_naics_code',
+  'outlet_inside_outside_city_limits_indicator',
+  'outlet_permit_issue_date', 'outlet_first_sales_date',
 ].join(',')
 
 // Simple in-memory rate limit: one import at a time
@@ -21,20 +30,21 @@ let importInProgress = false
 
 export async function POST(_req: NextRequest) {
   if (importInProgress) {
-    return NextResponse.json({ error: 'An import is already running. Please wait.' }, { status: 429 })
+    return NextResponse.json(
+      { error: 'An import is already running. Please wait.' },
+      { status: 429 }
+    )
   }
 
   const db = createServiceClient()
-  let ownerId: string
   let territory: Awaited<ReturnType<typeof ensureWorkspaceTerritory>>
 
   try {
-    ownerId = await getWorkspaceOwnerId()
     territory = await ensureWorkspaceTerritory()
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
-    console.error('[import/manual] workspace error:', msg)
-    return NextResponse.json({ error: `Workspace not ready: ${msg}` }, { status: 500 })
+    console.error('[import/manual] territory error:', msg)
+    return NextResponse.json({ error: `Territory not ready: ${msg}` }, { status: 500 })
   }
 
   const validCodes = validateCountyCodes(territory.county_codes, DFW_COUNTY_ALLOWLIST)
@@ -45,11 +55,10 @@ export async function POST(_req: NextRequest) {
   const cutoffIso = buildCutoffIso(territory.days_to_import)
   const whereClause = buildSoQLWhere(cutoffIso, validCodes)
 
-  // Create import run
+  // Create import run record
   const { data: run, error: runErr } = await db
     .from('import_runs')
     .insert({
-      owner_id: ownerId,
       territory_id: territory.id,
       source: 'texas_sales_tax_permits',
       status: 'running',
@@ -60,6 +69,8 @@ export async function POST(_req: NextRequest) {
     .single()
 
   if (runErr || !run) {
+    const detail = runErr ? [runErr.message, runErr.code, runErr.details].filter(Boolean).join(' | ') : 'unknown'
+    console.error('[import/manual] Failed to create import run:', detail)
     return NextResponse.json({ error: 'Failed to create import run.' }, { status: 500 })
   }
 
@@ -72,7 +83,10 @@ export async function POST(_req: NextRequest) {
     const abortAt = Date.now() + 90_000 // 90s server-side timeout
 
     while (fetched < MAX_RECORDS) {
-      if (Date.now() > abortAt) { errorMessage = `Timed out after ${fetched} records`; break }
+      if (Date.now() > abortAt) {
+        errorMessage = `Timed out after ${fetched} records`
+        break
+      }
 
       const params = new URLSearchParams({
         '$select': TEXAS_FIELDS,
@@ -82,8 +96,13 @@ export async function POST(_req: NextRequest) {
         '$offset': String(offset),
       })
 
-      const resp = await fetch(`${TEXAS_API}?${params}`, { signal: AbortSignal.timeout(30_000) })
-      if (!resp.ok) { errorMessage = `Texas API HTTP ${resp.status}`; break }
+      const resp = await fetch(`${TEXAS_API}?${params}`, {
+        signal: AbortSignal.timeout(30_000),
+      })
+      if (!resp.ok) {
+        errorMessage = `Texas API HTTP ${resp.status}`
+        break
+      }
 
       const page: Record<string, string>[] = await resp.json()
       fetched += page.length
@@ -94,8 +113,12 @@ export async function POST(_req: NextRequest) {
         const permitDate = parseDate(raw.outlet_permit_issue_date)
         const outletCounty = normalize(raw.outlet_county_code)
 
-        if (!taxpayerNum || !outletNum || !permitDate || !outletCounty || !DFW_COUNTY_ALLOWLIST.has(outletCounty)) {
-          skipped++; continue
+        if (
+          !taxpayerNum || !outletNum || !permitDate ||
+          !outletCounty || !DFW_COUNTY_ALLOWLIST.has(outletCounty)
+        ) {
+          skipped++
+          continue
         }
 
         const firstSalesDate = parseDate(raw.outlet_first_sales_date)
@@ -136,28 +159,35 @@ export async function POST(_req: NextRequest) {
           last_seen_at: new Date().toISOString(),
         }
 
+        // Check for existing lead (idempotent upsert)
         const { data: existing } = await db
           .from('leads')
           .select('id,status,score,priority')
-          .eq('owner_id', ownerId)
           .eq('source', 'texas_sales_tax_permits')
           .eq('taxpayer_number', taxpayerNum)
           .eq('outlet_number', outletNum)
           .maybeSingle()
 
         if (existing) {
-          const advanced = new Set(['connected','follow_up','appointment','won'])
-          const { error: upErr } = await db.from('leads').update({
-            ...sourceFields,
-            score: advanced.has(existing.status) ? existing.score : scored.score,
-            priority: advanced.has(existing.status) ? existing.priority : scored.priority,
-            score_reasons: scored.reasons,
-          }).eq('id', existing.id)
-          if (upErr) { skipped++; continue }
+          // Don't overwrite score/priority if lead is already progressed
+          const advanced = new Set(['connected', 'follow_up', 'appointment', 'won'])
+          const { error: upErr } = await db
+            .from('leads')
+            .update({
+              ...sourceFields,
+              score: advanced.has(existing.status) ? existing.score : scored.score,
+              priority: advanced.has(existing.status) ? existing.priority : scored.priority,
+              score_reasons: scored.reasons,
+            })
+            .eq('id', existing.id)
+
+          if (upErr) {
+            skipped++
+            continue
+          }
           updated++
         } else {
           const { error: insErr } = await db.from('leads').insert({
-            owner_id: ownerId,
             territory_id: territory.id,
             source: 'texas_sales_tax_permits',
             ...sourceFields,
@@ -168,10 +198,16 @@ export async function POST(_req: NextRequest) {
             status: 'new',
             starred: false,
           })
+
           if (insErr) {
-            if (insErr.code === '23505') { duplicates++; continue }
+            if (insErr.code === '23505') {
+              duplicates++
+              continue
+            }
             skipped++
-          } else { inserted++ }
+          } else {
+            inserted++
+          }
         }
       }
 
@@ -185,7 +221,7 @@ export async function POST(_req: NextRequest) {
   }
 
   const finalStatus = errorMessage
-    ? (inserted + updated > 0 ? 'partial' : 'failed')
+    ? inserted + updated > 0 ? 'partial' : 'failed'
     : 'completed'
 
   await db.from('import_runs').update({
@@ -209,6 +245,6 @@ export async function POST(_req: NextRequest) {
       duplicate_count: duplicates,
       skipped_count: skipped,
       error_message: errorMessage,
-    }
+    },
   })
 }

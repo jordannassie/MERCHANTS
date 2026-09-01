@@ -1,28 +1,18 @@
 import { AppNav } from '@/components/AppNav'
-import { ensureWorkspaceProfile, ensureWorkspaceTerritory } from '@/lib/workspace'
-import { createServiceClient } from '@/lib/supabase/service'
+import { ensureWorkspaceTerritory } from '@/lib/workspace'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  // Bootstrap profile + territory idempotently on every load
+  // Bootstrap the global territory idempotently on every load.
+  // Silent failure if Supabase isn't configured yet.
   try {
-    await ensureWorkspaceProfile()
     await ensureWorkspaceTerritory()
   } catch {
-    // If Supabase isn't configured yet, continue to show the UI
+    // Tables may not exist yet — the app will show an appropriate state.
   }
-
-  const supabase = createServiceClient()
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('full_name')
-    .limit(1)
-    .maybeSingle()
-
-  const userName = profile?.full_name ?? 'Jordan'
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <AppNav userName={userName} />
+      <AppNav userName="Jordan" />
       <div className="md:pl-56">
         <main className="pb-20 md:pb-0 min-h-screen">
           {children}

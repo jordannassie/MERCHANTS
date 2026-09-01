@@ -1,13 +1,15 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
-import { getWorkspaceOwnerId } from '@/lib/workspace'
 import { z } from 'zod'
 
 const schema = z.object({
   leadId: z.string().uuid(),
-  activityType: z.enum(['call','note','email','meeting','status_change']),
+  activityType: z.enum(['call', 'note', 'email', 'meeting', 'status_change']),
   contactId: z.string().uuid().nullable().optional(),
-  callOutcome: z.enum(['no_answer','voicemail','connected','call_back','not_interested','appointment','won']).nullable().optional(),
+  callOutcome: z
+    .enum(['no_answer', 'voicemail', 'connected', 'call_back', 'not_interested', 'appointment', 'won'])
+    .nullable()
+    .optional(),
   notes: z.string().nullable().optional(),
   durationSeconds: z.number().nullable().optional(),
   occurredAt: z.string().optional(),
@@ -17,15 +19,20 @@ const schema = z.object({
 
 export async function POST(request: NextRequest) {
   const db = createServiceClient()
-  const ownerId = await getWorkspaceOwnerId()
 
   const body = await request.json()
   const parsed = schema.safeParse(body)
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.message }, { status: 400 })
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.message }, { status: 400 })
+  }
 
   const d = parsed.data
 
-  const { data: lead } = await db.from('leads').select('id,status').eq('id', d.leadId).eq('owner_id', ownerId).single()
+  const { data: lead } = await db
+    .from('leads')
+    .select('id,status')
+    .eq('id', d.leadId)
+    .single()
   if (!lead) return NextResponse.json({ error: 'Lead not found' }, { status: 404 })
 
   const now = d.occurredAt ? new Date(d.occurredAt).toISOString() : new Date().toISOString()
@@ -34,7 +41,6 @@ export async function POST(request: NextRequest) {
     .from('activities')
     .insert({
       lead_id: d.leadId,
-      owner_id: ownerId,
       contact_id: d.contactId ?? null,
       activity_type: d.activityType,
       call_outcome: d.callOutcome ?? null,
@@ -48,22 +54,32 @@ export async function POST(request: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const STATUS_ORDER = ['new','attempted','connected','follow_up','appointment','won','lost','do_not_contact']
+  const STATUS_ORDER = [
+    'new', 'attempted', 'connected', 'follow_up',
+    'appointment', 'won', 'lost', 'do_not_contact',
+  ]
   const currentIdx = STATUS_ORDER.indexOf(lead.status)
-  const newStatus = d.statusUpdate
   const leadUpdates: Record<string, unknown> = { last_contacted_at: now }
 
-  if (newStatus && STATUS_ORDER.includes(newStatus)) {
-    const newIdx = STATUS_ORDER.indexOf(newStatus)
-    if (newStatus === 'do_not_contact' || newStatus === 'lost' || newIdx > currentIdx) {
-      leadUpdates.status = newStatus
+  if (d.statusUpdate && STATUS_ORDER.includes(d.statusUpdate)) {
+    const newIdx = STATUS_ORDER.indexOf(d.statusUpdate)
+    if (
+      d.statusUpdate === 'do_not_contact' ||
+      d.statusUpdate === 'lost' ||
+      newIdx > currentIdx
+    ) {
+      leadUpdates.status = d.statusUpdate
     }
   }
 
   if (d.nextFollowUpAt) leadUpdates.next_follow_up_at = d.nextFollowUpAt
 
   const { data: updatedLead } = await db
-    .from('leads').update(leadUpdates).eq('id', d.leadId).eq('owner_id', ownerId).select().single()
+    .from('leads')
+    .update(leadUpdates)
+    .eq('id', d.leadId)
+    .select()
+    .single()
 
   return NextResponse.json({ activity, updatedLead })
 }
