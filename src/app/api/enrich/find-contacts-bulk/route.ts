@@ -6,6 +6,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { findPlacesContact, type LeadForSearch } from '@/lib/google-places'
+import { checkRateLimit, rateLimitExceeded } from '@/lib/rate-limit'
 import { z } from 'zod'
 
 const MAX_BATCH = 25
@@ -31,6 +32,11 @@ export async function POST(request: NextRequest) {
   }
 
   const db = createServiceClient()
+
+  // Rate limit: max 3 bulk batches per 30 minutes
+  const rl = await checkRateLimit(db, 'bulk')
+  if (!rl.allowed) return rateLimitExceeded(rl) as unknown as ReturnType<typeof NextResponse.json>
+
   let leadsQuery = db
     .from('leads')
     .select(

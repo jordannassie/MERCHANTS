@@ -7,6 +7,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { researchDecisionMaker } from '@/lib/openai-research'
+import { checkRateLimit, rateLimitExceeded } from '@/lib/rate-limit'
 import { z } from 'zod'
 
 const schema = z.object({
@@ -29,6 +30,10 @@ export async function POST(request: NextRequest) {
 
   const { leadId, forceRefresh } = parsed.data
   const db = createServiceClient()
+
+  // Rate limit: max 20 AI research calls per 60 minutes (OpenAI costs money)
+  const rl = await checkRateLimit(db, 'research')
+  if (!rl.allowed) return rateLimitExceeded(rl) as unknown as ReturnType<typeof NextResponse.json>
 
   const { data: lead } = await db
     .from('leads')

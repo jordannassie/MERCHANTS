@@ -10,6 +10,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { findPlacesContact, type LeadForSearch } from '@/lib/google-places'
+import { checkRateLimit, rateLimitExceeded } from '@/lib/rate-limit'
 import { z } from 'zod'
 
 const schema = z.object({
@@ -34,6 +35,10 @@ export async function POST(request: NextRequest) {
 
   const { leadId, forceRefresh } = parsed.data
   const db = createServiceClient()
+
+  // Rate limit: max 50 enrichment calls per 15 minutes (server-side, no login)
+  const rl = await checkRateLimit(db, 'enrich')
+  if (!rl.allowed) return rateLimitExceeded(rl) as unknown as ReturnType<typeof NextResponse.json>
 
   const { data: rawLead, error: leadErr } = await db
     .from('leads')
