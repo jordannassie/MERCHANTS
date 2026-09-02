@@ -46,7 +46,8 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
       if (next.neverContacted) params.set('neverContacted', 'true')
       if (next.followUpDue) params.set('followUpDue', 'true')
       if (next.starred) params.set('starred', 'true')
-      if (next.hasPhone) params.set('hasPhone', 'true')
+      // hasPhone defaults to true — only encode when user explicitly sets it to false
+      if (next.hasPhone === false) params.set('hasPhone', 'false')
       if (next.missingPhone) params.set('missingPhone', 'true')
       if (next.hasWebsite) params.set('hasWebsite', 'true')
       if (next.missingWebsite) params.set('missingWebsite', 'true')
@@ -90,7 +91,9 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
     filters.city || filters.permitDateFrom || filters.permitDateTo ||
     filters.firstSalesDateFrom || filters.firstSalesDateTo ||
     filters.openingSoon || filters.neverContacted || filters.followUpDue || filters.starred ||
-    filters.hasPhone || filters.missingPhone || filters.hasWebsite || filters.missingWebsite ||
+    // hasPhone defaults to true — only "active" (shows Clear) when explicitly disabled
+    filters.hasPhone === false ||
+    filters.missingPhone || filters.hasWebsite || filters.missingWebsite ||
     filters.enriched || filters.needsReview || !filters.hideCorporateChains
   )
 

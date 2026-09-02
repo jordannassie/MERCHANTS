@@ -28,6 +28,10 @@ export default async function LeadsPage({ searchParams }: PageProps) {
   // hideCorporateChains defaults to TRUE — user must explicitly pass showChains=true to see them
   const hideCorporateChains = sp.showChains !== 'true'
 
+  // hasPhone defaults to TRUE — show callable leads (permit_phone OR primary_phone) unless
+  // the user explicitly passes ?hasPhone=false to show all leads including those without phones
+  const hasPhone = sp.hasPhone !== 'false'
+
   const filters: LeadsFilters = {
     search: sp.search || '',
     status: (sp.status as LeadsFilters['status']) || '',
@@ -42,7 +46,7 @@ export default async function LeadsPage({ searchParams }: PageProps) {
     neverContacted: sp.neverContacted === 'true',
     followUpDue: sp.followUpDue === 'true',
     starred: sp.starred === 'true',
-    hasPhone: sp.hasPhone === 'true',
+    hasPhone,
     missingPhone: sp.missingPhone === 'true',
     hasWebsite: sp.hasWebsite === 'true',
     missingWebsite: sp.missingWebsite === 'true',
@@ -95,6 +99,11 @@ export default async function LeadsPage({ searchParams }: PageProps) {
     : filters.sort === 'next_follow_up_at' ? 'next_follow_up_at'
     : 'created_at'
   query = query.order(sortCol, { ascending: filters.order === 'asc', nullsFirst: false })
+  // Secondary sort: when ordering by score, also sort by nearest first_sales_date
+  // so upcoming openings appear before already-open leads of equal score.
+  if (sortCol === 'score') {
+    query = query.order('first_sales_date', { ascending: true, nullsFirst: false })
+  }
 
   const { data: leads, count } = await query.range(from, to)
   const totalPages = Math.ceil((count ?? 0) / LEADS_PER_PAGE)
@@ -131,7 +140,8 @@ export default async function LeadsPage({ searchParams }: PageProps) {
           <h1 className="text-xl font-semibold text-gray-900">Leads</h1>
           {count != null && hasAnyLeads && (
             <p className="text-sm text-gray-500 mt-0.5">
-              {count.toLocaleString()} result{count !== 1 ? 's' : ''}
+              {count.toLocaleString()}{' '}
+              {filters.hasPhone ? 'callable lead' : 'lead'}{count !== 1 ? 's' : ''}
             </p>
           )}
         </div>

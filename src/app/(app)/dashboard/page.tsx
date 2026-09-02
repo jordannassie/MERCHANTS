@@ -56,40 +56,78 @@ export default async function DashboardPage() {
       .lt('started_at', staleThreshold)
   } catch { /* non-critical */ }
 
+  // Shared column list for call-list leads
+  const CALL_COLS = 'id,display_name,outlet_name,outlet_city,outlet_state,priority,status,score,primary_phone,permit_phone,permit_issue_date,first_sales_date,naics_code,category'
+
   const [
     { count: totalLeads },
     { count: hotLeads },
     { count: followUpsDue },
     { count: appointments },
-    { data: topLeads },
+    { data: callableLeads },
+    { count: callableCount },
+    { data: hotNoPhone },
     { data: todayFollowUps },
     { data: lastImportArr },
     { data: territory },
   ] = await Promise.all([
     db.from('leads').select('*', { count: 'exact', head: true }),
+
     db.from('leads').select('*', { count: 'exact', head: true })
       .eq('priority', 'hot')
       .not('status', 'in', '(won,lost,do_not_contact)')
       .or(NON_CHAIN),
+
     db.from('leads').select('*', { count: 'exact', head: true })
       .lte('next_follow_up_at', todayEnd.toISOString())
       .not('status', 'in', '(won,lost,do_not_contact)'),
+
     db.from('leads').select('*', { count: 'exact', head: true }).eq('status', 'appointment'),
+
+    // Primary call list: leads with any callable phone, ordered by score then soonest opening
     db.from('leads')
-      .select('id,display_name,outlet_name,outlet_city,outlet_state,priority,status,score,primary_phone,permit_phone,permit_issue_date,first_sales_date,naics_code,google_place_id,enrichment_status,category')
+      .select(CALL_COLS)
+      .or('permit_phone.not.is.null,primary_phone.not.is.null')
+      .not('status', 'in', '(won,lost,do_not_contact)')
+      .or(NON_CHAIN)
+      .order('score', { ascending: false })
+      .order('first_sales_date', { ascending: true, nullsFirst: false })
+      .limit(10),
+
+    // Total callable leads count (for section header)
+    db.from('leads').select('*', { count: 'exact', head: true })
+      .or('permit_phone.not.is.null,primary_phone.not.is.null')
+      .not('status', 'in', '(won,lost,do_not_contact)')
+      .or(NON_CHAIN),
+
+    // Fallback: hot leads without any phone (shown only if callable list has < 10)
+    db.from('leads')
+      .select(CALL_COLS)
+      .is('permit_phone', null)
+      .is('primary_phone', null)
+      .eq('priority', 'hot')
       .not('status', 'in', '(won,lost,do_not_contact)')
       .or(NON_CHAIN)
       .order('score', { ascending: false })
       .limit(5),
+
     db.from('leads')
       .select('id,display_name,outlet_city,outlet_state,primary_phone,permit_phone,next_follow_up_at,status,naics_code')
       .lte('next_follow_up_at', todayEnd.toISOString())
       .gte('next_follow_up_at', todayStart.toISOString())
       .order('next_follow_up_at')
       .limit(6),
+
     db.from('import_runs').select('*').order('started_at', { ascending: false }).limit(1),
     db.from('territories').select('*').eq('is_active', true).limit(1),
   ])
+
+  // Merge callable leads with hot-no-phone fallback if fewer than 10 callable leads
+  const callableIds = new Set((callableLeads ?? []).map(l => l.id))
+  const fallback = (hotNoPhone ?? []).filter(l => !callableIds.has(l.id))
+  const topLeads = (callableLeads ?? []).length >= 10
+    ? callableLeads ?? []
+    : [...(callableLeads ?? []), ...fallback].slice(0, 10)
 
   const firstName = 'Jordan'
   const lastRun = lastImportArr?.[0] ?? null
@@ -133,11 +171,18 @@ export default async function DashboardPage() {
       {/* Main grid */}
       <div className="grid md:grid-cols-5 gap-6">
 
-        {/* Today's Best Leads — 3/5 width */}
+        {/* Today's Call List — 3/5 width */}
         <div className="md:col-span-3 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
-            <h2 className="font-semibold text-gray-900">Today&apos;s Best Leads</h2>
-            <Link href="/leads" className="text-xs text-blue-600 hover:underline">View all →</Link>
+            <div>
+              <h2 className="font-semibold text-gray-900">Today&apos;s Call List</h2>
+              {(callableCount ?? 0) > 0 && (
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {(callableCount ?? 0).toLocaleString()} callable lead{callableCount !== 1 ? 's' : ''}
+                </p>
+              )}
+            </div>
+            <Link href="/leads?hasPhone=true" className="text-xs text-blue-600 hover:underline">View all →</Link>
           </div>
 
           {topLeads && topLeads.length > 0 ? (
@@ -227,7 +272,7 @@ export default async function DashboardPage() {
               </tbody>
             </table>
           ) : (
-            <p className="px-5 py-10 text-sm text-gray-400 text-center">No leads yet — import Texas permits to get started.</p>
+            <p className="px-5 py-10 text-sm text-gray-400 text-center">No callable leads yet — import a Texas permit-phone file to add phone numbers.</p>
           )}
         </div>
 
