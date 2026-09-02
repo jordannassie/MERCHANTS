@@ -6,7 +6,7 @@ import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
 import {
   ChevronRight, Play, Shield, ArrowRight,
-  BarChart2, CheckCircle, CreditCard, Phone, Mail, X, LogIn, LifeBuoy,
+  BarChart2, CheckCircle, CreditCard, Phone, Mail, LogIn, LifeBuoy,
 } from 'lucide-react'
 import { PinDialog } from './PinDialog'
 
@@ -64,7 +64,6 @@ const EMPTY_FORM = { firstName: '', lastName: '', phone: '', email: '', comments
 export default function LandingClient() {
   const searchParams = useSearchParams()
   const [pinOpen, setPinOpen] = useState(() => searchParams.get('login') === '1')
-  const [supportOpen, setSupportOpen] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
@@ -73,8 +72,6 @@ export default function LandingClient() {
   function scrollTo(href: string) {
     document.querySelector(href)?.scrollIntoView({ behavior: 'smooth' })
   }
-
-  function openSupport() { setSupportOpen(true); setSubmitted(false); setSubmitError(''); setForm(EMPTY_FORM) }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -88,6 +85,7 @@ export default function LandingClient() {
       })
       if (!res.ok) throw new Error('Submission failed')
       setSubmitted(true)
+      setForm(EMPTY_FORM)
     } catch {
       setSubmitError('Something went wrong. Please try again or call us directly.')
     } finally {
@@ -97,11 +95,12 @@ export default function LandingClient() {
 
   return (
     <div className="min-h-screen bg-white text-slate-900 font-sans">
+
       {/* ─── UTILITY TOP BAR ────────────────────────────────────────────────── */}
       <div className="bg-slate-800 text-slate-300 text-xs">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-8 flex items-center justify-end gap-3">
           <button
-            onClick={openSupport}
+            onClick={() => scrollTo('#contact')}
             className="flex items-center gap-1 hover:text-white transition-colors"
           >
             <LifeBuoy size={11} /> Support Request
@@ -139,40 +138,28 @@ export default function LandingClient() {
             ))}
           </nav>
 
-          {/* Right: support + CTA */}
+          {/* Right CTA */}
           <div className="hidden md:flex items-center gap-2">
-            <button
-              onClick={openSupport}
-              className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900 text-sm font-medium px-3 py-2 rounded-lg hover:bg-slate-100 transition-colors"
-            >
-              <LifeBuoy size={14} /> Support
-            </button>
             <button
               onClick={() => scrollTo('#contact')}
               className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
             >
-              See How Much You Could Save <ChevronRight size={14} />
+              Request a Free Review <ChevronRight size={14} />
             </button>
           </div>
 
-          {/* Mobile: support + get started */}
-          <div className="md:hidden flex items-center gap-2">
-            <button onClick={openSupport} className="text-slate-500 p-1">
-              <LifeBuoy size={18} />
-            </button>
-            <button
-              onClick={() => scrollTo('#contact')}
-              className="text-sm font-semibold text-blue-600"
-            >
-              Get started
-            </button>
-          </div>
+          {/* Mobile CTA */}
+          <button
+            onClick={() => scrollTo('#contact')}
+            className="md:hidden text-sm font-semibold text-blue-600"
+          >
+            Get started
+          </button>
         </div>
       </header>
 
       {/* ─── HERO ───────────────────────────────────────────────────────────── */}
       <section className="relative overflow-hidden bg-white pt-20 pb-28 md:pt-28 md:pb-36">
-        {/* Subtle grid background */}
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0"
@@ -201,7 +188,7 @@ export default function LandingClient() {
               onClick={() => scrollTo('#contact')}
               className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-base px-8 py-4 rounded-xl shadow-lg shadow-blue-200 transition-all"
             >
-              See How Much You Could Save <ArrowRight size={16} />
+              Request a Free Review <ArrowRight size={16} />
             </button>
             <button
               onClick={() => scrollTo('#video')}
@@ -234,13 +221,6 @@ export default function LandingClient() {
               and simplify the way your business gets paid.
             </p>
           </div>
-
-          {/*
-            VIDEO PLACEHOLDER
-            Replace the src attribute below with the final video URL.
-            The poster attribute can be updated with a thumbnail image URL.
-            This component is isolated here for easy replacement.
-          */}
           <VideoPlaceholder />
         </div>
       </section>
@@ -301,44 +281,25 @@ export default function LandingClient() {
         </div>
       </section>
 
-      {/* ─── FULL-WIDTH IMAGE 1: Clover Restaurant Devices ──────────────────── */}
+      {/* ─── FULL-WIDTH IMAGE 1 ──────────────────────────────────────────────── */}
       <section className="relative w-full overflow-hidden" style={{ height: '480px' }}>
-        <Image
-          src={IMG_CLOVER}
-          alt="Clover restaurant payment devices"
-          fill
-          className="object-cover"
-          sizes="100vw"
-        />
+        <Image src={IMG_CLOVER} alt="Clover restaurant payment devices" fill className="object-cover" sizes="100vw" />
       </section>
 
-      {/* ─── FULL-WIDTH IMAGE 2: Payment Types ──────────────────────────────── */}
+      {/* ─── FULL-WIDTH IMAGE 2 ──────────────────────────────────────────────── */}
       <section className="relative w-full overflow-hidden" style={{ height: '480px' }}>
-        <Image
-          src={IMG_TYPES}
-          alt="Different payment types accepted"
-          fill
-          className="object-cover"
-          sizes="100vw"
-        />
+        <Image src={IMG_TYPES} alt="Different payment types accepted" fill className="object-cover" sizes="100vw" />
       </section>
 
-      {/* ─── FULL-WIDTH IMAGE 3: Device Close-Up ────────────────────────────── */}
+      {/* ─── FULL-WIDTH IMAGE 3 ──────────────────────────────────────────────── */}
       <section className="relative w-full overflow-hidden" style={{ height: '480px' }}>
-        <Image
-          src={IMG_DEVICE}
-          alt="Payment terminal close-up"
-          fill
-          className="object-cover object-center"
-          sizes="100vw"
-        />
+        <Image src={IMG_DEVICE} alt="Payment terminal close-up" fill className="object-cover object-center" sizes="100vw" />
       </section>
 
       {/* ─── BIO: Jordan Nassie ─────────────────────────────────────────────── */}
       <section id="about" className="bg-white py-20 md:py-28">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row items-center gap-12">
-            {/* Photo */}
             <div className="shrink-0">
               <div className="relative w-56 h-56 md:w-64 md:h-64 rounded-2xl overflow-hidden shadow-xl ring-4 ring-blue-50">
                 <Image
@@ -351,7 +312,6 @@ export default function LandingClient() {
               </div>
             </div>
 
-            {/* Bio text */}
             <div className="flex-1 text-center md:text-left">
               <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-4">
                 <Shield size={12} /> Your Local Payment Expert
@@ -386,120 +346,65 @@ export default function LandingClient() {
         </div>
       </section>
 
-      {/* ─── FINAL CTA ──────────────────────────────────────────────────────── */}
-      <section id="contact" className="bg-blue-600 py-20 md:py-28">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-            Ready to See What You Could Save?
-          </h2>
-          <p className="text-blue-100 text-lg mb-10 max-w-xl mx-auto">
-            A free payment review takes less than 15 minutes and there is no obligation to switch.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <a
-              href="mailto:jordannassie@gmail.com?subject=Payment%20Review%20Request"
-              className="inline-flex items-center gap-2 bg-white hover:bg-blue-50 text-blue-700 font-bold text-base px-8 py-4 rounded-xl shadow-xl transition-all"
-            >
-              <Mail size={16} /> Request a Free Review
-            </a>
-            <a
-              href="tel:9493316367"
-              className="inline-flex items-center gap-2 bg-blue-500 hover:bg-blue-400 text-white font-bold text-base px-8 py-4 rounded-xl border border-blue-400 transition-all"
-            >
-              <Phone size={16} /> Call (949) 331-6367
-            </a>
-          </div>
-          <p className="mt-5 text-blue-200 text-xs">
-            No bots, no forms — just a real conversation with Jordan.
-          </p>
-        </div>
-      </section>
+      {/* ─── CONTACT FORM ───────────────────────────────────────────────────── */}
+      <section id="contact" className="bg-slate-50 py-20 md:py-28">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-start">
 
-      {/* ─── FOOTER ─────────────────────────────────────────────────────────── */}
-      <footer className="bg-white border-t border-slate-100 py-10">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-          {/* Top row: logos + links */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <Image src={LOGO_URL} alt="Process.Direct" width={110} height={28} className="h-7 w-auto object-contain" />
-              <span className="text-slate-400 text-xs">© {new Date().getFullYear()}</span>
-            </div>
-            <div className="flex items-center gap-5 text-xs text-slate-400">
-              <a href="#" className="hover:text-slate-700 transition-colors">Privacy</a>
-              <button
-                onClick={() => setPinOpen(true)}
-                className="hover:text-slate-600 transition-colors text-xs"
-              >
-                Admin Login
-              </button>
-            </div>
-          </div>
-
-          {/* Partner row: Hawthorne Payments */}
-          <div className="flex flex-col sm:flex-row items-center gap-4 pt-4 border-t border-slate-100">
-            <Image
-              src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/lgoso%20prartner.png"
-              alt="Hawthorne Payments"
-              width={160}
-              height={48}
-              className="h-12 w-auto object-contain"
-            />
-            <p className="text-xs text-slate-400 text-center sm:text-left leading-relaxed">
-              Hawthorne Payments, LLC is a registered ISO of PNC Bank, N.A., Pittsburgh, PA
-            </p>
-          </div>
-        </div>
-      </footer>
-
-      {/* ─── PIN DIALOG ─────────────────────────────────────────────────────── */}
-      <PinDialog open={pinOpen} onClose={() => setPinOpen(false)} />
-
-      {/* ─── SUPPORT REQUEST MODAL ──────────────────────────────────────────── */}
-      {supportOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ backgroundColor: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)' }}
-          onClick={(e) => { if (e.target === e.currentTarget) setSupportOpen(false) }}
-        >
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900">Support Request</h2>
-                <p className="text-xs text-slate-500 mt-0.5">We'll get back to you within one business day.</p>
+            {/* Left: copy */}
+            <div>
+              <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-5">
+                <Shield size={12} /> Free — No Obligation
               </div>
-              <button
-                onClick={() => setSupportOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-              >
-                <X size={18} />
-              </button>
+              <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 leading-tight mb-4">
+                Request a Free Review
+              </h2>
+              <p className="text-slate-500 text-lg leading-relaxed mb-8">
+                A free payment review takes less than 15 minutes. Tell us a little about your business
+                and we'll reach out with honest, straightforward recommendations.
+              </p>
+              <div className="space-y-4 text-sm text-slate-600">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center shrink-0">
+                    <Phone size={14} className="text-blue-600" />
+                  </div>
+                  <a href="tel:9493316367" className="hover:text-blue-600 transition-colors font-medium">(949) 331-6367</a>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center shrink-0">
+                    <Mail size={14} className="text-blue-600" />
+                  </div>
+                  <a href="mailto:jordannassie@gmail.com" className="hover:text-blue-600 transition-colors font-medium">jordannassie@gmail.com</a>
+                </div>
+              </div>
             </div>
 
-            {/* Body */}
-            <div className="px-6 py-6">
+            {/* Right: form */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8">
               {submitted ? (
-                <div className="text-center py-8">
-                  <div className="w-14 h-14 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <CheckCircle size={28} className="text-green-500" />
+                <div className="text-center py-10">
+                  <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <CheckCircle size={30} className="text-green-500" />
                   </div>
-                  <h3 className="text-lg font-bold text-slate-900 mb-2">Request Received!</h3>
-                  <p className="text-slate-500 text-sm">
-                    Thanks {form.firstName}. Jordan will be in touch soon. For urgent help call{' '}
+                  <h3 className="text-xl font-bold text-slate-900 mb-2">We got your request!</h3>
+                  <p className="text-slate-500 text-sm leading-relaxed">
+                    Thanks! Jordan will be in touch soon. For urgent help call{' '}
                     <a href="tel:9493316367" className="text-blue-600 font-semibold">(949) 331-6367</a>.
                   </p>
                   <button
-                    onClick={() => setSupportOpen(false)}
-                    className="mt-6 px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+                    onClick={() => setSubmitted(false)}
+                    className="mt-6 text-xs text-slate-400 hover:text-slate-600 underline transition-colors"
                   >
-                    Close
+                    Submit another request
                   </button>
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">First Name <span className="text-red-500">*</span></label>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                        First Name <span className="text-red-500">*</span>
+                      </label>
                       <input
                         type="text"
                         required
@@ -510,7 +415,9 @@ export default function LandingClient() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Last Name <span className="text-red-500">*</span></label>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                        Last Name <span className="text-red-500">*</span>
+                      </label>
                       <input
                         type="text"
                         required
@@ -523,7 +430,7 @@ export default function LandingClient() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Phone</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">Phone</label>
                     <input
                       type="tel"
                       value={form.phone}
@@ -534,7 +441,9 @@ export default function LandingClient() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Email <span className="text-red-500">*</span></label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                      Email <span className="text-red-500">*</span>
+                    </label>
                     <input
                       type="email"
                       required
@@ -546,7 +455,9 @@ export default function LandingClient() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Comments <span className="text-red-500">*</span></label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                      Comments <span className="text-red-500">*</span>
+                    </label>
                     <textarea
                       required
                       rows={4}
@@ -564,16 +475,57 @@ export default function LandingClient() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold text-sm py-3 rounded-xl transition-colors"
+                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold text-sm py-3.5 rounded-xl transition-colors shadow-md shadow-blue-200"
                   >
                     {submitting ? 'Sending…' : 'Submit Request'}
                   </button>
+
+                  <p className="text-center text-xs text-slate-400">
+                    No obligation. We'll reach out within one business day.
+                  </p>
                 </form>
               )}
             </div>
           </div>
         </div>
-      )}
+      </section>
+
+      {/* ─── FOOTER ─────────────────────────────────────────────────────────── */}
+      <footer className="bg-white border-t border-slate-100 py-10">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <Image src={LOGO_URL} alt="Process.Direct" width={110} height={28} className="h-7 w-auto object-contain" />
+              <span className="text-slate-400 text-xs">© {new Date().getFullYear()}</span>
+            </div>
+            <div className="flex items-center gap-5 text-xs text-slate-400">
+              <a href="#" className="hover:text-slate-700 transition-colors">Privacy</a>
+              <button
+                onClick={() => setPinOpen(true)}
+                className="hover:text-slate-600 transition-colors text-xs"
+              >
+                Admin Login
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center gap-4 pt-4 border-t border-slate-100">
+            <Image
+              src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/lgoso%20prartner.png"
+              alt="Hawthorne Payments"
+              width={160}
+              height={48}
+              className="h-12 w-auto object-contain"
+            />
+            <p className="text-xs text-slate-400 text-center sm:text-left leading-relaxed">
+              Hawthorne Payments, LLC is a registered ISO of PNC Bank, N.A., Pittsburgh, PA
+            </p>
+          </div>
+        </div>
+      </footer>
+
+      {/* ─── PIN DIALOG ─────────────────────────────────────────────────────── */}
+      <PinDialog open={pinOpen} onClose={() => setPinOpen(false)} />
     </div>
   )
 }
@@ -582,7 +534,6 @@ export default function LandingClient() {
 function VideoPlaceholder() {
   const [playing, setPlaying] = useState(false)
 
-  // Replace VIDEO_SRC with the actual video URL when available
   const VIDEO_SRC = ''
 
   if (!VIDEO_SRC) {
@@ -611,7 +562,7 @@ function VideoPlaceholder() {
         className="w-full h-full object-cover"
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
-        aria-label="How Merchant Radar works"
+        aria-label="How Process.Direct works"
       >
         <track kind="captions" />
         Your browser does not support video playback.
