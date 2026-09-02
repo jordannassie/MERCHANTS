@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
@@ -572,44 +572,48 @@ export default function LandingClient() {
 // ─── Isolated video placeholder — swap src/poster when ready ─────────────────
 function VideoPlaceholder() {
   const [playing, setPlaying] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
 
   const VIDEO_SRC = 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/video/vss.mp4'
 
-  if (!VIDEO_SRC) {
-    return (
-      <div className="relative w-full rounded-2xl overflow-hidden bg-slate-900 shadow-2xl"
-        style={{ aspectRatio: '16/9' }}>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center mb-4 cursor-default">
-            <Play size={24} className="text-white fill-white ml-1" />
-          </div>
-          <p className="text-slate-400 text-sm">Video coming soon</p>
-        </div>
-      </div>
-    )
+  function handlePlayClick() {
+    const v = videoRef.current
+    if (!v) return
+    v.muted = false
+    v.loop = false
+    v.controls = true
+    v.play()
+    setPlaying(true)
   }
 
   return (
-    <div className="relative w-full rounded-2xl overflow-hidden shadow-2xl bg-slate-900"
-      style={{ aspectRatio: '16/9' }}>
+    <div
+      className="relative w-full rounded-2xl overflow-hidden shadow-2xl bg-slate-900 cursor-pointer"
+      style={{ aspectRatio: '16/9' }}
+      onClick={!playing ? handlePlayClick : undefined}
+    >
+      {/* Video — autoplays muted+loop as background; becomes full player on click */}
       <video
+        ref={videoRef}
         src={VIDEO_SRC}
-        controls
+        autoPlay
+        muted
+        loop
         playsInline
-        preload="metadata"
-        autoPlay={false}
+        preload="auto"
         className="w-full h-full object-cover"
-        onPlay={() => setPlaying(true)}
+        onPlay={() => {}}
         onPause={() => setPlaying(false)}
         aria-label="How Process.Direct works"
       >
         <track kind="captions" />
-        Your browser does not support video playback.
       </video>
+
+      {/* Play button overlay — hidden once user clicks play */}
       {!playing && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-16 h-16 rounded-full bg-black/40 flex items-center justify-center">
-            <Play size={24} className="text-white fill-white ml-1" />
+        <div className="absolute inset-0 flex items-center justify-center bg-black/20 hover:bg-black/30 transition-colors">
+          <div className="w-20 h-20 rounded-full bg-white/90 shadow-xl flex items-center justify-center">
+            <Play size={30} className="text-blue-600 fill-blue-600 ml-1" />
           </div>
         </div>
       )}
