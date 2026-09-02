@@ -171,8 +171,8 @@ export default function LandingClient() {
             </p>
 
           <DecisionCards
-            onNewBusiness={() => scrollToContactWithInquiry(\"I'm opening a new business\")}
-            onExistingBusiness={() => scrollToContactWithInquiry(\"I already accept cards — review my rates\")}
+            onNewBusiness={() => scrollToContactWithInquiry("I'm opening a new business")}
+            onExistingBusiness={() => scrollToContactWithInquiry("I already accept cards — review my rates")}
           />
 
             {/* Trust indicators */}
@@ -199,7 +199,28 @@ export default function LandingClient() {
       </section>
 
       {/* ─── QUICKBOOKS STRIP ───────────────────────────────────────────────── */}
-      {/* ─── TRUST STATS (full-width) ────────────────────────────────────────── */}\n+      <section className=\"w-full bg-blue-50/40 py-12\">\n+        <div className=\"max-w-6xl mx-auto px-4 sm:px-6 lg:px-8\">\n+          <div className=\"text-center mb-4 text-sm text-slate-700\">Experience you can count on.</div>\n+          <div className=\"grid grid-cols-1 md:grid-cols-2 gap-6 items-center\">\n+            <div className=\"flex items-center justify-center md:justify-end\">\n+              <div className=\"bg-white rounded-2xl p-8 w-full max-w-md text-center md:text-right\">\n+                <div className=\"text-4xl font-extrabold text-slate-900\">20+</div>\n+                <div className=\"mt-2 text-sm text-slate-600\">Years of Combined Payment Industry Experience</div>\n+              </div>\n+            </div>\n+            <div className=\"flex items-center justify-center md:justify-start\">\n+              <div className=\"bg-white rounded-2xl p-8 w-full max-w-md text-center md:text-left\">\n+                <div className=\"text-4xl font-extrabold text-slate-900\">$4.5B+</div>\n+                <div className=\"mt-2 text-sm text-slate-600\">In Annual Transactions Supported</div>\n+              </div>\n+            </div>\n+          </div>\n+        </div>\n+      </section>\n+\n+      <section className=\"bg-white border-y border-slate-100 py-6\">
+      {/* ─── TRUST STATS (full-width) ────────────────────────────────────────── */}
+     <section className="w-full bg-blue-50/40 py-12">
+       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+         <div className="text-center mb-4 text-sm text-slate-700">Experience you can count on.</div>
+         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+           <div className="flex items-center justify-center md:justify-end">
+             <div className="bg-white rounded-2xl p-8 w-full max-w-md text-center md:text-right">
+               <div className="text-4xl font-extrabold text-slate-900">20+</div>
+               <div className="mt-2 text-sm text-slate-600">Years of Combined Payment Industry Experience</div>
+             </div>
+           </div>
+           <div className="flex items-center justify-center md:justify-start">
+             <div className="bg-white rounded-2xl p-8 w-full max-w-md text-center md:text-left">
+               <div className="text-4xl font-extrabold text-slate-900">$4.5B+</div>
+               <div className="mt-2 text-sm text-slate-600">In Annual Transactions Supported</div>
+             </div>
+           </div>
+         </div>
+       </div>
+     </section>
+
+     <section className="bg-white border-y border-slate-100 py-6">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-center gap-5">
           <Image
             src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/quickbooks.png"
@@ -217,9 +238,9 @@ export default function LandingClient() {
 
       {/* ─── DECISION + BENEFITS ────────────────────────────────────────────── */}
       <DecisionSection
-        onNewBusiness={() => scrollToContactWithSubject('New Business / POS Setup')}
-        onExistingBusiness={() => scrollToContactWithSubject('Free Processing Review')}
-        onTalkWithJordan={() => scrollToContactWithSubject('')}
+        onNewBusiness={() => scrollToContactWithInquiry("I'm opening a new business")}
+        onExistingBusiness={() => scrollToContactWithInquiry("I already accept cards — review my rates")}
+        onTalkWithJordan={() => scrollToContactWithInquiry('')}
       />
 
       {/* ─── VIDEO SECTION ──────────────────────────────────────────────────── */}
@@ -460,7 +481,7 @@ export default function LandingClient() {
                       onChange={e => setForm(f => ({ ...f, inquiry_type: e.target.value }))}
                       className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
-                      <option value=\"\">Select an option</option>
+                      <option value="">Select an option</option>
                       <option>I'm opening a new business</option>
                       <option>I need a POS system or payment terminal</option>
                       <option>I already accept cards — review my rates</option>
