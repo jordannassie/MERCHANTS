@@ -9,6 +9,7 @@ import {
   BarChart2, CheckCircle, CreditCard, Phone, Mail, LogIn, LifeBuoy,
 } from 'lucide-react'
 import { PinDialog } from './PinDialog'
+import { ComparisonTable } from './ComparisonTable'
 
 const NAV_LINKS = [
   { label: 'Savings', href: '#savings' },
@@ -262,6 +263,9 @@ export default function LandingClient() {
         </div>
       </section>
 
+
+      {/* ─── COMPARISON TABLE ───────────────────────────────────────────────── */}
+      <ComparisonTable onScrollToContact={() => scrollTo('#contact')} />
 
       {/* ─── IMAGE GALLERY ──────────────────────────────────────────────────── */}
       <section className="bg-white py-14">
