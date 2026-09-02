@@ -6,7 +6,7 @@ import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
 import {
   ChevronRight, Play, Shield, ArrowRight,
-  BarChart2, CheckCircle, CreditCard, Phone, Mail,
+  BarChart2, CheckCircle, CreditCard, Phone, Mail, X, LogIn, LifeBuoy,
 } from 'lucide-react'
 import { PinDialog } from './PinDialog'
 
@@ -59,17 +59,65 @@ const HOW_STEPS = [
   },
 ]
 
+const EMPTY_FORM = { firstName: '', lastName: '', phone: '', email: '', comments: '' }
+
 export default function LandingClient() {
   const searchParams = useSearchParams()
-  // Initialize from URL: auto-open dialog when redirected from a protected route (?login=1)
   const [pinOpen, setPinOpen] = useState(() => searchParams.get('login') === '1')
+  const [supportOpen, setSupportOpen] = useState(false)
+  const [form, setForm] = useState(EMPTY_FORM)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
+  const [submitError, setSubmitError] = useState('')
 
   function scrollTo(href: string) {
     document.querySelector(href)?.scrollIntoView({ behavior: 'smooth' })
   }
 
+  function openSupport() { setSupportOpen(true); setSubmitted(false); setSubmitError(''); setForm(EMPTY_FORM) }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setSubmitting(true)
+    setSubmitError('')
+    try {
+      const res = await fetch('/api/support', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      if (!res.ok) throw new Error('Submission failed')
+      setSubmitted(true)
+    } catch {
+      setSubmitError('Something went wrong. Please try again or call us directly.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-white text-slate-900 font-sans">
+      {/* ─── UTILITY TOP BAR ────────────────────────────────────────────────── */}
+      <div className="bg-slate-800 text-slate-300 text-xs">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-8 flex items-center justify-end gap-3">
+          <button
+            onClick={openSupport}
+            className="flex items-center gap-1 hover:text-white transition-colors"
+          >
+            <LifeBuoy size={11} /> Support Request
+          </button>
+          <span className="text-slate-600">|</span>
+          <a
+            href="https://www.mystorecentral.com/auth/login"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 hover:text-white transition-colors"
+          >
+            <LogIn size={11} /> Customer Login
+          </a>
+        </div>
+      </div>
+
       {/* ─── STICKY HEADER ──────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-100">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -91,21 +139,34 @@ export default function LandingClient() {
             ))}
           </nav>
 
-          {/* CTA */}
-          <button
-            onClick={() => scrollTo('#contact')}
-            className="hidden md:flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-          >
-            See How Much You Could Save <ChevronRight size={14} />
-          </button>
+          {/* Right: support + CTA */}
+          <div className="hidden md:flex items-center gap-2">
+            <button
+              onClick={openSupport}
+              className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900 text-sm font-medium px-3 py-2 rounded-lg hover:bg-slate-100 transition-colors"
+            >
+              <LifeBuoy size={14} /> Support
+            </button>
+            <button
+              onClick={() => scrollTo('#contact')}
+              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+            >
+              See How Much You Could Save <ChevronRight size={14} />
+            </button>
+          </div>
 
-          {/* Mobile menu placeholder — scroll to contact */}
-          <button
-            onClick={() => scrollTo('#contact')}
-            className="md:hidden text-sm font-semibold text-blue-600"
-          >
-            Get started
-          </button>
+          {/* Mobile: support + get started */}
+          <div className="md:hidden flex items-center gap-2">
+            <button onClick={openSupport} className="text-slate-500 p-1">
+              <LifeBuoy size={18} />
+            </button>
+            <button
+              onClick={() => scrollTo('#contact')}
+              className="text-sm font-semibold text-blue-600"
+            >
+              Get started
+            </button>
+          </div>
         </div>
       </header>
 
@@ -407,6 +468,127 @@ export default function LandingClient() {
 
       {/* ─── PIN DIALOG ─────────────────────────────────────────────────────── */}
       <PinDialog open={pinOpen} onClose={() => setPinOpen(false)} />
+
+      {/* ─── SUPPORT REQUEST MODAL ──────────────────────────────────────────── */}
+      {supportOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setSupportOpen(false) }}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Support Request</h2>
+                <p className="text-xs text-slate-500 mt-0.5">We'll get back to you within one business day.</p>
+              </div>
+              <button
+                onClick={() => setSupportOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-6">
+              {submitted ? (
+                <div className="text-center py-8">
+                  <div className="w-14 h-14 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <CheckCircle size={28} className="text-green-500" />
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-900 mb-2">Request Received!</h3>
+                  <p className="text-slate-500 text-sm">
+                    Thanks {form.firstName}. Jordan will be in touch soon. For urgent help call{' '}
+                    <a href="tel:9493316367" className="text-blue-600 font-semibold">(949) 331-6367</a>.
+                  </p>
+                  <button
+                    onClick={() => setSupportOpen(false)}
+                    className="mt-6 px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">First Name <span className="text-red-500">*</span></label>
+                      <input
+                        type="text"
+                        required
+                        value={form.firstName}
+                        onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))}
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Jane"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Last Name <span className="text-red-500">*</span></label>
+                      <input
+                        type="text"
+                        required
+                        value={form.lastName}
+                        onChange={e => setForm(f => ({ ...f, lastName: e.target.value }))}
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Smith"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Phone</label>
+                    <input
+                      type="tel"
+                      value={form.phone}
+                      onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="(555) 000-0000"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Email <span className="text-red-500">*</span></label>
+                    <input
+                      type="email"
+                      required
+                      value={form.email}
+                      onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="jane@yourbusiness.com"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Comments <span className="text-red-500">*</span></label>
+                    <textarea
+                      required
+                      rows={4}
+                      value={form.comments}
+                      onChange={e => setForm(f => ({ ...f, comments: e.target.value }))}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                      placeholder="How can we help you?"
+                    />
+                  </div>
+
+                  {submitError && (
+                    <p className="text-red-600 text-xs">{submitError}</p>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold text-sm py-3 rounded-xl transition-colors"
+                  >
+                    {submitting ? 'Sending…' : 'Submit Request'}
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -138,6 +138,15 @@ async function main() {
     console.log('[migrate] Applying 010_mark_chain_leads (idempotent)…')
     await applyMigration('010_mark_chain_leads.sql', sql010)
   }
+
+  // Check if 012 support_requests table exists
+  const tbl012 = await columnExists('support_requests', 'id')
+  if (!tbl012) {
+    const sql012 = readMigration('012_support_requests.sql')
+    if (sql012) await applyMigration('012_support_requests.sql', sql012)
+  } else {
+    console.log('[migrate] ✓ 012 support_requests present')
+  }
 }
 
 async function applyMigration(filename, sql) {

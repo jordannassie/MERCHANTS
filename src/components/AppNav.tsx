@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, Users, Columns3, CalendarClock, Settings, Upload, LogOut } from 'lucide-react'
+import { LayoutDashboard, Users, Columns3, CalendarClock, Settings, Upload, LogOut, LifeBuoy } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const NAV = [
@@ -11,6 +11,7 @@ const NAV = [
   { href: '/leads',       label: 'Leads',       icon: Users },
   { href: '/pipeline',    label: 'Pipeline',    icon: Columns3 },
   { href: '/follow-ups',  label: 'Follow-ups',  icon: CalendarClock },
+  { href: '/support',     label: 'Support',     icon: LifeBuoy },
   { href: '/settings',    label: 'Imports',     icon: Upload },
   { href: '/settings',    label: 'Settings',    icon: Settings },
 ]

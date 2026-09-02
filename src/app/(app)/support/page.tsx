@@ -1,0 +1,99 @@
+import { Metadata } from 'next'
+import { createServiceClient } from '@/lib/supabase/service'
+import { LifeBuoy, Mail, Phone, Clock } from 'lucide-react'
+
+export const metadata: Metadata = { title: 'Support Requests' }
+export const dynamic = 'force-dynamic'
+
+function statusBadge(status: string) {
+  const cfg: Record<string, string> = {
+    new:         'bg-blue-50 text-blue-700',
+    in_progress: 'bg-amber-50 text-amber-700',
+    resolved:    'bg-green-50 text-green-700',
+  }
+  const label: Record<string, string> = {
+    new: 'New', in_progress: 'In Progress', resolved: 'Resolved',
+  }
+  return (
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${cfg[status] ?? 'bg-gray-100 text-gray-600'}`}>
+      {label[status] ?? status}
+    </span>
+  )
+}
+
+export default async function SupportPage() {
+  const db = createServiceClient()
+  const { data: requests } = await db
+    .from('support_requests')
+    .select('*')
+    .order('created_at', { ascending: false })
+
+  return (
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-8">
+        <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
+          <LifeBuoy size={20} className="text-blue-600" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Support Requests</h1>
+          <p className="text-sm text-gray-500">Inquiries submitted via the website contact form.</p>
+        </div>
+        <div className="ml-auto">
+          <span className="bg-blue-600 text-white text-xs font-bold px-2.5 py-1 rounded-full">
+            {requests?.filter(r => r.status === 'new').length ?? 0} new
+          </span>
+        </div>
+      </div>
+
+      {/* Table */}
+      {!requests || requests.length === 0 ? (
+        <div className="bg-white border border-gray-100 rounded-2xl p-16 text-center">
+          <LifeBuoy size={32} className="text-gray-300 mx-auto mb-3" />
+          <p className="text-gray-400 text-sm">No support requests yet.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {requests.map(r => (
+            <div key={r.id} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-bold text-gray-900 text-base">
+                      {r.first_name} {r.last_name}
+                    </span>
+                    {statusBadge(r.status)}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500">
+                    {r.email && (
+                      <a href={`mailto:${r.email}`} className="flex items-center gap-1 hover:text-blue-600 transition-colors">
+                        <Mail size={12} /> {r.email}
+                      </a>
+                    )}
+                    {r.phone && (
+                      <a href={`tel:${r.phone.replace(/\D/g, '')}`} className="flex items-center gap-1 hover:text-blue-600 transition-colors">
+                        <Phone size={12} /> {r.phone}
+                      </a>
+                    )}
+                    <span className="flex items-center gap-1">
+                      <Clock size={12} />
+                      {new Date(r.created_at).toLocaleString('en-US', {
+                        month: 'short', day: 'numeric', year: 'numeric',
+                        hour: 'numeric', minute: '2-digit',
+                      })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              {r.comments && (
+                <div className="mt-3 pt-3 border-t border-gray-50">
+                  <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{r.comments}</p>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
