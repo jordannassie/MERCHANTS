@@ -269,8 +269,8 @@ export default function LandingClient() {
           {/* Large top image */}
           <div className="relative rounded-2xl overflow-hidden shadow-md w-full" style={{ height: '420px' }}>
             <Image
-              src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/POSS.png"
-              alt="POS system in cafe"
+              src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/Terms.png"
+              alt="Payment terminals lineup"
               fill
               className="object-cover object-center"
               sizes="100vw"
@@ -279,7 +279,7 @@ export default function LandingClient() {
           {/* Two images below */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div className="relative rounded-2xl overflow-hidden shadow-md" style={{ height: '300px' }}>
-              <Image src={IMG_CLOVER} alt="Clover restaurant payment devices" fill className="object-cover" sizes="(max-width: 768px) 100vw, 50vw" />
+              <Image src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/Coffeee.png" alt="Café checkout" fill className="object-cover" sizes="(max-width: 768px) 100vw, 50vw" />
             </div>
             <div className="relative rounded-2xl overflow-hidden shadow-md" style={{ height: '300px' }}>
               <Image
