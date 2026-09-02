@@ -17,8 +17,9 @@ const schema = z.object({
   lastName:  z.string().min(1),
   phone:     z.string().optional().default(''),
   email:     z.string().email(),
-  comments:  z.string().min(1),
+  comments:  z.string().optional().default(''),
   subject:   z.string().optional().default(''),
+  inquiry_type: z.string().optional().default(''),
 })
 
 export async function POST(request: NextRequest) {
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.message }, { status: 400 })
   }
 
-  const { firstName, lastName, phone, email, comments, subject } = parsed.data
+  const { firstName, lastName, phone, email, comments, subject, inquiry_type } = parsed.data
   const db = createServiceClient()
 
   const fullComments = subject ? `[${subject}]\n\n${comments}` : comments
@@ -39,6 +40,7 @@ export async function POST(request: NextRequest) {
     phone,
     email,
     comments: fullComments,
+    inquiry_type,
   })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

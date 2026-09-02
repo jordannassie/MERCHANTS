@@ -80,8 +80,8 @@ export function ComparisonTable({ onScrollToContact }: { onScrollToContact: () =
 
         {/* Heading */}
         <div className="text-center mb-12">
-          <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4">
-            Why Businesses Choose Process.Direct
+          <h2 id="why" className="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4">
+            Why are are the Best?
           </h2>
           <p className="text-lg text-slate-500 max-w-2xl mx-auto">
             The technology matters. But having a real person in your corner matters more.

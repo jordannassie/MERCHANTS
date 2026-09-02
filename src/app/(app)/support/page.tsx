@@ -10,6 +10,7 @@ type SupportRequest = {
   phone: string
   email: string
   comments: string
+  inquiry_type?: string | null
   status: string
   created_at: string
 }
@@ -32,6 +33,7 @@ function statusBadge(status: string) {
 
 export default function SupportPage() {
   const [requests, setRequests] = useState<SupportRequest[]>([])
+  const [filter, setFilter] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState<string | null>(null)
 
@@ -59,7 +61,7 @@ export default function SupportPage() {
   }
 
   const newCount = requests.filter(r => r.status === 'new').length
-
+  const filtered = filter ? requests.filter(r => (r.inquiry_type ?? 'Not specified') === filter) : requests
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
       {/* Header */}
@@ -87,7 +89,22 @@ export default function SupportPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {requests.map(r => (
+          {/* Filter control */ }
+          <div className="flex items-center gap-3 mb-4">
+            <label className="text-sm text-slate-500">Filter by need:</label>
+            <select value={filter} onChange={e => setFilter(e.target.value)} className="text-sm border rounded px-3 py-1 text-slate-700">
+              <option value=''>All</option>
+              <option>I'm opening a new business</option>
+              <option>I need a POS system or payment terminal</option>
+              <option>I already accept cards — review my rates</option>
+              <option>I want to switch payment providers</option>
+              <option>I need help with online payments</option>
+              <option>Something else</option>
+            </select>
+            <button onClick={() => setFilter('')} className="text-sm text-slate-500 ml-2">Clear</button>
+          </div>
+
+          {filtered.map(r => (
             <div key={r.id} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
@@ -96,6 +113,7 @@ export default function SupportPage() {
                       {r.first_name} {r.last_name}
                     </span>
                     {statusBadge(r.status)}
+                    {r.inquiry_type && <span className="ml-2 text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{r.inquiry_type}</span>}
                   </div>
                   <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500">
                     {r.email && (

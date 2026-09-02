@@ -1,0 +1,1 @@
+-- Add inquiry_type to support_requests for structured admin filtering\n+\n+alter table if exists public.support_requests\n+  add column if not exists inquiry_type text;\n+\n+-- Optional: create index for faster filtering\n+create index if not exists idx_support_requests_inquiry_type on public.support_requests (inquiry_type);\n+

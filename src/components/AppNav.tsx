@@ -32,13 +32,15 @@ export function AppNav({ userName = 'Jordan' }: { userName?: string }) {
       <aside className="hidden md:flex flex-col fixed inset-y-0 left-0 w-56 bg-white border-r border-gray-200 z-40">
         {/* Logo */}
         <div className="flex items-center gap-2 px-5 py-5 border-b border-gray-100">
-          <Image
-            src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Process%20logo.png"
-            alt="Process.Direct"
-            width={120}
-            height={32}
-            className="h-8 w-auto object-contain"
-          />
+          <button onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }) }} className="flex items-center">
+            <Image
+              src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Blacklogo.png"
+              alt="Process.Direct"
+              width={120}
+              height={32}
+              className="h-8 w-auto object-contain"
+            />
+          </button>
         </div>
 
         {/* Nav links */}

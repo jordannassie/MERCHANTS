@@ -13,11 +13,11 @@ import { ComparisonTable } from './ComparisonTable'
 import { DecisionSection } from './DecisionSection'
 import { DecisionCards } from './DecisionCards'
 
-const NAV_LINKS = [
-  { label: 'Savings', href: '#savings' },
-  { label: 'About', href: '#about' },
-  { label: 'Contact', href: '#contact' },
-]
+  const NAV_LINKS = [
+    { label: 'Savings', href: '#why' },
+    { label: 'About', href: '#about' },
+    { label: 'Contact', href: '#contact' },
+  ]
 
 const LOGO_URL = 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Process%20logo.png'
 const JORDAN_PHOTO = 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/Jordanimage.png'
@@ -27,7 +27,7 @@ const IMG_DEVICE = 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/p
 
 
 
-const EMPTY_FORM = { firstName: '', lastName: '', phone: '', email: '', comments: '', subject: '' }
+const EMPTY_FORM = { firstName: '', lastName: '', phone: '', email: '', comments: '', subject: '', inquiry_type: '' }
 
 export default function LandingClient() {
   const searchParams = useSearchParams()
@@ -41,8 +41,8 @@ export default function LandingClient() {
     document.querySelector(href)?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  function scrollToContactWithSubject(subject: string) {
-    setForm(f => ({ ...f, subject, comments: subject ? `I'm interested in: ${subject}` : f.comments }))
+  function scrollToContactWithInquiry(inquiry: string) {
+    setForm(f => ({ ...f, inquiry_type: inquiry, subject: inquiry, comments: inquiry ? `I'm interested in: ${inquiry}` : f.comments }))
     setSubmitted(false)
     setTimeout(() => document.querySelector('#contact')?.scrollIntoView({ behavior: 'smooth' }), 50)
   }
@@ -157,9 +157,9 @@ export default function LandingClient() {
         {/* Hero text content — sits below the image, on white */}
         <div className="relative bg-white pb-20 md:pb-28">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-6">
-              <Shield size={12} /> Helping Texas businesses reduce processing costs
-            </div>
+          <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-6">
+            <Shield size={12} /> Helping Texas businesses reduce processing costs
+          </div>
 
             <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold text-slate-900 tracking-tight leading-[1.08] mb-6">
               Save More on<br className="hidden sm:block" /> Every Sale.
@@ -170,10 +170,10 @@ export default function LandingClient() {
               payment equipment for the way they sell.
             </p>
 
-            <DecisionCards
-              onNewBusiness={() => scrollToContactWithSubject('New Business / POS Setup')}
-              onExistingBusiness={() => scrollToContactWithSubject('Free Processing Review')}
-            />
+          <DecisionCards
+            onNewBusiness={() => scrollToContactWithInquiry(\"I'm opening a new business\")}
+            onExistingBusiness={() => scrollToContactWithInquiry(\"I already accept cards — review my rates\")}
+          />
 
             {/* Trust indicators */}
             <div className="mt-12 flex flex-wrap justify-center gap-6 text-xs text-slate-400 font-medium">
@@ -345,14 +345,13 @@ export default function LandingClient() {
             {/* Left: copy */}
             <div>
               <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-5">
-                <Shield size={12} /> Free — No Obligation
+                <Shield size={12} /> Simple. Personal. Built for your business.
               </div>
               <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 leading-tight mb-4">
-                Request a Free Review
+                Let’s Find the Right Payment Setup
               </h2>
               <p className="text-slate-500 text-lg leading-relaxed mb-8">
-                A free payment review takes less than 15 minutes. Tell us a little about your business
-                and we'll reach out with honest, straightforward recommendations.
+                Tell us what your business needs. We’ll reach out with a straightforward recommendation—whether you’re opening, upgrading equipment, or reviewing your current payment costs.
               </p>
               <div className="space-y-4 text-sm text-slate-600">
                 <div className="flex items-center gap-3">
@@ -398,7 +397,7 @@ export default function LandingClient() {
                       <button type="button" onClick={() => setForm(f => ({ ...f, subject: '', comments: '' }))} className="ml-auto text-blue-400 hover:text-blue-600 text-xs">✕</button>
                     </div>
                   )}
-                  <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                         First Name <span className="text-red-500">*</span>
@@ -452,17 +451,35 @@ export default function LandingClient() {
                     />
                   </div>
 
+                  {/* Inquiry dropdown (required) */ }
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">What can we help with? <span className="text-red-500">*</span></label>
+                    <select
+                      required
+                      value={form.inquiry_type}
+                      onChange={e => setForm(f => ({ ...f, inquiry_type: e.target.value }))}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value=\"\">Select an option</option>
+                      <option>I'm opening a new business</option>
+                      <option>I need a POS system or payment terminal</option>
+                      <option>I already accept cards — review my rates</option>
+                      <option>I want to switch payment providers</option>
+                      <option>I need help with online payments</option>
+                      <option>Something else</option>
+                    </select>
+                  </div>
+
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                      Comments <span className="text-red-500">*</span>
+                      Anything else you'd like us to know? (Optional)
                     </label>
                     <textarea
-                      required
                       rows={4}
                       value={form.comments}
                       onChange={e => setForm(f => ({ ...f, comments: e.target.value }))}
                       className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                      placeholder="How can we help you?"
+                      placeholder="Tell us a little about your business or what you need."
                     />
                   </div>
 
@@ -475,7 +492,7 @@ export default function LandingClient() {
                     disabled={submitting}
                     className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold text-sm py-3.5 rounded-xl transition-colors shadow-md shadow-blue-200"
                   >
-                    {submitting ? 'Sending…' : 'Submit Request'}
+                    {submitting ? 'Sending…' : 'Get My Recommendation'}
                   </button>
 
                   <p className="text-center text-xs text-slate-400">

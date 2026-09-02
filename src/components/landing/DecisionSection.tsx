@@ -1,38 +1,29 @@
 'use client'
 
-import {
-  Monitor, CreditCard, ArrowRight,
-  Calendar, Package, Zap, Headphones, User, DollarSign,
-} from 'lucide-react'
+import { CheckCircle2, ArrowRight } from 'lucide-react'
 
 const BENEFITS = [
   {
-    icon: Calendar,
     title: 'Month-to-Month Agreement',
     body: 'No long-term contract holding your business back.',
   },
   {
-    icon: Package,
     title: 'Free Equipment Options',
     body: 'Equipment options available at no upfront cost, except certain third-party POS systems.',
   },
   {
-    icon: Zap,
     title: 'Fast Savings Review',
     body: 'Share a recent processing statement and receive a clear savings proposal in about 15 minutes.',
   },
   {
-    icon: Headphones,
     title: 'U.S.-Based Support',
     body: 'Get help from a support team based in the United States.',
   },
   {
-    icon: User,
     title: 'A Real Person to Call',
     body: 'Work directly with Jordan — not just an 800 number or a different agent every time.',
   },
   {
-    icon: DollarSign,
     title: 'Predictable Pricing',
     body: 'Clear pricing built to avoid surprise rate increases.',
   },
@@ -61,13 +52,13 @@ export function DecisionSection({ onNewBusiness, onExistingBusiness, onTalkWithJ
 
           {/* 3-col benefit grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
-            {BENEFITS.map(({ icon: Icon, title, body }) => (
+            {BENEFITS.map(({ title, body }) => (
               <div
                 key={title}
                 className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm hover:shadow-md hover:border-blue-100 transition-all"
               >
-                <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center mb-4">
-                  <Icon size={18} className="text-blue-600" />
+                <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center mb-4">
+                  <CheckCircle2 size={18} className="text-green-600" />
                 </div>
                 <h3 className="font-bold text-slate-900 text-base mb-1.5">{title}</h3>
                 <p className="text-slate-500 text-sm leading-relaxed">{body}</p>

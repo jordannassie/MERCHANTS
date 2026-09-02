@@ -18,13 +18,15 @@ export function MobileTopBar() {
   return (
     <div className="md:hidden sticky top-0 z-30 bg-white border-b border-gray-200 flex items-center justify-between px-4 h-12">
       <div className="flex items-center gap-2">
-        <Image
-          src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Process%20logo.png"
-          alt="Process.Direct"
-          width={100}
-          height={28}
-          className="h-7 w-auto object-contain"
-        />
+        <button onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }) }} className="flex items-center">
+          <Image
+            src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Blacklogo.png"
+            alt="Process.Direct"
+            width={100}
+            height={28}
+            className="h-7 w-auto object-contain"
+          />
+        </button>
       </div>
       <button
         onClick={logout}
