@@ -448,20 +448,37 @@ export default function LandingClient() {
       </section>
 
       {/* ─── FOOTER ─────────────────────────────────────────────────────────── */}
-      <footer className="bg-slate-900 text-slate-400 py-10">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Image src={LOGO_URL} alt="Process.Direct" width={110} height={28} className="h-7 w-auto object-contain brightness-0 invert opacity-80" />
-            <span className="text-slate-600 text-xs">© {new Date().getFullYear()}</span>
+      <footer className="bg-white border-t border-slate-100 py-10">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+          {/* Top row: logos + links */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <Image src={LOGO_URL} alt="Process.Direct" width={110} height={28} className="h-7 w-auto object-contain" />
+              <span className="text-slate-400 text-xs">© {new Date().getFullYear()}</span>
+            </div>
+            <div className="flex items-center gap-5 text-xs text-slate-400">
+              <a href="#" className="hover:text-slate-700 transition-colors">Privacy</a>
+              <button
+                onClick={() => setPinOpen(true)}
+                className="hover:text-slate-600 transition-colors text-xs"
+              >
+                Admin Login
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-5 text-xs">
-            <a href="#" className="hover:text-slate-200 transition-colors">Privacy</a>
-            <button
-              onClick={() => setPinOpen(true)}
-              className="text-slate-600 hover:text-slate-400 transition-colors text-xs"
-            >
-              Admin Login
-            </button>
+
+          {/* Partner row: Hawthorne Payments */}
+          <div className="flex flex-col sm:flex-row items-center gap-4 pt-4 border-t border-slate-100">
+            <Image
+              src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/lgoso%20prartner.png"
+              alt="Hawthorne Payments"
+              width={160}
+              height={48}
+              className="h-12 w-auto object-contain"
+            />
+            <p className="text-xs text-slate-400 text-center sm:text-left leading-relaxed">
+              Hawthorne Payments, LLC is a registered ISO of PNC Bank, N.A., Pittsburgh, PA
+            </p>
           </div>
         </div>
       </footer>
