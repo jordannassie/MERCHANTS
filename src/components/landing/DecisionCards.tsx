@@ -13,7 +13,7 @@
         >
            <div className="flex items-start gap-4">
               <div className="w-14 h-14 rounded-xl bg-blue-50 flex items-center justify-center transition-colors duration-200 group-hover:bg-white">
-               <Monitor size={28} className="text-blue-600 group-hover:text-white" />
+               <Monitor className="h-7 w-7 text-blue-600 transition-colors duration-200" />
              </div>
              <div className="flex-1">
               <h3 className="text-xl font-bold text-slate-900 group-hover:text-white transition-colors">I'm Opening a Business</h3>
@@ -35,7 +35,7 @@
         >
            <div className="flex items-start gap-4">
              <div className="w-14 h-14 rounded-xl bg-white/20 flex items-center justify-center transition-colors duration-200 group-hover:bg-blue-50">
-               <CreditCard size={28} className="text-white group-hover:text-blue-600" />
+               <CreditCard className="h-7 w-7 text-white transition-colors duration-200 group-hover:text-blue-600" />
              </div>
              <div className="flex-1">
                <h3 className="text-xl font-bold text-white group-hover:text-slate-900 transition-colors">I Already Accept Cards</h3>

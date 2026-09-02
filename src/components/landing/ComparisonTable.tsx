@@ -103,7 +103,7 @@ export function ComparisonTable({ onScrollToContact }: { onScrollToContact: () =
                     <span className="inline-flex w-fit items-center bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full tracking-wide uppercase">
                       Best for Local Business
                     </span>
-                    <Image src={LOGOS.pd.src} alt={LOGOS.pd.alt} width={LOGOS.pd.w} height={LOGOS.pd.h} className="h-7 w-auto object-contain" />
+    <Image src={LOGOS.pd.src} alt={LOGOS.pd.alt} width={LOGOS.pd.w*2} height={LOGOS.pd.h*2} className="h-14 w-auto object-contain" />
                   </div>
                 </th>
                 {/* Competitors */}

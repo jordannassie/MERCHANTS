@@ -96,7 +96,7 @@ export default function LandingClient() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           {/* Logo */}
           <Link href="/" className="flex items-center">
-            <Image src={LOGO_URL} alt="Process.Direct" width={140} height={36} className="h-9 w-auto object-contain" />
+            <Image src={LOGO_URL} alt="Process.Direct" width={280} height={72} className="h-16 w-auto object-contain" />
           </Link>
 
           {/* Desktop nav */}

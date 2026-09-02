@@ -36,9 +36,9 @@ export function AppNav({ userName = 'Jordan' }: { userName?: string }) {
             <Image
               src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Blacklogo.png"
               alt="Process.Direct"
-              width={120}
-              height={32}
-              className="h-8 w-auto object-contain"
+              width={240}
+              height={64}
+              className="h-16 w-auto object-contain"
             />
           </button>
         </div>

@@ -22,9 +22,9 @@ export function MobileTopBar() {
           <Image
             src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Blacklogo.png"
             alt="Process.Direct"
-            width={100}
-            height={28}
-            className="h-7 w-auto object-contain"
+            width={200}
+            height={56}
+            className="h-14 w-auto object-contain"
           />
         </button>
       </div>
