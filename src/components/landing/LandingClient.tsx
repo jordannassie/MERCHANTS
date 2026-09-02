@@ -2,18 +2,26 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
 import {
-  Crosshair, ChevronRight, Play, Shield, ArrowRight,
-  BarChart2, CheckCircle, CreditCard,
+  ChevronRight, Play, Shield, ArrowRight,
+  BarChart2, CheckCircle, CreditCard, Phone, Mail,
 } from 'lucide-react'
 import { PinDialog } from './PinDialog'
 
 const NAV_LINKS = [
   { label: 'How It Works', href: '#how-it-works' },
   { label: 'Savings', href: '#savings' },
+  { label: 'About', href: '#about' },
   { label: 'Contact', href: '#contact' },
 ]
+
+const LOGO_URL = 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Process%20logo.png'
+const JORDAN_PHOTO = 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/Jordanimage.png'
+const IMG_CLOVER = 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/Clover-Restaurant-Devices-1-900x464.webp'
+const IMG_TYPES = 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/different-type-cover_image.jpg'
+const IMG_DEVICE = 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/H479a5103a8714372ada840a8ca05057dr.png_300x300.avif'
 
 const SAVINGS_CARDS = [
   {
@@ -66,9 +74,8 @@ export default function LandingClient() {
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-100">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2">
-            <Crosshair size={20} className="text-blue-600" />
-            <span className="font-bold text-slate-900 text-base">Merchant Radar</span>
+          <Link href="/" className="flex items-center">
+            <Image src={LOGO_URL} alt="Process.Direct" width={140} height={36} className="h-9 w-auto object-contain" />
           </Link>
 
           {/* Desktop nav */}
@@ -233,6 +240,123 @@ export default function LandingClient() {
         </div>
       </section>
 
+      {/* ─── FULL-WIDTH IMAGE 1: Clover Restaurant Devices ──────────────────── */}
+      <section className="relative w-full overflow-hidden" style={{ height: '480px' }}>
+        <Image
+          src={IMG_CLOVER}
+          alt="Clover restaurant payment devices"
+          fill
+          className="object-cover"
+          sizes="100vw"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-900/70 to-transparent flex items-center">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <h2 className="text-3xl md:text-5xl font-extrabold text-white leading-tight max-w-xl">
+              Modern Equipment<br />for Every Table
+            </h2>
+            <p className="mt-4 text-slate-200 text-lg max-w-md">
+              From tableside ordering to counter checkout — get the right device for how you do business.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── FULL-WIDTH IMAGE 2: Payment Types ──────────────────────────────── */}
+      <section className="relative w-full overflow-hidden" style={{ height: '480px' }}>
+        <Image
+          src={IMG_TYPES}
+          alt="Different payment types accepted"
+          fill
+          className="object-cover"
+          sizes="100vw"
+        />
+        <div className="absolute inset-0 bg-gradient-to-l from-slate-900/70 to-transparent flex items-center justify-end">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 w-full flex justify-end">
+            <div className="max-w-xl text-right">
+              <h2 className="text-3xl md:text-5xl font-extrabold text-white leading-tight">
+                Accept Every<br />Payment Type
+              </h2>
+              <p className="mt-4 text-slate-200 text-lg">
+                Cards, contactless, mobile wallets — your customers pay their way, without extra fees on your end.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── FULL-WIDTH IMAGE 3: Device Close-Up ────────────────────────────── */}
+      <section className="relative w-full overflow-hidden" style={{ height: '480px' }}>
+        <Image
+          src={IMG_DEVICE}
+          alt="Payment terminal close-up"
+          fill
+          className="object-cover object-center"
+          sizes="100vw"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent flex items-end">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-12 w-full text-center">
+            <h2 className="text-3xl md:text-4xl font-extrabold text-white">
+              Simple. Fast. Reliable.
+            </h2>
+            <p className="mt-3 text-slate-200 text-lg max-w-xl mx-auto">
+              Payment hardware that just works — backed by local support you can actually reach.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── BIO: Jordan Nassie ─────────────────────────────────────────────── */}
+      <section id="about" className="bg-white py-20 md:py-28">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col md:flex-row items-center gap-12">
+            {/* Photo */}
+            <div className="shrink-0">
+              <div className="relative w-56 h-56 md:w-64 md:h-64 rounded-2xl overflow-hidden shadow-xl ring-4 ring-blue-50">
+                <Image
+                  src={JORDAN_PHOTO}
+                  alt="Jordan Nassie"
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 768px) 224px, 256px"
+                />
+              </div>
+            </div>
+
+            {/* Bio text */}
+            <div className="flex-1 text-center md:text-left">
+              <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-4">
+                <Shield size={12} /> Your Local Payment Expert
+              </div>
+              <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4">
+                Jordan Nassie
+              </h2>
+              <p className="text-slate-500 text-lg leading-relaxed mb-6">
+                Jordan is a Texas-based payment processing specialist dedicated to helping
+                local businesses cut unnecessary fees and find the right equipment for the
+                way they sell. With hands-on experience across restaurants, retail, and
+                service businesses, Jordan delivers honest recommendations — no jargon,
+                no pressure, just results.
+              </p>
+
+              <div className="flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
+                <a
+                  href="tel:9493316367"
+                  className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm px-5 py-3 rounded-xl transition-colors shadow-md shadow-blue-200"
+                >
+                  <Phone size={15} /> (949) 331-6367
+                </a>
+                <a
+                  href="mailto:jordannassie@gmail.com"
+                  className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-sm px-5 py-3 rounded-xl transition-colors"
+                >
+                  <Mail size={15} /> jordannassie@gmail.com
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ─── FINAL CTA ──────────────────────────────────────────────────────── */}
       <section id="contact" className="bg-blue-600 py-20 md:py-28">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
@@ -242,14 +366,22 @@ export default function LandingClient() {
           <p className="text-blue-100 text-lg mb-10 max-w-xl mx-auto">
             A free payment review takes less than 15 minutes and there is no obligation to switch.
           </p>
-          <a
-            href="mailto:jordan@example.com?subject=Payment%20Review%20Request"
-            className="inline-flex items-center gap-2 bg-white hover:bg-blue-50 text-blue-700 font-bold text-base px-8 py-4 rounded-xl shadow-xl transition-all"
-          >
-            Request a Free Payment Review <ArrowRight size={16} />
-          </a>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <a
+              href="mailto:jordannassie@gmail.com?subject=Payment%20Review%20Request"
+              className="inline-flex items-center gap-2 bg-white hover:bg-blue-50 text-blue-700 font-bold text-base px-8 py-4 rounded-xl shadow-xl transition-all"
+            >
+              <Mail size={16} /> Request a Free Review
+            </a>
+            <a
+              href="tel:9493316367"
+              className="inline-flex items-center gap-2 bg-blue-500 hover:bg-blue-400 text-white font-bold text-base px-8 py-4 rounded-xl border border-blue-400 transition-all"
+            >
+              <Phone size={16} /> Call (949) 331-6367
+            </a>
+          </div>
           <p className="mt-5 text-blue-200 text-xs">
-            Or call directly — no bots, no forms, just a conversation.
+            No bots, no forms — just a real conversation with Jordan.
           </p>
         </div>
       </section>
@@ -257,10 +389,9 @@ export default function LandingClient() {
       {/* ─── FOOTER ─────────────────────────────────────────────────────────── */}
       <footer className="bg-slate-900 text-slate-400 py-10">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <Crosshair size={15} className="text-blue-500" />
-            <span className="text-sm text-slate-300 font-medium">Merchant Radar</span>
-            <span className="text-slate-600 text-xs ml-2">© {new Date().getFullYear()}</span>
+          <div className="flex items-center gap-3">
+            <Image src={LOGO_URL} alt="Process.Direct" width={110} height={28} className="h-7 w-auto object-contain brightness-0 invert opacity-80" />
+            <span className="text-slate-600 text-xs">© {new Date().getFullYear()}</span>
           </div>
           <div className="flex items-center gap-5 text-xs">
             <a href="#" className="hover:text-slate-200 transition-colors">Privacy</a>

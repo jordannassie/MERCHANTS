@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Merchant Radar",
-    template: "%s | Merchant Radar",
+    default: "Process.Direct",
+    template: "%s | Process.Direct",
   },
   description: "We help businesses lower payment-processing costs and get the right payment equipment for the way they sell.",
 };
