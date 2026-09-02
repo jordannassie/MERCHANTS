@@ -1,7 +1,8 @@
 /**
  * POST /api/enrich/save-contact
  * Save a manually reviewed / confirmed Google Places candidate.
- * Gracefully falls back to 005 columns if 006 is not applied.
+ * Only updates columns that exist in migration 005 — no dependency on 006.
+ * All rich metadata (placeId, confidence, etc.) goes into enrichment_jobs.
  */
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
@@ -33,42 +34,43 @@ export async function POST(request: NextRequest) {
 
   const { data: lead } = await db
     .from('leads')
-    .select('primary_phone,website')
+    .select('id,primary_phone,website')
     .eq('id', d.leadId)
     .single()
   if (!lead) return NextResponse.json({ error: 'Lead not found' }, { status: 404 })
 
   const now = new Date().toISOString()
-  const baseUpdates: Record<string, unknown> = {
+
+  // Only update columns that are safe without migration 006
+  const updates: Record<string, unknown> = {
     enrichment_status: 'completed',
     enriched_at: now,
   }
+
+  // Never overwrite manually entered phone unless explicitly requested
   if ((!lead.primary_phone || d.overwritePhone) && d.phone) {
-    baseUpdates.primary_phone = d.phone
+    updates.primary_phone = d.phone
   }
   if ((!lead.website || d.overwriteWebsite) && d.website) {
-    baseUpdates.website = d.website
+    updates.website = d.website
   }
-  if (d.googleMapsUri) baseUpdates.google_maps_url = d.googleMapsUri
-
-  const richUpdates = {
-    ...baseUpdates,
-    google_place_id: d.placeId,
-    international_phone: d.internationalPhone ?? null,
-    business_status: d.businessStatus ?? null,
-    google_primary_type: d.primaryType ?? null,
-    contact_match_confidence: d.confidence,
-    contact_source: 'google_places',
-    contact_source_urls: [d.googleMapsUri].filter(Boolean),
-    enrichment_error: null,
+  if (d.googleMapsUri) {
+    updates.google_maps_url = d.googleMapsUri
   }
 
-  const { error: richErr } = await db.from('leads').update(richUpdates).eq('id', d.leadId)
-  if (richErr?.code === '42703') {
-    await db.from('leads').update(baseUpdates).eq('id', d.leadId)
+  // Use .select() in the same chain so PostgREST returns the updated row atomically
+  const { data: updated, error: updateErr } = await db
+    .from('leads')
+    .update(updates)
+    .eq('id', d.leadId)
+    .select('id,display_name,outlet_name,primary_phone,website,google_maps_url,enrichment_status,enriched_at')
+    .single()
+
+  if (updateErr) {
+    return NextResponse.json({ error: updateErr.message }, { status: 500 })
   }
 
-  // Store full Place data in enrichment_jobs
+  // Store full Place metadata in enrichment_jobs (independent of migration 006)
   await db.from('enrichment_jobs').insert({
     lead_id: d.leadId,
     status: 'completed',
@@ -79,6 +81,7 @@ export async function POST(request: NextRequest) {
       displayName: d.displayName,
       formattedAddress: d.formattedAddress,
       nationalPhoneNumber: d.phone,
+      internationalPhoneNumber: d.internationalPhone,
       websiteUri: d.website,
       googleMapsUri: d.googleMapsUri,
       businessStatus: d.businessStatus,
@@ -89,12 +92,5 @@ export async function POST(request: NextRequest) {
     completed_at: now,
   })
 
-  const { data: updated, error } = await db
-    .from('leads')
-    .select('id,display_name,outlet_name,primary_phone,website,google_maps_url,enrichment_status,enriched_at')
-    .eq('id', d.leadId)
-    .single()
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ lead: updated })
 }

@@ -2,9 +2,10 @@
  * POST /api/enrich/find-contact
  * Google Places business match for a single lead.
  *
- * Works with migration 005 schema alone (gracefully upgrades if 006 is applied).
- * All rich Place metadata is also stored in enrichment_jobs.raw_response so
- * google_place_id, confidence, etc. are preserved even before 006 columns exist.
+ * Works with migration 005 schema alone. All rich Place metadata is stored
+ * in enrichment_jobs.raw_response. Only columns that exist in 005 are ever
+ * updated on the leads row (primary_phone, website, google_maps_url,
+ * enrichment_status, enriched_at).
  */
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
@@ -34,7 +35,6 @@ export async function POST(request: NextRequest) {
   const { leadId, forceRefresh } = parsed.data
   const db = createServiceClient()
 
-  // SELECT only columns that exist in migration 005 (safe regardless of 006)
   const { data: rawLead, error: leadErr } = await db
     .from('leads')
     .select(
@@ -49,9 +49,8 @@ export async function POST(request: NextRequest) {
   }
   const lead = rawLead as unknown as LeadForSearch & { enrichment_status: string | null }
 
-  // Check deduplication using existing enrichment_status column
+  // Check deduplication
   if (!forceRefresh && lead.enrichment_status === 'completed') {
-    // Also check enrichment_jobs for cached Place data
     const { data: cachedJob } = await db
       .from('enrichment_jobs')
       .select('raw_response,proposed_data')
@@ -71,11 +70,8 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Mark lead as running
-  await db
-    .from('leads')
-    .update({ enrichment_status: 'running' })
-    .eq('id', leadId)
+  // Mark lead as searching
+  await db.from('leads').update({ enrichment_status: 'running' }).eq('id', leadId)
 
   const result = await findPlacesContact(lead as LeadForSearch, apiKey)
 
@@ -84,20 +80,13 @@ export async function POST(request: NextRequest) {
   )
   const googleSearchUrl = `https://www.google.com/search?q=${searchQuery}`
 
-  // ── Error / not found ────────────────────────────────────────────────────
   if (result.status === 'error') {
-    await db
-      .from('leads')
-      .update({ enrichment_status: 'failed' })
-      .eq('id', leadId)
+    await db.from('leads').update({ enrichment_status: 'failed' }).eq('id', leadId)
     return NextResponse.json({ status: 'error', error: result.error, googleSearchUrl })
   }
 
   if (result.status === 'not_found') {
-    await db
-      .from('leads')
-      .update({ enrichment_status: 'failed' })
-      .eq('id', leadId)
+    await db.from('leads').update({ enrichment_status: 'failed' }).eq('id', leadId)
     await db.from('enrichment_jobs').insert({
       lead_id: leadId,
       status: 'failed',
@@ -108,7 +97,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: 'not_found', candidates: [], googleSearchUrl })
   }
 
-  // ── Review — confidence 60–84, need manual approval ──────────────────────
   if (result.status === 'review') {
     await db.from('leads').update({ enrichment_status: 'pending' }).eq('id', leadId)
     return NextResponse.json({
@@ -118,44 +106,38 @@ export async function POST(request: NextRequest) {
     })
   }
 
-  // ── Auto-save — confidence ≥ 85 ──────────────────────────────────────────
+  // Auto-save (confidence ≥ 85)
   if (result.status === 'found' && result.best) {
     const p = result.best
     const now = new Date().toISOString()
 
-    // 1. Always update existing columns (005-safe)
-    const baseUpdates: Record<string, unknown> = {
+    const updates: Record<string, unknown> = {
       enrichment_status: 'completed',
       enriched_at: now,
     }
-    if (!(lead as LeadForSearch).primary_phone && p.nationalPhoneNumber) {
-      baseUpdates.primary_phone = p.nationalPhoneNumber
+    if (!lead.primary_phone && p.nationalPhoneNumber) {
+      updates.primary_phone = p.nationalPhoneNumber
     }
-    if (!(lead as LeadForSearch).website && p.websiteUri) {
-      baseUpdates.website = p.websiteUri
+    if (!lead.website && p.websiteUri) {
+      updates.website = p.websiteUri
     }
-    if (p.googleMapsUri) baseUpdates.google_maps_url = p.googleMapsUri
-
-    // 2. Try to also write 006 columns (upgrade silently if available)
-    const richUpdates = {
-      ...baseUpdates,
-      google_place_id: p.id,
-      international_phone: p.internationalPhoneNumber,
-      business_status: p.businessStatus,
-      google_primary_type: p.primaryType,
-      contact_match_confidence: p.confidence,
-      contact_source: 'google_places',
-      contact_source_urls: [p.googleMapsUri].filter(Boolean),
-      enrichment_error: null,
+    if (p.googleMapsUri) {
+      updates.google_maps_url = p.googleMapsUri
     }
 
-    const { error: richErr } = await db.from('leads').update(richUpdates).eq('id', leadId)
-    if (richErr?.code === '42703') {
-      // Migration 006 not applied yet — use base update only
-      await db.from('leads').update(baseUpdates).eq('id', leadId)
+    // Single atomic update + select — no separate re-fetch needed
+    const { data: updatedLead, error: updateErr } = await db
+      .from('leads')
+      .update(updates)
+      .eq('id', leadId)
+      .select('id,display_name,outlet_name,outlet_city,primary_phone,website,google_maps_url,enrichment_status,enriched_at')
+      .single()
+
+    if (updateErr) {
+      console.error('[find-contact] lead update error:', updateErr)
     }
 
-    // 3. Always upsert enrichment_jobs (stores full Place data independent of schema)
+    // Store Place metadata in enrichment_jobs
     await db.from('enrichment_jobs').insert({
       lead_id: leadId,
       status: 'completed',
@@ -179,16 +161,10 @@ export async function POST(request: NextRequest) {
       completed_at: now,
     })
 
-    const { data: updatedLead } = await db
-      .from('leads')
-      .select('id,display_name,outlet_name,outlet_city,primary_phone,website,google_maps_url,enrichment_status,enriched_at')
-      .eq('id', leadId)
-      .single()
-
     return NextResponse.json({
       status: 'found',
       confidence: p.confidence,
-      lead: updatedLead,
+      lead: updatedLead ?? rawLead,
       place: p,
       candidates: result.candidates,
       googleSearchUrl,

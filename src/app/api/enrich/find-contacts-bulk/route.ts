@@ -1,7 +1,7 @@
 /**
  * POST /api/enrich/find-contacts-bulk
  * Run Google Places matching for up to 25 leads.
- * Gracefully degrades when migration 006 is not applied.
+ * Only updates migration-005 columns. Rich metadata goes into enrichment_jobs.
  */
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
@@ -86,30 +86,20 @@ export async function POST(request: NextRequest) {
       results.push({ leadId: lead.id, status: 'review', phone: null, website: null, confidence: result.best?.confidence ?? null })
     } else if (result.status === 'found' && result.best) {
       const p = result.best
-      const baseUpdates: Record<string, unknown> = {
+      const updates: Record<string, unknown> = {
         enrichment_status: 'completed',
         enriched_at: now,
       }
-      if (!lead.primary_phone && p.nationalPhoneNumber) baseUpdates.primary_phone = p.nationalPhoneNumber
-      if (!lead.website && p.websiteUri) baseUpdates.website = p.websiteUri
-      if (p.googleMapsUri) baseUpdates.google_maps_url = p.googleMapsUri
+      if (!lead.primary_phone && p.nationalPhoneNumber) updates.primary_phone = p.nationalPhoneNumber
+      if (!lead.website && p.websiteUri) updates.website = p.websiteUri
+      if (p.googleMapsUri) updates.google_maps_url = p.googleMapsUri
 
-      const richUpdates = {
-        ...baseUpdates,
-        google_place_id: p.id,
-        international_phone: p.internationalPhoneNumber,
-        business_status: p.businessStatus,
-        google_primary_type: p.primaryType,
-        contact_match_confidence: p.confidence,
-        contact_source: 'google_places',
-        contact_source_urls: [p.googleMapsUri].filter(Boolean),
-        enrichment_error: null,
-      }
+      const { error: updateErr } = await db
+        .from('leads')
+        .update(updates)
+        .eq('id', lead.id)
 
-      const { error: richErr } = await db.from('leads').update(richUpdates).eq('id', lead.id)
-      if (richErr?.code === '42703') {
-        await db.from('leads').update(baseUpdates).eq('id', lead.id)
-      }
+      if (updateErr) console.error('[bulk] update error:', updateErr.message)
 
       await db.from('enrichment_jobs').insert({
         lead_id: lead.id,
