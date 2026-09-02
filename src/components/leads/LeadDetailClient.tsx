@@ -21,9 +21,10 @@ interface Props {
   lead: Lead
   contacts: Contact[]
   activities: (Activity & { contact?: { full_name: string } | null })[]
+  placeCache?: Record<string, unknown> | null
 }
 
-export function LeadDetailClient({ lead: initialLead, contacts: initialContacts, activities: initialActivities }: Props) {
+export function LeadDetailClient({ lead: initialLead, contacts: initialContacts, activities: initialActivities, placeCache }: Props) {
   const router = useRouter()
   const [isPending] = useTransition()
   const [lead, setLead] = useState(initialLead)
@@ -163,7 +164,7 @@ export function LeadDetailClient({ lead: initialLead, contacts: initialContacts,
       </div>
 
       {/* Contact Panel — shown prominently before permit data */}
-      <ContactPanel lead={lead} />
+      <ContactPanel lead={lead} contacts={contacts} placeCache={placeCache as Parameters<typeof ContactPanel>[0]['placeCache']} />
 
       <div className="grid md:grid-cols-2 gap-4">
         {/* Texas Permit Data */}
