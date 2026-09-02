@@ -146,7 +146,7 @@ async function searchPlaces(query: string, apiKey: string): Promise<Array<{
       locationBias: {
         circle: {
           center: { latitude: 32.8, longitude: -97.1 }, // DFW centroid
-          radius: 80000, // 80 km
+          radius: 50000, // 50 km (API max)
         },
       },
     }),
