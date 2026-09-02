@@ -310,16 +310,6 @@ export default function LandingClient() {
           className="object-cover"
           sizes="100vw"
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-slate-900/70 to-transparent flex items-center">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-            <h2 className="text-3xl md:text-5xl font-extrabold text-white leading-tight max-w-xl">
-              Modern Equipment<br />for Every Table
-            </h2>
-            <p className="mt-4 text-slate-200 text-lg max-w-md">
-              From tableside ordering to counter checkout — get the right device for how you do business.
-            </p>
-          </div>
-        </div>
       </section>
 
       {/* ─── FULL-WIDTH IMAGE 2: Payment Types ──────────────────────────────── */}
@@ -331,18 +321,6 @@ export default function LandingClient() {
           className="object-cover"
           sizes="100vw"
         />
-        <div className="absolute inset-0 bg-gradient-to-l from-slate-900/70 to-transparent flex items-center justify-end">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 w-full flex justify-end">
-            <div className="max-w-xl text-right">
-              <h2 className="text-3xl md:text-5xl font-extrabold text-white leading-tight">
-                Accept Every<br />Payment Type
-              </h2>
-              <p className="mt-4 text-slate-200 text-lg">
-                Cards, contactless, mobile wallets — your customers pay their way, without extra fees on your end.
-              </p>
-            </div>
-          </div>
-        </div>
       </section>
 
       {/* ─── FULL-WIDTH IMAGE 3: Device Close-Up ────────────────────────────── */}
@@ -354,16 +332,6 @@ export default function LandingClient() {
           className="object-cover object-center"
           sizes="100vw"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent flex items-end">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-12 w-full text-center">
-            <h2 className="text-3xl md:text-4xl font-extrabold text-white">
-              Simple. Fast. Reliable.
-            </h2>
-            <p className="mt-3 text-slate-200 text-lg max-w-xl mx-auto">
-              Payment hardware that just works — backed by local support you can actually reach.
-            </p>
-          </div>
-        </div>
       </section>
 
       {/* ─── BIO: Jordan Nassie ─────────────────────────────────────────────── */}
