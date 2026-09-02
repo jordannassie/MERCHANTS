@@ -78,7 +78,9 @@ export default async function LeadsPage({ searchParams }: PageProps) {
   if (filters.missingWebsite) query = query.is('website', null)
   if (filters.enriched) query = query.eq('enrichment_status', 'completed')
   if (filters.needsReview) query = query.eq('enrichment_status', 'pending')
-  if (filters.hideCorporateChains) query = query.not('category', 'eq', 'corporate_chain')
+  // category IS NULL (most existing leads) must also pass through this filter.
+  // PostgREST's neq excludes NULLs, so we explicitly OR category.is.null.
+  if (filters.hideCorporateChains) query = query.or('category.neq.corporate_chain,category.is.null')
 
   const sortCol =
     filters.sort === 'score' ? 'score'

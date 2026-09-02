@@ -37,6 +37,23 @@ export async function POST() {
   }
 
   const db = createServiceClient()
+
+  // Mark any import runs stuck in 'running' for more than 30 minutes as failed.
+  // Netlify functions time out and the finally block may never run, leaving
+  // stale records. This cleanup runs before creating a new run.
+  try {
+    const staleThreshold = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+    await db
+      .from('import_runs')
+      .update({
+        status: 'failed',
+        error_message: 'Import timed out — marked stale',
+        completed_at: new Date().toISOString(),
+      })
+      .eq('status', 'running')
+      .lt('started_at', staleThreshold)
+  } catch { /* non-critical — continue */ }
+
   let territory: Awaited<ReturnType<typeof ensureWorkspaceTerritory>>
 
   try {

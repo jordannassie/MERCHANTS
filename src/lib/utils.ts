@@ -118,3 +118,18 @@ export function toCSV(rows: Record<string, unknown>[]): string {
     ...rows.map(r => headers.map(h => escape(r[h])).join(',')),
   ].join('\n')
 }
+
+/**
+ * Safely parse a fetch Response as JSON.
+ * If the server returns HTML (e.g., a 502/504 gateway error page), this
+ * throws a clean Error rather than letting JSON.parse crash with
+ * "Unexpected token '<'".
+ */
+export async function safeJson<T = Record<string, unknown>>(res: Response): Promise<T> {
+  const text = await res.text()
+  try {
+    return JSON.parse(text) as T
+  } catch {
+    throw new Error(`Server error (HTTP ${res.status}) — response was not JSON`)
+  }
+}

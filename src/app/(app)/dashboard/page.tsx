@@ -50,10 +50,10 @@ export default async function DashboardPage() {
     { data: territory },
   ] = await Promise.all([
     db.from('leads').select('*', { count: 'exact', head: true }),
-    db.from('leads').select('*', { count: 'exact', head: true }).eq('priority', 'hot').not('status', 'in', '(won,lost,do_not_contact)').not('category', 'eq', 'corporate_chain'),
+    db.from('leads').select('*', { count: 'exact', head: true }).eq('priority', 'hot').not('status', 'in', '(won,lost,do_not_contact)').or('category.neq.corporate_chain,category.is.null'),
     db.from('leads').select('*', { count: 'exact', head: true }).lte('next_follow_up_at', todayEnd.toISOString()).not('status', 'in', '(won,lost,do_not_contact)'),
     db.from('leads').select('*', { count: 'exact', head: true }).eq('status', 'appointment'),
-    db.from('leads').select('id,display_name,outlet_name,outlet_city,outlet_state,priority,status,score,primary_phone,permit_issue_date,first_sales_date,naics_code,google_place_id,enrichment_status,category').not('status', 'in', '(won,lost,do_not_contact)').not('category', 'eq', 'corporate_chain').order('score', { ascending: false }).limit(5),
+    db.from('leads').select('id,display_name,outlet_name,outlet_city,outlet_state,priority,status,score,primary_phone,permit_issue_date,first_sales_date,naics_code,google_place_id,enrichment_status,category').not('status', 'in', '(won,lost,do_not_contact)').or('category.neq.corporate_chain,category.is.null').order('score', { ascending: false }).limit(5),
     db.from('leads').select('id,display_name,outlet_city,outlet_state,primary_phone,next_follow_up_at,status,naics_code').lte('next_follow_up_at', todayEnd.toISOString()).gte('next_follow_up_at', todayStart.toISOString()).order('next_follow_up_at').limit(6),
     db.from('import_runs').select('*').order('started_at', { ascending: false }).limit(1),
     db.from('territories').select('*').eq('is_active', true).limit(1),

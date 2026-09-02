@@ -29,9 +29,11 @@ export function ImportButton({ territory, lastRun }: Props) {
     try {
       // No auth token or territory ID needed — server resolves workspace identity
       const res = await fetch('/api/import/manual', { method: 'POST' })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? 'Import failed')
-      setResult(json.run)
+      const text = await res.text()
+      let json: Record<string, unknown>
+      try { json = JSON.parse(text) } catch { throw new Error(`Server error (HTTP ${res.status})`) }
+      if (!res.ok) throw new Error(String(json.error ?? 'Import failed'))
+      setResult((json.run as ImportRun) ?? null)
       router.refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unknown error')

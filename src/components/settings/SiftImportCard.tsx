@@ -46,7 +46,10 @@ export function SiftImportCard() {
   // ── Load initial status ────────────────────────────────────────────────────
   useEffect(() => {
     fetch('/api/import/sift-auto')
-      .then(r => r.json())
+      .then(async r => {
+        const text = await r.text()
+        try { return JSON.parse(text) } catch { return {} }
+      })
       .then(d => {
         setSiftKeyConfigured(d.siftKeyConfigured ?? false)
         setStpAccessible(d.stpAccessible ?? false)
@@ -67,22 +70,29 @@ export function SiftImportCard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ force }),
       })
-      const json = await res.json()
+      const text = await res.text()
+      let json: Record<string, unknown>
+      try { json = JSON.parse(text) } catch {
+        throw new Error(`Server error (HTTP ${res.status}) — try again`)
+      }
       if (!res.ok) {
-        setAutoResult({ error: json.error ?? 'Import failed', errorCode: json.errorCode })
+        setAutoResult({ error: String(json.error ?? 'Import failed'), errorCode: json.errorCode as string | undefined })
       } else if (json.cached) {
-        setAutoResult({ cached: true, filename: json.filename })
+        setAutoResult({ cached: true, filename: json.filename as string | undefined })
       } else {
-        setAutoResult({ summary: json.summary, filename: json.filename })
-        setLastImport({
-          filename: json.filename,
-          status: 'completed',
-          records_parsed: json.summary?.rowsParsed ?? 0,
-          leads_matched: json.summary?.leadsMatched ?? 0,
-          phones_added: json.summary?.phonesAdded ?? 0,
-          imported_at: new Date().toISOString(),
-          error_message: null,
-        })
+        const summary = json.summary as ImportSummary | undefined
+        setAutoResult({ summary, filename: json.filename as string | undefined })
+        if (json.filename) {
+          setLastImport({
+            filename: json.filename as string,
+            status: 'completed',
+            records_parsed: summary?.rowsParsed ?? 0,
+            leads_matched: summary?.leadsMatched ?? 0,
+            phones_added: summary?.phonesAdded ?? 0,
+            imported_at: new Date().toISOString(),
+            error_message: null,
+          })
+        }
       }
     } catch (e) {
       setAutoResult({ error: String(e) })
@@ -100,11 +110,15 @@ export function SiftImportCard() {
       const form = new FormData()
       form.append('file', file)
       const res = await fetch('/api/import/sift-permits', { method: 'POST', body: form })
-      const json = await res.json()
+      const text = await res.text()
+      let json: Record<string, unknown>
+      try { json = JSON.parse(text) } catch {
+        throw new Error(`Server error (HTTP ${res.status}) — try again`)
+      }
       if (res.ok) {
-        setManualResult({ summary: json.summary })
+        setManualResult({ summary: json.summary as ImportSummary | undefined })
       } else {
-        setManualResult({ error: json.error ?? 'Import failed' })
+        setManualResult({ error: String(json.error ?? 'Import failed') })
       }
     } catch (e) {
       setManualResult({ error: String(e) })
