@@ -3,9 +3,10 @@
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import type { Lead, Contact, Activity } from '@/lib/types'
+import type { Lead, Contact, Activity, EntityRecord } from '@/lib/types'
 import { fmtDate, fmtDateTime, fmtRelative, fmtPhone, STATUS_COLORS, PRIORITY_COLORS, safeUrl, buildMapsUrl } from '@/lib/utils'
 import { DFW_COUNTIES } from '@/lib/constants'
+import { naicsLabel, resolveNaics, NAICS_TIER_COLORS } from '@/lib/naics'
 import { Button } from '@/components/ui/Button'
 import { Dialog } from '@/components/ui/Dialog'
 import { LogCallDialog } from './LogCallDialog'
@@ -22,9 +23,10 @@ interface Props {
   contacts: Contact[]
   activities: (Activity & { contact?: { full_name: string } | null })[]
   placeCache?: Record<string, unknown> | null
+  entityRecord?: EntityRecord | null
 }
 
-export function LeadDetailClient({ lead: initialLead, contacts: initialContacts, activities: initialActivities, placeCache }: Props) {
+export function LeadDetailClient({ lead: initialLead, contacts: initialContacts, activities: initialActivities, placeCache, entityRecord }: Props) {
   const router = useRouter()
   const [isPending] = useTransition()
   const [lead, setLead] = useState(initialLead)
@@ -164,7 +166,7 @@ export function LeadDetailClient({ lead: initialLead, contacts: initialContacts,
       </div>
 
       {/* Contact Panel — shown prominently before permit data */}
-      <ContactPanel lead={lead} contacts={contacts} placeCache={placeCache as Parameters<typeof ContactPanel>[0]['placeCache']} />
+      <ContactPanel lead={lead} contacts={contacts} placeCache={placeCache as Parameters<typeof ContactPanel>[0]['placeCache']} entityRecord={entityRecord} />
 
       <div className="grid md:grid-cols-2 gap-4">
         {/* Texas Permit Data */}
@@ -174,13 +176,27 @@ export function LeadDetailClient({ lead: initialLead, contacts: initialContacts,
             <span className="text-xs text-gray-400 font-normal">(source record)</span>
           </h2>
           <dl className="space-y-2 text-sm">
+            {/* NAICS with category badge */}
+            {lead.naics_code && (() => {
+              const resolved = resolveNaics(lead.naics_code)
+              return (
+                <div className="flex gap-2">
+                  <dt className="text-gray-500 w-32 shrink-0">NAICS</dt>
+                  <dd className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-mono text-gray-900">{lead.naics_code}</span>
+                    <span className={`text-xs px-1.5 py-0.5 rounded border font-medium ${NAICS_TIER_COLORS[resolved.tier]}`}>
+                      {naicsLabel(lead.naics_code)}
+                    </span>
+                  </dd>
+                </div>
+              )
+            })()}
             {[
               ['Taxpayer', lead.taxpayer_name],
-              ['Taxpayer Address', [lead.taxpayer_address, lead.taxpayer_city, lead.taxpayer_state, lead.taxpayer_zip].filter(Boolean).join(', ')],
+              ['Taxpayer Addr', [lead.taxpayer_address, lead.taxpayer_city, lead.taxpayer_state, lead.taxpayer_zip].filter(Boolean).join(', ')],
               ['Outlet Name', lead.outlet_name],
-              ['Outlet Address', [lead.outlet_address, lead.outlet_city, lead.outlet_state, lead.outlet_zip].filter(Boolean).join(', ')],
+              ['Outlet Addr', [lead.outlet_address, lead.outlet_city, lead.outlet_state, lead.outlet_zip].filter(Boolean).join(', ')],
               ['County', lead.outlet_county_code ? (DFW_COUNTIES[lead.outlet_county_code] ?? lead.outlet_county_code) : null],
-              ['NAICS', lead.naics_code],
               ['Org Type', lead.taxpayer_organization_type],
               ['Permit Issued', fmtDate(lead.permit_issue_date)],
               ['First Sales', fmtDate(lead.first_sales_date)],

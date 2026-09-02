@@ -89,6 +89,50 @@ export interface Lead {
   contact_match_confidence: number | null
   contact_source: string | null
   contact_source_urls: unknown | null
+  // Phase 1: Texas permit phone (migration 008)
+  permit_phone: string | null
+  permit_phone_source: string | null
+  permit_phone_imported_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+// Phase 3: Entity record from CPA franchise-tax API (migration 008)
+export interface EntityRecord {
+  id: string
+  lead_id: string
+  taxpayer_id: string | null
+  legal_entity_name: string | null
+  dba_name: string | null
+  entity_type: string | null
+  state_of_formation: string | null
+  sos_file_number: string | null
+  sos_registration_status: string | null
+  registered_agent_name: string | null
+  registered_office_street: string | null
+  registered_office_city: string | null
+  registered_office_state: string | null
+  registered_office_zip: string | null
+  officers: Array<{
+    AGNT_NM: string
+    AGNT_TITL_TX: string
+    AGNT_ACTV_YR: string
+    AD_STR_POB_TX?: string
+    CITY_NM?: string
+    ST_CD?: string
+    AD_ZP?: string
+    SOURCE?: string
+  }> | null
+  individual_first_name: string | null
+  individual_last_name: string | null
+  individual_full_name: string | null
+  primary_contact_name: string | null
+  primary_contact_title: string | null
+  primary_contact_role: string | null
+  entity_source_url: string | null
+  entity_confidence: number | null
+  registered_agent_is_commercial: boolean
+  researched_at: string | null
   created_at: string
   updated_at: string
 }

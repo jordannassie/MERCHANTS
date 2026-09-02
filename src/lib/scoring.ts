@@ -1,3 +1,5 @@
+import { resolveNaics, naicsScoreModifier } from './naics'
+
 export interface ScoringInput {
   naicsCode: string | null
   permitIssueDate: string | null
@@ -53,38 +55,19 @@ export function scoreLead(input: ScoringInput, now: Date = new Date()): ScoringR
     }
   }
 
-  // ── NAICS: positive signals ───────────────────────────────────────────────
-  const naics = (input.naicsCode ?? '').trim()
-  if (naics.startsWith('722')) {
-    score += 20; reasons.push('Restaurant / food service (NAICS 722)')
-  } else if (naics.startsWith('8121')) {
-    score += 18; reasons.push('Personal care / salon (NAICS 8121)')
-  } else if (naics.startsWith('8111')) {
-    score += 18; reasons.push('Automotive repair (NAICS 8111)')
-  } else if (naics.startsWith('71394')) {
-    score += 18; reasons.push('Fitness / recreation (NAICS 71394)')
-  } else if (naics.startsWith('6212')) {
-    score += 20; reasons.push('Dental office (NAICS 6212)')
-  } else if (naics.startsWith('6213')) {
-    score += 14; reasons.push('Healthcare practitioner (NAICS 6213)')
-  } else if (naics.startsWith('6214')) {
-    score += 18; reasons.push('Outpatient care center (NAICS 6214)')
-  } else if (['445', '449', '455'].some(p => naics.startsWith(p))) {
-    score += 12; reasons.push(`Retail (NAICS ${naics.slice(0, 3)})`)
-  } else if (naics.startsWith('238')) {
-    score += 8; reasons.push('Specialty contractor (NAICS 238)')
+  // ── NAICS scoring (uses the NAICS dictionary for comprehensive coverage) ──
+  const naicsCode = input.naicsCode
+  const naics = (naicsCode ?? '').trim()
+  if (naics) {
+    const resolved = resolveNaics(naics)
+    const mod = naicsScoreModifier(naics)
+    if (mod !== 0) {
+      score += mod
+      reasons.push(`${resolved.label} (NAICS ${naics}) — ${resolved.tier} card-processing category`)
+    }
   }
 
-  // ── NAICS: negative signals ───────────────────────────────────────────────
-  if (naics.startsWith('531')) {
-    score -= 20; reasons.push('Real estate — lower card-processing likelihood')
-  }
-  if (naics.startsWith('523') || naics.startsWith('525')) {
-    score -= 20; reasons.push('Financial / investment entity')
-  }
-  if (naics.startsWith('551')) {
-    score -= 35; reasons.push('Holding company structure')
-  }
+  // ── NAICS: government override ────────────────────────────────────────────
   if (naics.startsWith('92')) {
     score -= 40; reasons.push('Government entity')
   }

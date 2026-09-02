@@ -5,11 +5,13 @@ import { useRouter } from 'next/navigation'
 import {
   Phone, Globe, MapPin, Copy, Check, ExternalLink,
   Search, User, Mail, AlertCircle, Loader2,
-  Star, ShieldCheck, HelpCircle, RefreshCw,
+  Star, ShieldCheck, HelpCircle, RefreshCw, Building2, ChevronDown, ChevronRight,
 } from 'lucide-react'
 import { fmtPhone, safeUrl } from '@/lib/utils'
+import { formatPhone, telHref } from '@/lib/phone-normalize'
+import { resolveNaics, NAICS_TIER_COLORS } from '@/lib/naics'
 import { EnrichmentBadge } from './EnrichmentBadge'
-import type { Lead, Contact } from '@/lib/types'
+import type { Lead, Contact, EntityRecord } from '@/lib/types'
 
 // Metadata packed into contacts.notes for backward compat with no-migration schema
 interface ContactNotes {
@@ -39,6 +41,7 @@ interface Props {
   lead: Lead
   contacts: Contact[]
   placeCache?: PlaceCache | null    // from enrichment_jobs.raw_response
+  entityRecord?: EntityRecord | null
 }
 
 // ── Confidence badge ──────────────────────────────────────────────────────────
@@ -55,11 +58,15 @@ function ConfidencePill({ confidence }: { confidence: number }) {
   )
 }
 
-export function ContactPanel({ lead: initialLead, contacts: initialContacts, placeCache }: Props) {
+export function ContactPanel({ lead: initialLead, contacts: initialContacts, placeCache, entityRecord: initialEntityRecord }: Props) {
   const router = useRouter()
   const [lead, setLead] = useState(initialLead)
   const [contacts] = useState(initialContacts)
   const [copiedPhone, setCopiedPhone] = useState(false)
+  const [entityRecord, setEntityRecord] = useState(initialEntityRecord)
+  const [entityLoading, setEntityLoading] = useState(false)
+  const [entityError, setEntityError] = useState<string | null>(null)
+  const [entityExpanded, setEntityExpanded] = useState(false)
 
   // Find Contact state
   const [findLoading, setFindLoading] = useState(false)
@@ -223,6 +230,31 @@ export function ContactPanel({ lead: initialLead, contacts: initialContacts, pla
     }
   }
 
+  // ── Entity / LLC research (CPA API) ──────────────────────────────────────────
+  async function lookupEntity(force = false) {
+    setEntityLoading(true)
+    setEntityError(null)
+    try {
+      const res = await fetch('/api/enrich/lookup-entity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadId: lead.id, force }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setEntityError(data.error ?? 'Entity lookup failed')
+      } else {
+        setEntityRecord(data.entity ?? null)
+        setEntityExpanded(true)
+        router.refresh()
+      }
+    } catch (e) {
+      setEntityError(String(e))
+    } finally {
+      setEntityLoading(false)
+    }
+  }
+
   // ── Run Full Research ─────────────────────────────────────────────────────────
   async function runFullResearch() {
     setFullLoading(true)
@@ -248,37 +280,86 @@ export function ContactPanel({ lead: initialLead, contacts: initialContacts, pla
 
   const isEnriched = lead.enrichment_status === 'completed'
 
+  // ── Resolved best callable phone (priority order) ──────────────────────────
+  // 1. Texas permit phone  2. primary_phone (Google/manual)
+  const permitPhone = (lead as Lead & { permit_phone?: string | null }).permit_phone
+  const permitPhoneSource = (lead as Lead & { permit_phone_source?: string | null }).permit_phone_source
+  const bestPhone = permitPhone ?? lead.primary_phone
+  const bestPhoneLabel = permitPhone
+    ? 'Texas permit phone'
+    : lead.primary_phone
+      ? (placeCache ? 'Google business phone' : 'Phone')
+      : null
+
+  // NAICS for display
+  const naicsResolved = lead.naics_code ? resolveNaics(lead.naics_code) : null
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4 md:p-5 mb-4 space-y-4">
       {/* ── Header ── */}
       <div className="flex items-center justify-between gap-3">
         <h2 className="font-semibold text-gray-900 text-sm">Contact Intelligence</h2>
-        <EnrichmentBadge status={lead.enrichment_status} confidence={placeConfidence} />
+        <div className="flex items-center gap-2">
+          {naicsResolved && (
+            <span className={`text-xs px-2 py-0.5 rounded border font-medium ${NAICS_TIER_COLORS[naicsResolved.tier]}`}>
+              {naicsResolved.label}
+            </span>
+          )}
+          <EnrichmentBadge status={lead.enrichment_status} confidence={placeConfidence} />
+        </div>
       </div>
 
-      {/* ── Phone ── */}
+      {/* ── Best callable phone (contact priority) ── */}
       <div className="space-y-3">
-        {lead.primary_phone ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <a
-              href={`tel:${lead.primary_phone}`}
-              className="flex items-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white text-base font-bold rounded-xl transition-colors shadow-sm"
-            >
-              <Phone size={16} />
-              {fmtPhone(lead.primary_phone)}
-            </a>
-            <button
-              onClick={copyPhone}
-              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 px-3 py-2 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors"
-            >
-              {copiedPhone ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
-              {copiedPhone ? 'Copied' : 'Copy'}
-            </button>
-            {placeCache?.confidence != null && !isNaN(placeCache.confidence) && (
-              <ConfidencePill confidence={placeCache.confidence} />
+        {bestPhone ? (
+          <div className="space-y-1.5">
+            {/* Priority label */}
+            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">
+              {bestPhoneLabel}
+              {permitPhoneSource === 'sift_weekly' && (
+                <span className="ml-1.5 normal-case bg-blue-50 text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded text-[10px]">
+                  Texas Comptroller record
+                </span>
+              )}
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <a
+                href={telHref(bestPhone) ?? '#'}
+                className="flex items-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white text-base font-bold rounded-xl transition-colors shadow-sm"
+              >
+                <Phone size={16} />
+                {formatPhone(bestPhone) ?? fmtPhone(bestPhone)}
+              </a>
+              <button
+                onClick={copyPhone}
+                className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 px-3 py-2 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors"
+              >
+                {copiedPhone ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
+                {copiedPhone ? 'Copied' : 'Copy'}
+              </button>
+              {placeCache?.confidence != null && !isNaN(placeCache.confidence as number) && !permitPhone && (
+                <ConfidencePill confidence={placeCache.confidence as number} />
+              )}
+              {placeConfidence != null && !placeCache?.confidence && !permitPhone && (
+                <ConfidencePill confidence={placeConfidence} />
+              )}
+            </div>
+
+            {/* Secondary phone if permit phone shown separately from Google phone */}
+            {permitPhone && lead.primary_phone && lead.primary_phone !== permitPhone && (
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <span className="text-gray-400">Also Google phone:</span>
+                <a href={`tel:${lead.primary_phone}`} className="text-blue-600 hover:underline">
+                  {formatPhone(lead.primary_phone) ?? fmtPhone(lead.primary_phone)}
+                </a>
+              </div>
             )}
-            {placeConfidence != null && !placeCache?.confidence && (
-              <ConfidencePill confidence={placeConfidence} />
+
+            {/* Permit phone disclaimer */}
+            {permitPhone && (
+              <p className="text-[11px] text-gray-400 italic">
+                Business phone from TX Comptroller permit record. Not the owner&apos;s direct personal number unless independently verified.
+              </p>
             )}
           </div>
         ) : (
@@ -312,29 +393,30 @@ export function ContactPanel({ lead: initialLead, contacts: initialContacts, pla
             {placeCache.displayName && (
               <p>
                 <span className="text-gray-400 w-20 inline-block">Place:</span>
-                {placeCache.displayName}
+                {String(placeCache.displayName)}
               </p>
             )}
             {placeCache.formattedAddress && (
               <p>
                 <span className="text-gray-400 w-20 inline-block">Address:</span>
-                {placeCache.formattedAddress}
+                {String(placeCache.formattedAddress)}
               </p>
             )}
             {placeCache.businessStatus && (
               <p>
                 <span className="text-gray-400 w-20 inline-block">Status:</span>
                 <span className={placeCache.businessStatus === 'OPERATIONAL' ? 'text-green-600 font-medium' : 'text-amber-600'}>
-                  {placeCache.businessStatus.replace('_', ' ')}
+                  {String(placeCache.businessStatus).replace('_', ' ')}
                 </span>
               </p>
             )}
           </div>
         )}
 
-        {/* ── Decision-maker ── */}
+        {/* ── Decision-maker (website research) ── */}
         {enrichedContact ? (
           <div className="border border-gray-100 rounded-xl p-3 space-y-1.5 bg-gray-50">
+            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Decision-Maker (website research)</p>
             <div className="flex items-center gap-2 flex-wrap">
               <User size={13} className="text-gray-400 shrink-0" />
               <span className="text-sm font-semibold text-gray-900">{enrichedContact.full_name}</span>
@@ -391,10 +473,22 @@ export function ContactPanel({ lead: initialLead, contacts: initialContacts, pla
         ) : (
           <div className="flex items-center gap-2 text-sm text-gray-400 bg-gray-50 rounded-lg px-3 py-2.5">
             <HelpCircle size={14} />
-            Decision-maker not verified — click Research Decision-Maker or call and ask for the owner or manager.
+            Decision-maker not verified — click Find Decision-Maker or call and ask for the owner or manager.
           </div>
         )}
       </div>
+
+      {/* ── LLC Record Research (CPA API, Phase 3) ── */}
+      <EntityResearchSection
+        lead={lead}
+        entityRecord={entityRecord}
+        loading={entityLoading}
+        error={entityError}
+        expanded={entityExpanded}
+        onToggle={() => setEntityExpanded(e => !e)}
+        onLookup={() => lookupEntity(false)}
+        onRefresh={() => lookupEntity(true)}
+      />
 
       {/* ── Action buttons ── */}
       <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
@@ -445,6 +539,239 @@ export function ContactPanel({ lead: initialLead, contacts: initialContacts, pla
           onDismiss={() => setOwnerResult(null)}
           saving={savingOwner}
         />
+      )}
+    </div>
+  )
+}
+
+// ── Entity Research Section (Phase 3) ──────────────────────────────────────────
+
+function EntityResearchSection({
+  lead, entityRecord, loading, error, expanded, onToggle, onLookup, onRefresh,
+}: {
+  lead: Lead
+  entityRecord: EntityRecord | null | undefined
+  loading: boolean
+  error: string | null
+  expanded: boolean
+  onToggle: () => void
+  onLookup: () => void
+  onRefresh: () => void
+}) {
+  const hasTaxpayer = !!lead.taxpayer_number
+
+  return (
+    <div className="border border-gray-100 rounded-xl overflow-hidden">
+      {/* Header row */}
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+      >
+        <div className="flex items-center gap-2">
+          <Building2 size={13} className="text-gray-400" />
+          <span className="text-xs font-semibold text-gray-700">LLC / Entity Record Research</span>
+          {entityRecord?.primary_contact_name && (
+            <span className="text-xs text-gray-500">· {entityRecord.primary_contact_name}</span>
+          )}
+          {entityRecord && !entityRecord.primary_contact_name && (
+            <span className="text-xs text-gray-400 italic">· no officer found</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {!entityRecord && hasTaxpayer && (
+            <span className="text-[10px] text-blue-600 font-medium">Look up</span>
+          )}
+          {expanded ? <ChevronDown size={13} className="text-gray-400" /> : <ChevronRight size={13} className="text-gray-400" />}
+        </div>
+      </button>
+
+      {/* Expanded content */}
+      {expanded && (
+        <div className="px-4 py-3 space-y-3 border-t border-gray-100">
+          {error && (
+            <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 flex items-start gap-2">
+              <AlertCircle size={12} className="shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {!entityRecord && !loading && !error && hasTaxpayer && (
+            <div className="space-y-2">
+              <p className="text-xs text-gray-500">
+                Look up entity data via the Texas Comptroller CPA API — officer names, SOS file number, registered agent.
+                Requires <code className="bg-gray-100 px-1 rounded text-[11px]">CPA_API_KEY</code> in Netlify environment variables.
+              </p>
+              <button
+                onClick={onLookup}
+                disabled={loading}
+                className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                {loading ? <Loader2 size={12} className="animate-spin" /> : <Building2 size={12} />}
+                Look Up Entity Record
+              </button>
+            </div>
+          )}
+
+          {!hasTaxpayer && (
+            <p className="text-xs text-gray-400 italic">No taxpayer number — entity lookup not available for this lead.</p>
+          )}
+
+          {loading && (
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <Loader2 size={12} className="animate-spin" /> Looking up entity record…
+            </div>
+          )}
+
+          {entityRecord && (
+            <div className="space-y-3">
+              {/* Entity summary */}
+              <div className="bg-gray-50 rounded-lg p-3 space-y-1.5 text-xs">
+                {entityRecord.legal_entity_name && (
+                  <div className="flex gap-2">
+                    <span className="text-gray-400 w-28 shrink-0">Legal Name</span>
+                    <span className="text-gray-900 font-medium">{entityRecord.legal_entity_name}</span>
+                  </div>
+                )}
+                {entityRecord.dba_name && (
+                  <div className="flex gap-2">
+                    <span className="text-gray-400 w-28 shrink-0">DBA</span>
+                    <span className="text-gray-900">{entityRecord.dba_name}</span>
+                  </div>
+                )}
+                {entityRecord.sos_file_number && (
+                  <div className="flex gap-2">
+                    <span className="text-gray-400 w-28 shrink-0">TX SOS File #</span>
+                    <span className="text-gray-900 font-mono">{entityRecord.sos_file_number}</span>
+                  </div>
+                )}
+                {entityRecord.sos_registration_status && (
+                  <div className="flex gap-2">
+                    <span className="text-gray-400 w-28 shrink-0">SOS Status</span>
+                    <span className={entityRecord.sos_registration_status === 'Active' ? 'text-green-600 font-medium' : 'text-amber-600'}>
+                      {entityRecord.sos_registration_status}
+                    </span>
+                  </div>
+                )}
+                {entityRecord.state_of_formation && (
+                  <div className="flex gap-2">
+                    <span className="text-gray-400 w-28 shrink-0">Formed In</span>
+                    <span className="text-gray-900">{entityRecord.state_of_formation}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Decision maker from official record */}
+              {entityRecord.primary_contact_name ? (
+                <div className="border border-blue-100 rounded-lg p-3 bg-blue-50 space-y-1">
+                  <p className="text-[10px] uppercase tracking-wider text-blue-500 font-semibold mb-1">
+                    Possible Decision-Maker (Official Record)
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <User size={12} className="text-blue-400 shrink-0" />
+                    <span className="text-sm font-semibold text-gray-900">{entityRecord.primary_contact_name}</span>
+                  </div>
+                  {entityRecord.primary_contact_title && (
+                    <p className="text-xs text-gray-600 pl-4">
+                      Official title: <span className="font-medium">{entityRecord.primary_contact_title}</span>
+                    </p>
+                  )}
+                  {entityRecord.entity_confidence != null && (
+                    <div className="pl-4">
+                      <ConfidencePill confidence={entityRecord.entity_confidence} />
+                    </div>
+                  )}
+                  <p className="text-[11px] text-gray-400 italic pl-4 mt-1">
+                    {entityRecord.primary_contact_role === 'sole_proprietor'
+                      ? 'Sole proprietor on TX Comptroller record.'
+                      : entityRecord.primary_contact_role === 'officer'
+                      ? 'Officer/director on TX Secretary of State record via CPA franchise-tax API.'
+                      : 'Source: Texas Comptroller CPA API.'}
+                    {' '}Never infer a direct personal phone from an entity record.
+                  </p>
+                </div>
+              ) : (
+                <div className="text-xs text-gray-400 italic bg-gray-50 rounded-lg px-3 py-2">
+                  No named officer or decision-maker found in franchise-tax record for this taxpayer ID.
+                  Call the business and ask for the owner or manager.
+                </div>
+              )}
+
+              {/* Registered agent (shown but flagged if commercial) */}
+              {entityRecord.registered_agent_name && (
+                <div className="flex gap-2 text-xs">
+                  <span className="text-gray-400 w-28 shrink-0">Reg. Agent</span>
+                  <span className={entityRecord.registered_agent_is_commercial ? 'text-gray-400 line-through' : 'text-gray-700'}>
+                    {entityRecord.registered_agent_name}
+                  </span>
+                  {entityRecord.registered_agent_is_commercial && (
+                    <span className="text-[10px] text-gray-400 italic">commercial RA — not a sales contact</span>
+                  )}
+                </div>
+              )}
+
+              {/* Officers list */}
+              {entityRecord.officers && entityRecord.officers.length > 0 && (
+                <details className="group">
+                  <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700 list-none flex items-center gap-1">
+                    <ChevronRight size={11} className="group-open:rotate-90 transition-transform" />
+                    All officers/directors ({entityRecord.officers.length})
+                  </summary>
+                  <div className="mt-2 space-y-1 pl-4">
+                    {entityRecord.officers.map((o, i) => (
+                      <div key={i} className="text-xs text-gray-600 flex gap-2">
+                        <span className="font-medium text-gray-900">{o.AGNT_NM}</span>
+                        <span className="text-gray-400">{o.AGNT_TITL_TX}</span>
+                        {o.AGNT_ACTV_YR && <span className="text-gray-400">({o.AGNT_ACTV_YR})</span>}
+                        {o.SOURCE && <span className="text-[10px] text-gray-300">{o.SOURCE}</span>}
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+
+              {/* Links */}
+              <div className="flex flex-wrap gap-3 pt-1 border-t border-gray-100 text-xs">
+                <a
+                  href="https://mycpa.cpa.state.tx.us/coa/cosSearch.do"
+                  target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-blue-600 hover:underline"
+                >
+                  TX SOS Search <ExternalLink size={10} />
+                </a>
+                {entityRecord.sos_file_number && (
+                  <a
+                    href={`https://direct.sos.state.tx.us/corp_inquiry/corp_inquiry-entity.asp?spage=docs&:Sfiling_number=${entityRecord.sos_file_number}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-blue-600 hover:underline"
+                  >
+                    SOSDirect Filing #{entityRecord.sos_file_number} <ExternalLink size={10} />
+                  </a>
+                )}
+                <a
+                  href={`https://mycpa.cpa.state.tx.us/coa/cosSearch.do`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-blue-600 hover:underline"
+                >
+                  CPA Entity Search <ExternalLink size={10} />
+                </a>
+              </div>
+
+              <div className="flex items-center justify-between pt-1 border-t border-gray-100">
+                <span className="text-[10px] text-gray-400">
+                  Researched {entityRecord.researched_at ? new Date(entityRecord.researched_at).toLocaleDateString() : 'unknown'}
+                  {' · '}Source: Texas Comptroller CPA API
+                </span>
+                <button
+                  onClick={onRefresh}
+                  disabled={loading}
+                  className="text-[10px] text-gray-400 hover:text-blue-600 flex items-center gap-1"
+                >
+                  <RefreshCw size={9} /> Refresh
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </div>
   )
