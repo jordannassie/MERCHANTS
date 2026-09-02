@@ -16,12 +16,12 @@
                <Monitor className="h-7 w-7 text-blue-600 transition-colors duration-200" />
              </div>
              <div className="flex-1">
-              <h3 className="text-xl font-bold text-slate-900 group-hover:text-white transition-colors">I'm Opening a Business</h3>
+               <h3 className="text-xl font-bold text-slate-900 group-hover:text-white transition-colors">I'm Opening a Business</h3>
                <p className="mt-2 text-sm text-slate-600 group-hover:text-white transition-colors">
                  Get a simple payment setup built around how you sell — in person, online, mobile, or at the counter.
                </p>
                <div className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-blue-600 group-hover:text-white">
-                 <span>Explore POS &amp; Equipment</span>
+                 <span>Get My Business Set Up</span>
                  <ArrowRight size={14} className="transition-transform duration-200 group-hover:translate-x-1" />
                </div>
              </div>
@@ -38,12 +38,12 @@
                <CreditCard className="h-7 w-7 text-white transition-colors duration-200 group-hover:text-blue-600" />
              </div>
              <div className="flex-1">
-               <h3 className="text-xl font-bold text-white group-hover:text-slate-900 transition-colors">I Already Accept Cards</h3>
+               <h3 className="text-xl font-bold text-white group-hover:text-slate-900 transition-colors">I Need a Better Payment Setup</h3>
                <p className="mt-2 text-sm text-blue-100 group-hover:text-slate-700 transition-colors">
-                 Send a recent processing statement and get a clear savings proposal in about 15 minutes.
+                 Upgrade your terminal, POS, online payments, or switch to a payment solution that fits your business.
                </p>
                <div className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-white group-hover:text-blue-600">
-                 <span>Get My Free Review</span>
+                 <span>Explore My Options</span>
                  <ArrowRight size={14} className="transition-transform duration-200 group-hover:translate-x-1" />
                </div>
              </div>

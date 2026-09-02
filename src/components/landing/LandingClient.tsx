@@ -375,10 +375,10 @@ export default function LandingClient() {
                 <Shield size={12} /> Simple. Personal. Built for your business.
               </div>
               <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 leading-tight mb-4">
-                Let’s Find the Right Payment Setup
+                Let’s Get You Set Up
               </h2>
               <p className="text-slate-500 text-lg leading-relaxed mb-8">
-                Tell us what your business needs. We’ll reach out with a straightforward recommendation—whether you’re opening, upgrading equipment, or reviewing your current payment costs.
+                Whether you’re opening a new business, replacing equipment, or ready for a better payment solution, we’ll help get you set up quickly and simply.
               </p>
               <div className="space-y-4 text-sm text-slate-600">
                 <div className="flex items-center gap-3">
@@ -480,7 +480,7 @@ export default function LandingClient() {
 
                   {/* Inquiry dropdown (required) */ }
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">What can we help with? <span className="text-red-500">*</span></label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">What do you need to get set up? <span className="text-red-500">*</span></label>
                     <select
                       required
                       value={form.inquiry_type}
@@ -489,17 +489,17 @@ export default function LandingClient() {
                     >
                       <option value="">Select an option</option>
                       <option>I'm opening a new business</option>
-                      <option>I need a POS system or payment terminal</option>
-                      <option>I already accept cards — review my rates</option>
-                      <option>I want to switch payment providers</option>
-                      <option>I need help with online payments</option>
-                      <option>Something else</option>
+                      <option>I need a payment terminal</option>
+                      <option>I need a POS system</option>
+                      <option>I'm ready to switch payment providers</option>
+                      <option>I need online payment options</option>
+                      <option>I'm not sure — help me choose</option>
                     </select>
                   </div>
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                      Anything else you'd like us to know? (Optional)
+                      Tell us about your business (Optional)
                     </label>
                     <textarea
                       rows={4}
@@ -519,11 +519,11 @@ export default function LandingClient() {
                     disabled={submitting}
                     className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold text-sm py-3.5 rounded-xl transition-colors shadow-md shadow-blue-200"
                   >
-                    {submitting ? 'Sending…' : 'Get My Recommendation'}
+                    {submitting ? 'Sending…' : 'Get Started'}
                   </button>
 
                   <p className="text-center text-xs text-slate-400">
-                    No obligation. We'll reach out within one business day.
+                    We'll help you choose the right setup and get started.
                   </p>
                 </form>
               )}
