@@ -18,6 +18,7 @@ const schema = z.object({
   phone:     z.string().optional().default(''),
   email:     z.string().email(),
   comments:  z.string().min(1),
+  subject:   z.string().optional().default(''),
 })
 
 export async function POST(request: NextRequest) {
@@ -27,15 +28,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.message }, { status: 400 })
   }
 
-  const { firstName, lastName, phone, email, comments } = parsed.data
+  const { firstName, lastName, phone, email, comments, subject } = parsed.data
   const db = createServiceClient()
+
+  const fullComments = subject ? `[${subject}]\n\n${comments}` : comments
 
   const { error } = await db.from('support_requests').insert({
     first_name: firstName,
     last_name:  lastName,
     phone,
     email,
-    comments,
+    comments: fullComments,
   })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

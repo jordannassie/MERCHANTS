@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { PinDialog } from './PinDialog'
 import { ComparisonTable } from './ComparisonTable'
+import { DecisionSection } from './DecisionSection'
 
 const NAV_LINKS = [
   { label: 'Savings', href: '#savings' },
@@ -25,7 +26,7 @@ const IMG_DEVICE = 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/p
 
 
 
-const EMPTY_FORM = { firstName: '', lastName: '', phone: '', email: '', comments: '' }
+const EMPTY_FORM = { firstName: '', lastName: '', phone: '', email: '', comments: '', subject: '' }
 
 export default function LandingClient() {
   const searchParams = useSearchParams()
@@ -37,6 +38,12 @@ export default function LandingClient() {
 
   function scrollTo(href: string) {
     document.querySelector(href)?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  function scrollToContactWithSubject(subject: string) {
+    setForm(f => ({ ...f, subject, comments: subject ? `I'm interested in: ${subject}` : f.comments }))
+    setSubmitted(false)
+    setTimeout(() => document.querySelector('#contact')?.scrollIntoView({ behavior: 'smooth' }), 50)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -200,58 +207,6 @@ export default function LandingClient() {
         </div>
       </section>
 
-      {/* ─── VIDEO SECTION ──────────────────────────────────────────────────── */}
-      <section id="video" className="bg-slate-50 py-20 md:py-28">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-10">
-            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">
-              See How We Help You Save
-            </h2>
-            <p className="text-lg text-slate-500 max-w-2xl mx-auto">
-              A quick look at how better payment processing can reduce unnecessary fees
-              and simplify the way your business gets paid.
-            </p>
-          </div>
-          <VideoPlaceholder />
-        </div>
-      </section>
-
-
-
-      {/* ─── COMPARISON TABLE ───────────────────────────────────────────────── */}
-      <ComparisonTable onScrollToContact={() => scrollTo('#contact')} />
-
-      {/* ─── IMAGE GALLERY ──────────────────────────────────────────────────── */}
-      <section className="bg-white py-14">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-5">
-          {/* Large top image */}
-          <div className="relative rounded-2xl overflow-hidden shadow-md w-full" style={{ height: '420px' }}>
-            <Image
-              src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/Terms.png"
-              alt="Payment terminals lineup"
-              fill
-              className="object-cover object-center"
-              sizes="100vw"
-            />
-          </div>
-          {/* Two images below */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div className="relative rounded-2xl overflow-hidden shadow-md" style={{ height: '300px' }}>
-              <Image src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/Coffeee.png" alt="Café checkout" fill className="object-cover" sizes="(max-width: 768px) 100vw, 50vw" />
-            </div>
-            <div className="relative rounded-2xl overflow-hidden shadow-md" style={{ height: '300px' }}>
-              <Image
-                src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/POS.png"
-                alt="POS hardware lineup"
-                fill
-                className="object-cover object-center"
-                sizes="(max-width: 768px) 100vw, 50vw"
-              />
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* ─── QUICKBOOKS STRIP ───────────────────────────────────────────────── */}
       <section className="bg-white border-y border-slate-100 py-6">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-center gap-5">
@@ -266,6 +221,61 @@ export default function LandingClient() {
           <p className="text-slate-600 text-sm font-medium text-center sm:text-left">
             Syncs seamlessly with your QuickBooks software — no double entry, no headaches.
           </p>
+        </div>
+      </section>
+
+      {/* ─── DECISION + BENEFITS ────────────────────────────────────────────── */}
+      <DecisionSection
+        onNewBusiness={() => scrollToContactWithSubject('New Business / POS Setup')}
+        onExistingBusiness={() => scrollToContactWithSubject('Free Processing Review')}
+        onTalkWithJordan={() => scrollToContactWithSubject('')}
+      />
+
+      {/* ─── VIDEO SECTION ──────────────────────────────────────────────────── */}
+      <section id="video" className="bg-white py-20 md:py-28">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-10">
+            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">
+              See How We Help You Save
+            </h2>
+            <p className="text-lg text-slate-500 max-w-2xl mx-auto">
+              A quick look at how better payment processing can reduce unnecessary fees
+              and simplify the way your business gets paid.
+            </p>
+          </div>
+          <VideoPlaceholder />
+        </div>
+      </section>
+
+      {/* ─── COMPARISON TABLE ───────────────────────────────────────────────── */}
+      <ComparisonTable onScrollToContact={() => scrollTo('#contact')} />
+
+      {/* ─── IMAGE GALLERY ──────────────────────────────────────────────────── */}
+      <section className="bg-white py-14">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-5">
+          <div className="relative rounded-2xl overflow-hidden shadow-md w-full" style={{ height: '420px' }}>
+            <Image
+              src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/Terms.png"
+              alt="Payment terminals lineup"
+              fill
+              className="object-cover object-center"
+              sizes="100vw"
+            />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="relative rounded-2xl overflow-hidden shadow-md" style={{ height: '300px' }}>
+              <Image src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/Coffeee.png" alt="Café checkout" fill className="object-cover" sizes="(max-width: 768px) 100vw, 50vw" />
+            </div>
+            <div className="relative rounded-2xl overflow-hidden shadow-md" style={{ height: '300px' }}>
+              <Image
+                src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/POS.png"
+                alt="POS hardware lineup"
+                fill
+                className="object-cover object-center"
+                sizes="(max-width: 768px) 100vw, 50vw"
+              />
+            </div>
+          </div>
         </div>
       </section>
 
@@ -390,6 +400,13 @@ export default function LandingClient() {
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
+                  {/* Pre-selected subject badge */}
+                  {form.subject && (
+                    <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                      <span className="text-xs font-semibold text-blue-700">{form.subject}</span>
+                      <button type="button" onClick={() => setForm(f => ({ ...f, subject: '', comments: '' }))} className="ml-auto text-blue-400 hover:text-blue-600 text-xs">✕</button>
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1.5">

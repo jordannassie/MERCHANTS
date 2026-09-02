@@ -1,6 +1,14 @@
 'use client'
 
+import Image from 'next/image'
 import { CheckCircle2, Minus, ArrowRight } from 'lucide-react'
+
+const LOGOS = {
+  pd:     { src: 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Process%20logo.png',                                            alt: 'Process.Direct',  w: 110, h: 28 },
+  clover: { src: 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/clover.svg',                                                     alt: 'Clover',          w: 80,  h: 24 },
+  toast:  { src: 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Toasts.png',                                                     alt: 'Toast',           w: 80,  h: 28 },
+  stripe: { src: 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Stripe_Logo,_revised_2016.svg.webp', alt: 'Stripe',          w: 70,  h: 28 },
+}
 
 const ROWS = [
   {
@@ -91,17 +99,17 @@ export function ComparisonTable({ onScrollToContact }: { onScrollToContact: () =
                 </th>
                 {/* Process.Direct */}
                 <th className="px-5 py-4 w-[26%] bg-green-50 border-x border-green-100">
-                  <div className="flex flex-col gap-1.5">
+                  <div className="flex flex-col gap-2">
                     <span className="inline-flex w-fit items-center bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full tracking-wide uppercase">
                       Best for Local Business
                     </span>
-                    <span className="text-base font-bold text-slate-900">Process.Direct</span>
+                    <Image src={LOGOS.pd.src} alt={LOGOS.pd.alt} width={LOGOS.pd.w} height={LOGOS.pd.h} className="h-7 w-auto object-contain" />
                   </div>
                 </th>
                 {/* Competitors */}
-                {['Clover', 'Toast', 'Stripe'].map(name => (
-                  <th key={name} className="px-5 py-4 text-base font-semibold text-slate-500">
-                    {name}
+                {(['clover','toast','stripe'] as const).map(key => (
+                  <th key={key} className="px-5 py-4">
+                    <Image src={LOGOS[key].src} alt={LOGOS[key].alt} width={LOGOS[key].w} height={LOGOS[key].h} className="h-6 w-auto object-contain" />
                   </th>
                 ))}
               </tr>
@@ -143,20 +151,20 @@ export function ComparisonTable({ onScrollToContact }: { onScrollToContact: () =
               </div>
               {/* Process.Direct */}
               <div className="px-4 py-3 bg-green-50 border-b border-green-100">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-bold text-green-700">Process.Direct</span>
+                <div className="flex items-center justify-between mb-2">
+                  <Image src={LOGOS.pd.src} alt={LOGOS.pd.alt} width={90} height={22} className="h-5 w-auto object-contain" />
                   <span className="text-[10px] bg-green-500 text-white font-bold px-2 py-0.5 rounded-full">Best</span>
                 </div>
                 <PdCell text={row.pd} />
               </div>
               {/* Competitors */}
-              {[
-                { name: 'Clover', text: row.clover },
-                { name: 'Toast',  text: row.toast  },
-                { name: 'Stripe', text: row.stripe  },
-              ].map(({ name, text }) => (
-                <div key={name} className="px-4 py-3 border-b border-slate-50 last:border-0">
-                  <span className="text-xs font-semibold text-slate-400 block mb-1">{name}</span>
+              {([
+                { key: 'clover' as const, text: row.clover },
+                { key: 'toast'  as const, text: row.toast  },
+                { key: 'stripe' as const, text: row.stripe  },
+              ]).map(({ key, text }) => (
+                <div key={key} className="px-4 py-3 border-b border-slate-50 last:border-0">
+                  <Image src={LOGOS[key].src} alt={LOGOS[key].alt} width={60} height={18} className="h-4 w-auto object-contain mb-1.5" />
                   <CompCell text={text} />
                 </div>
               ))}
