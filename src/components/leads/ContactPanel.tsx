@@ -66,6 +66,8 @@ export function ContactPanel({ lead: initialLead, contacts: initialContacts, pla
   const [entityRecord, setEntityRecord] = useState(initialEntityRecord)
   const [entityLoading, setEntityLoading] = useState(false)
   const [entityError, setEntityError] = useState<string | null>(null)
+  const [entityErrorCode, setEntityErrorCode] = useState<string | null>(null)
+  const [entityWaitSeconds, setEntityWaitSeconds] = useState<number | null>(null)
   const [entityExpanded, setEntityExpanded] = useState(false)
 
   // Find Contact state
@@ -232,8 +234,11 @@ export function ContactPanel({ lead: initialLead, contacts: initialContacts, pla
 
   // ── Entity / LLC research (CPA API) ──────────────────────────────────────────
   async function lookupEntity(force = false) {
+    if (entityLoading) return  // prevent duplicate clicks
     setEntityLoading(true)
     setEntityError(null)
+    setEntityErrorCode(null)
+    setEntityWaitSeconds(null)
     try {
       const res = await fetch('/api/enrich/lookup-entity', {
         method: 'POST',
@@ -243,6 +248,9 @@ export function ContactPanel({ lead: initialLead, contacts: initialContacts, pla
       const data = await res.json()
       if (!res.ok) {
         setEntityError(data.error ?? 'Entity lookup failed')
+        setEntityErrorCode(data.errorCode ?? null)
+        setEntityWaitSeconds(data.waitSeconds ?? null)
+        setEntityExpanded(true)
       } else {
         setEntityRecord(data.entity ?? null)
         setEntityExpanded(true)
@@ -250,6 +258,7 @@ export function ContactPanel({ lead: initialLead, contacts: initialContacts, pla
       }
     } catch (e) {
       setEntityError(String(e))
+      setEntityExpanded(true)
     } finally {
       setEntityLoading(false)
     }
@@ -484,6 +493,8 @@ export function ContactPanel({ lead: initialLead, contacts: initialContacts, pla
         entityRecord={entityRecord}
         loading={entityLoading}
         error={entityError}
+        errorCode={entityErrorCode}
+        waitSeconds={entityWaitSeconds}
         expanded={entityExpanded}
         onToggle={() => setEntityExpanded(e => !e)}
         onLookup={() => lookupEntity(false)}
@@ -547,18 +558,56 @@ export function ContactPanel({ lead: initialLead, contacts: initialContacts, pla
 // ── Entity Research Section (Phase 3) ──────────────────────────────────────────
 
 function EntityResearchSection({
-  lead, entityRecord, loading, error, expanded, onToggle, onLookup, onRefresh,
+  lead, entityRecord, loading, error, errorCode, waitSeconds, expanded, onToggle, onLookup, onRefresh,
 }: {
   lead: Lead
   entityRecord: EntityRecord | null | undefined
   loading: boolean
   error: string | null
+  errorCode: string | null
+  waitSeconds: number | null
   expanded: boolean
   onToggle: () => void
   onLookup: () => void
   onRefresh: () => void
 }) {
   const hasTaxpayer = !!lead.taxpayer_number
+
+  const waitMin = waitSeconds ? Math.ceil(waitSeconds / 60) : null
+
+  const entityErrorNode = !error ? null
+    : errorCode === 'cpa_key_missing' ? (
+        <div className="text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 space-y-1.5">
+          <p className="font-semibold text-amber-800 flex items-center gap-1.5">
+            <AlertCircle size={12} /> CPA API key not configured
+          </p>
+          <ol className="list-decimal list-inside text-amber-700 space-y-0.5 ml-0.5">
+            <li>Register at <a href="https://comptroller.texas.gov/transparency/open-data/" target="_blank" rel="noopener noreferrer" className="underline">comptroller.texas.gov/transparency/open-data/</a></li>
+            <li>Add <code className="bg-amber-100 px-1 rounded">CPA_API_KEY</code> to Netlify env vars (never use NEXT_PUBLIC_)</li>
+            <li>Redeploy the site</li>
+          </ol>
+        </div>
+    ) : errorCode === 'migration_missing' ? (
+        <div className="text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 space-y-1">
+          <p className="font-semibold text-amber-800 flex items-center gap-1.5"><AlertCircle size={12} /> Migration 008 not applied</p>
+          <p className="text-amber-700">Run <code className="bg-amber-100 px-1 rounded">supabase/migrations/008_permit_phone_and_entity.sql</code> in the <a href="https://supabase.com/dashboard/project/phhczohqidgrvcmszets/sql/new" target="_blank" rel="noopener noreferrer" className="underline">Supabase SQL Editor</a>.</p>
+        </div>
+    ) : errorCode === 'internal_rate_limit' ? (
+        <div className="text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-start gap-2 text-amber-700">
+          <AlertCircle size={12} className="shrink-0 mt-0.5" />
+          <span>{error}{waitMin ? ` — try again in ${waitMin} minute${waitMin === 1 ? '' : 's'}` : ''}</span>
+        </div>
+    ) : errorCode === 'entity_not_found' ? (
+        <div className="text-xs bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-gray-500 italic">
+          Entity not found in Texas Comptroller records for taxpayer ID {lead.taxpayer_number}.
+          The business may be registered under a different taxpayer ID or may not file franchise tax.
+        </div>
+    ) : (
+        <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 flex items-start gap-2">
+          <AlertCircle size={12} className="shrink-0 mt-0.5" />
+          <span>{error}</span>
+        </div>
+    )
 
   return (
     <div className="border border-gray-100 rounded-xl overflow-hidden">
@@ -588,12 +637,7 @@ function EntityResearchSection({
       {/* Expanded content */}
       {expanded && (
         <div className="px-4 py-3 space-y-3 border-t border-gray-100">
-          {error && (
-            <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 flex items-start gap-2">
-              <AlertCircle size={12} className="shrink-0 mt-0.5" />
-              <span>{error}</span>
-            </div>
-          )}
+          {entityErrorNode}
 
           {!entityRecord && !loading && !error && hasTaxpayer && (
             <div className="space-y-2">
@@ -604,10 +648,10 @@ function EntityResearchSection({
               <button
                 onClick={onLookup}
                 disabled={loading}
-                className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? <Loader2 size={12} className="animate-spin" /> : <Building2 size={12} />}
-                Look Up Entity Record
+                {loading ? 'Looking up…' : 'Look Up Entity Record'}
               </button>
             </div>
           )}

@@ -58,9 +58,27 @@ create index if not exists entity_records_taxpayer   on public.entity_records(ta
 create index if not exists entity_records_sos_file   on public.entity_records(sos_file_number);
 create index if not exists leads_permit_phone        on public.leads(permit_phone) where permit_phone is not null;
 
+-- Unique constraint so upsert on lead_id works
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'entity_records_lead_id_key'
+      and conrelid = 'public.entity_records'::regclass
+  ) then
+    alter table public.entity_records add constraint entity_records_lead_id_key unique (lead_id);
+  end if;
+end$$;
+
 create trigger entity_records_updated_at
   before update on public.entity_records
   for each row execute function public.handle_updated_at();
+
+-- ── RLS: entity_records is server-side only ───────────────────────────────
+-- The anon/publishable key used by browser clients cannot access this table.
+-- All reads and writes go through server routes using the service-role client.
+alter table public.entity_records enable row level security;
+-- No policies = no anon access. Service role bypasses RLS at the DB level.
 
 -- ── Confirmation function ─────────────────────────────────────
 create or replace function public.migration_008_applied()

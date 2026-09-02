@@ -6,24 +6,28 @@
  *   enrich   — 50 single-lead Google Places calls per 15 minutes
  *   bulk     — 3 bulk batch calls per 30 minutes
  *   research — 20 OpenAI research calls per 60 minutes
+ *   entity   — 200 CPA entity lookups per 60 minutes (CPA API is free)
  *
  * Single-workspace internal tool — no per-user tracking needed.
- * GOOGLE_MAPS_API_KEY and OPENAI_API_KEY are never exposed to the browser.
+ * API keys are never exposed to the browser.
  */
+import { NextResponse } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-export type RateLimitKey = 'enrich' | 'bulk' | 'research'
+export type RateLimitKey = 'enrich' | 'bulk' | 'research' | 'entity'
 
 const LIMITS: Record<RateLimitKey, { max: number; windowMinutes: number }> = {
-  enrich:   { max: 50, windowMinutes: 15 },
-  bulk:     { max: 3,  windowMinutes: 30 },
-  research: { max: 20, windowMinutes: 60 },
+  enrich:   { max: 50,  windowMinutes: 15 },
+  bulk:     { max: 3,   windowMinutes: 30 },
+  research: { max: 20,  windowMinutes: 60 },
+  entity:   { max: 200, windowMinutes: 60 }, // CPA API is free; generous limit
 }
 
 export interface RateLimitResult {
   allowed: boolean
   remaining: number
   resetAt: string
+  waitSeconds: number
   limit: number
   used: number
 }
@@ -39,12 +43,13 @@ export async function checkRateLimit(
   const { max, windowMinutes } = LIMITS[key]
   const windowStart = new Date(Date.now() - windowMinutes * 60_000).toISOString()
   const resetAt = new Date(Date.now() + windowMinutes * 60_000).toISOString()
+  const windowWaitSeconds = Math.ceil(windowMinutes * 60)
 
-  // Map each key to a source string stored in enrichment_jobs.raw_response
   const sourceByKey: Record<RateLimitKey, string> = {
     enrich:   'google_places',
-    bulk:     'google_places',          // bulk writes the same source
+    bulk:     'google_places',
     research: 'openai_web_research',
+    entity:   'cpa_entity_lookup',
   }
   const source = sourceByKey[key]
 
@@ -52,42 +57,43 @@ export async function checkRateLimit(
     .from('enrichment_jobs')
     .select('id', { count: 'exact', head: true })
     .gte('created_at', windowStart)
-    .eq('raw_response->>source' as 'status', source)  // jsonb path filter
+    .eq('raw_response->>source' as 'status', source)
 
   if (error) {
-    // Don't block the request if rate-limit counting fails
     console.warn('[rate-limit] count error:', error.message)
-    return { allowed: true, remaining: max, resetAt, limit: max, used: 0 }
+    return { allowed: true, remaining: max, resetAt, waitSeconds: windowWaitSeconds, limit: max, used: 0 }
   }
 
   const used = count ?? 0
+  const resetMs = new Date(resetAt).getTime() - Date.now()
   return {
     allowed: used < max,
     remaining: Math.max(0, max - used),
     resetAt,
+    waitSeconds: Math.ceil(resetMs / 1000),
     limit: max,
     used,
   }
 }
 
-/** Build a 429 NextResponse for rate limit exceeded */
-export function rateLimitExceeded(result: RateLimitResult): Response {
-  return new Response(
-    JSON.stringify({
-      error: `Rate limit exceeded. ${result.used}/${result.limit} requests used in this window. Try again after ${new Date(result.resetAt).toLocaleTimeString()}.`,
-      limit: result.limit,
-      used: result.used,
-      remaining: 0,
+/** Build a 429 NextResponse for rate limit exceeded — includes errorCode and waitSeconds */
+export function rateLimitExceeded(result: RateLimitResult): NextResponse {
+  const waitMin = Math.ceil(result.waitSeconds / 60)
+  return NextResponse.json(
+    {
+      errorCode: 'internal_rate_limit',
+      error: `Rate limit reached — ${result.used}/${result.limit} lookups in this window. Try again in ${waitMin} minute${waitMin === 1 ? '' : 's'}.`,
+      waitSeconds: result.waitSeconds,
       resetAt: result.resetAt,
-    }),
+      remaining: result.remaining,
+    },
     {
       status: 429,
       headers: {
-        'Content-Type': 'application/json',
         'X-RateLimit-Limit': String(result.limit),
         'X-RateLimit-Remaining': '0',
         'X-RateLimit-Reset': result.resetAt,
-        'Retry-After': String(Math.ceil((new Date(result.resetAt).getTime() - Date.now()) / 1000)),
+        'Retry-After': String(result.waitSeconds),
       },
     }
   )

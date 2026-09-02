@@ -23,6 +23,10 @@ export interface NaicsCategory {
 // Key: prefix (2–6 digits). More-specific codes override shorter prefixes.
 const NAICS_MAP: Record<string, NaicsCategory> = {
   // ── Restaurants & Food Service (priority) ──────────────────────────────────
+  // 3-digit fallback catches any restaurant code not matched below
+  '722':    { label: 'Food Service / Restaurant',     tier: 'priority' },
+
+  // 2017 NAICS codes (still used by some TX records)
   '7221':   { label: 'Full-Service Restaurant',       tier: 'priority' },
   '72211':  { label: 'Full-Service Restaurant',       tier: 'priority' },
   '722110': { label: 'Full-Service Restaurant',       tier: 'priority' },
@@ -35,8 +39,29 @@ const NAICS_MAP: Record<string, NaicsCategory> = {
   '722310': { label: 'Food Service Contractor',       tier: 'priority' },
   '722320': { label: 'Caterer',                       tier: 'priority' },
   '722330': { label: 'Mobile Food Services',          tier: 'priority' },
-  '722410': { label: 'Drinking Place (Bar)',          tier: 'priority' },
+  '722410': { label: 'Drinking Place (Bar)',           tier: 'priority' },
   '7224':   { label: 'Bar / Drinking Place',          tier: 'priority' },
+
+  // 2022 NAICS codes — TX Comptroller uses these for new permits
+  // 7225 = Restaurants and Other Eating Places (replaces 7221-7224)
+  '7225':   { label: 'Restaurant / Eating Place',     tier: 'priority' },
+  '72251':  { label: 'Full-Service Restaurant',       tier: 'priority' },
+  '722511': { label: 'Full-Service Restaurant',       tier: 'priority' },
+  '72252':  { label: 'Limited-Service Restaurant',    tier: 'priority' },
+  '722513': { label: 'Limited-Service Restaurant',    tier: 'priority' },
+  '722514': { label: 'Cafeteria / Grill Buffet',      tier: 'priority' },
+  '722515': { label: 'Snack / Non-Alcoholic Bar',     tier: 'priority' },
+  '72253':  { label: 'Special Food Services',         tier: 'priority' },
+  '722530': { label: 'Special Food Services',         tier: 'priority' },
+  '722550': { label: 'Caterer',                       tier: 'priority' },
+  '72254':  { label: 'Bar / Drinking Place',          tier: 'priority' },
+  '722540': { label: 'Drinking Place (Bar)',           tier: 'priority' },
+  '72259':  { label: 'Other Food Service',            tier: 'priority' },
+  '722590': { label: 'Other Food Service',            tier: 'priority' },
+
+  // ── 3-digit fallbacks for major groups not covered by 4+ digit entries ────
+  '812':    { label: 'Personal Care / Laundry',       tier: 'priority' },
+  '713':    { label: 'Amusement / Recreation',        tier: 'good' },
 
   // ── Personal Care / Beauty / Wellness (priority) ──────────────────────────
   '812110': { label: 'Barber Shop',                   tier: 'priority' },

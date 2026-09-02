@@ -105,14 +105,21 @@ async function main() {
 
   // Check if 007 columns exist (covers 006 too since 007 is a superset)
   const col007 = await columnExists('leads', 'google_place_id')
-  if (col007) {
+  if (!col007) {
+    const sql007 = readMigration('007_enrichment_columns.sql')
+    if (sql007) await applyMigration('007_enrichment_columns.sql', sql007)
+  } else {
     console.log('[migrate] ✓ 007 enrichment columns present')
-    return
   }
 
-  // Try to apply 007 via Management API
-  const sql007 = readMigration('007_enrichment_columns.sql')
-  if (sql007) await applyMigration('007_enrichment_columns.sql', sql007)
+  // Check if 008 columns exist (permit_phone + entity_records)
+  const col008 = await columnExists('leads', 'permit_phone')
+  if (!col008) {
+    const sql008 = readMigration('008_permit_phone_and_entity.sql')
+    if (sql008) await applyMigration('008_permit_phone_and_entity.sql', sql008)
+  } else {
+    console.log('[migrate] ✓ 008 permit_phone + entity_records present')
+  }
 }
 
 async function applyMigration(filename, sql) {
