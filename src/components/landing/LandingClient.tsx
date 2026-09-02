@@ -341,9 +341,16 @@ export default function LandingClient() {
               <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-4">
                 <Shield size={12} /> Your Local Payment Expert
               </div>
-              <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4">
+              <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 mb-3">
                 Jordan Nassie
               </h2>
+
+              {/* Jordan's promise */}
+              <blockquote className="mb-5 border-l-4 border-blue-500 pl-4 text-slate-600 italic text-base leading-relaxed">
+                "I promise to help save you money and give you excellent support."
+                <footer className="mt-1 text-xs not-italic font-semibold text-slate-400">— Jordan Nassie</footer>
+              </blockquote>
+
               <p className="text-slate-500 text-lg leading-relaxed mb-6">
                 Jordan is a Texas-based payment processing specialist dedicated to helping
                 local businesses cut unnecessary fees and find the right equipment for the
@@ -366,12 +373,6 @@ export default function LandingClient() {
                   <Mail size={15} /> jordannassie@gmail.com
                 </a>
               </div>
-
-              {/* Jordan's promise */}
-              <blockquote className="mt-6 border-l-4 border-blue-500 pl-4 text-slate-600 italic text-base leading-relaxed">
-                "I promise to save you money and give you excellent support."
-                <footer className="mt-1 text-xs not-italic font-semibold text-slate-400">— Jordan Nassie</footer>
-              </blockquote>
             </div>
           </div>
         </div>
