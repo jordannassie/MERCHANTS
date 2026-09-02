@@ -11,6 +11,7 @@ import {
 import { PinDialog } from './PinDialog'
 import { ComparisonTable } from './ComparisonTable'
 import { DecisionSection } from './DecisionSection'
+import { DecisionCards } from './DecisionCards'
 
 const NAV_LINKS = [
   { label: 'Savings', href: '#savings' },
@@ -169,20 +170,10 @@ export default function LandingClient() {
               payment equipment for the way they sell.
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <button
-                onClick={() => scrollTo('#contact')}
-                className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-base px-8 py-4 rounded-xl shadow-lg shadow-blue-200 transition-all"
-              >
-                Request a Free Review <ArrowRight size={16} />
-              </button>
-              <button
-                onClick={() => scrollTo('#video')}
-                className="inline-flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-base px-8 py-4 rounded-xl border border-slate-200 transition-all"
-              >
-                <Play size={14} className="fill-slate-700" /> Watch How It Works
-              </button>
-            </div>
+            <DecisionCards
+              onNewBusiness={() => scrollToContactWithSubject('New Business / POS Setup')}
+              onExistingBusiness={() => scrollToContactWithSubject('Free Processing Review')}
+            />
 
             {/* Trust indicators */}
             <div className="mt-12 flex flex-wrap justify-center gap-6 text-xs text-slate-400 font-medium">
@@ -208,7 +199,7 @@ export default function LandingClient() {
       </section>
 
       {/* ─── QUICKBOOKS STRIP ───────────────────────────────────────────────── */}
-      <section className="bg-white border-y border-slate-100 py-6">
+      {/* ─── TRUST STATS (full-width) ────────────────────────────────────────── */}\n+      <section className=\"w-full bg-blue-50/40 py-12\">\n+        <div className=\"max-w-6xl mx-auto px-4 sm:px-6 lg:px-8\">\n+          <div className=\"text-center mb-4 text-sm text-slate-700\">Experience you can count on.</div>\n+          <div className=\"grid grid-cols-1 md:grid-cols-2 gap-6 items-center\">\n+            <div className=\"flex items-center justify-center md:justify-end\">\n+              <div className=\"bg-white rounded-2xl p-8 w-full max-w-md text-center md:text-right\">\n+                <div className=\"text-4xl font-extrabold text-slate-900\">20+</div>\n+                <div className=\"mt-2 text-sm text-slate-600\">Years of Combined Payment Industry Experience</div>\n+              </div>\n+            </div>\n+            <div className=\"flex items-center justify-center md:justify-start\">\n+              <div className=\"bg-white rounded-2xl p-8 w-full max-w-md text-center md:text-left\">\n+                <div className=\"text-4xl font-extrabold text-slate-900\">$4.5B+</div>\n+                <div className=\"mt-2 text-sm text-slate-600\">In Annual Transactions Supported</div>\n+              </div>\n+            </div>\n+          </div>\n+        </div>\n+      </section>\n+\n+      <section className=\"bg-white border-y border-slate-100 py-6\">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-center gap-5">
           <Image
             src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/quickbooks.png"
