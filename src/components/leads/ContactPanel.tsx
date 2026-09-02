@@ -577,13 +577,24 @@ function EntityResearchSection({
 
   const entityErrorNode = !error ? null
     : errorCode === 'cpa_key_missing' ? (
-        <div className="text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 space-y-1.5">
+        <div className="text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 space-y-2">
           <p className="font-semibold text-amber-800 flex items-center gap-1.5">
             <AlertCircle size={12} /> CPA API key not configured
           </p>
-          <ol className="list-decimal list-inside text-amber-700 space-y-0.5 ml-0.5">
-            <li>Register at <a href="https://comptroller.texas.gov/transparency/open-data/" target="_blank" rel="noopener noreferrer" className="underline">comptroller.texas.gov/transparency/open-data/</a></li>
-            <li>Add <code className="bg-amber-100 px-1 rounded">CPA_API_KEY</code> to Netlify env vars (never use NEXT_PUBLIC_)</li>
+          <ol className="list-decimal list-inside text-amber-700 space-y-1 ml-0.5">
+            <li>
+              <a
+                href="https://data-secure.comptroller.texas.gov/main/view"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 underline font-medium"
+              >
+                Get or manage your Texas CPA API key
+                <ExternalLink size={10} className="shrink-0" />
+              </a>
+              {' '}— select <span className="font-medium">Tax Accounts (formerly FTAS)</span>
+            </li>
+            <li>Add <code className="bg-amber-100 px-1 rounded">CPA_API_KEY</code> to Netlify env vars (never <code className="bg-amber-100 px-1 rounded">NEXT_PUBLIC_</code>)</li>
             <li>Redeploy the site</li>
           </ol>
         </div>

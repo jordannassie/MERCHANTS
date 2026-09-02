@@ -4,6 +4,7 @@ import { TerritoryForm } from '@/components/settings/TerritoryForm'
 import { ImportHistory } from '@/components/settings/ImportHistory'
 import { ImportButton } from '@/components/ImportButton'
 import { SiftImportCard } from '@/components/settings/SiftImportCard'
+import { CpaApiKeyCard } from '@/components/settings/CpaApiKeyCard'
 import type { Territory, ImportRun } from '@/lib/types'
 
 export const metadata: Metadata = { title: 'Settings — Merchant Radar' }
@@ -37,6 +38,9 @@ export default async function SettingsPage() {
 
       {/* SIFT permit phone import */}
       <SiftImportCard />
+
+      {/* CPA API key setup */}
+      <CpaApiKeyCard />
 
       {/* Import History */}
       <ImportHistory runs={(importRuns ?? []) as (ImportRun & { territory?: { name: string } | null })[]} />
