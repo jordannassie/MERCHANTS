@@ -27,7 +27,7 @@ const IMG_DEVICE = 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/p
 
 
 
-const EMPTY_FORM = { firstName: '', lastName: '', phone: '', email: '', comments: '', subject: '', inquiry_type: '' }
+const EMPTY_FORM = { firstName: '', lastName: '', phone: '', email: '', comments: '', subject: '', inquiry_type: '', industry: '' }
 
 export default function LandingClient() {
   const searchParams = useSearchParams()
@@ -248,6 +248,25 @@ export default function LandingClient() {
         onExistingBusiness={() => scrollToContactWithInquiry("I already accept cards — review my rates")}
         onTalkWithJordan={() => scrollToContactWithInquiry('')}
       />
+
+      {/* Mobile sticky contact bar - visible only below md (768px) */}
+      <div className="md:hidden fixed bottom-0 inset-x-0 z-50">
+        <div className="bg-white border-t border-slate-200 shadow-lg safe-area-bottom px-4 py-3">
+          <div className="flex gap-3">
+            <a href="tel:+19493316367" className="flex-1 inline-flex items-center justify-center gap-2 h-12 rounded-lg border border-blue-600 bg-white text-blue-600 font-semibold">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5h2l.4 2M7 7h10l1 9H6L7 7z"/></svg>
+              Call
+            </a>
+            <a href="sms:+19493316367" className="flex-1 inline-flex items-center justify-center gap-2 h-12 rounded-lg bg-blue-600 text-white font-semibold">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 3.866-3.582 7-8 7-1.356 0-2.64-.236-3.8-.66L3 19l1.66-5.2C3.9 12.54 3 10.346 3 8c0-3.866 3.582-7 8-7s8 3.134 8 7z"/></svg>
+              Text Us
+            </a>
+          </div>
+        </div>
+      </div>
+
+      {/* spacer so page content isn't hidden behind mobile sticky bar */}
+      <div className="h-16 md:h-0" />
 
       {/* ─── VIDEO SECTION ──────────────────────────────────────────────────── */}
       <section id="video" className="bg-white py-20 md:py-28">
@@ -495,6 +514,30 @@ export default function LandingClient() {
                       <option>I'm ready to switch payment providers</option>
                       <option>I need online payment options</option>
                       <option>I'm not sure — help me choose</option>
+                    </select>
+                  </div>
+
+                  {/* Industry dropdown (required) */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">What type of business do you have? <span className="text-red-500">*</span></label>
+                    <select
+                      required
+                      value={form.industry ?? ''}
+                      onChange={e => setForm(f => ({ ...f, industry: e.target.value }))}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">Select your industry</option>
+                      <option>Restaurant, café, or food truck</option>
+                      <option>Retail store or boutique</option>
+                      <option>Salon, barber, spa, or beauty</option>
+                      <option>Auto repair, dealership, or car wash</option>
+                      <option>Contractor or home services</option>
+                      <option>Medical, dental, or wellness</option>
+                      <option>Professional services</option>
+                      <option>Fitness, studio, or membership business</option>
+                      <option>Grocery, convenience, or liquor store</option>
+                      <option>E-commerce or online business</option>
+                      <option>Other</option>
                     </select>
                   </div>
 
