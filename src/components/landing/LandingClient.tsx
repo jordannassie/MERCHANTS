@@ -238,19 +238,21 @@ export default function LandingClient() {
       </section>
 
 
-      {/* ─── FULL-WIDTH IMAGE 1 ──────────────────────────────────────────────── */}
-      <section className="relative w-full overflow-hidden" style={{ height: '480px' }}>
-        <Image src={IMG_CLOVER} alt="Clover restaurant payment devices" fill className="object-cover" sizes="100vw" />
-      </section>
-
-      {/* ─── FULL-WIDTH IMAGE 2 ──────────────────────────────────────────────── */}
-      <section className="relative w-full overflow-hidden" style={{ height: '480px' }}>
-        <Image src={IMG_TYPES} alt="Different payment types accepted" fill className="object-cover" sizes="100vw" />
-      </section>
-
-      {/* ─── FULL-WIDTH IMAGE 3 ──────────────────────────────────────────────── */}
-      <section className="relative w-full overflow-hidden" style={{ height: '480px' }}>
-        <Image src={IMG_DEVICE} alt="Payment terminal close-up" fill className="object-cover object-center" sizes="100vw" />
+      {/* ─── IMAGE GALLERY ──────────────────────────────────────────────────── */}
+      <section className="bg-white py-14">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div className="relative rounded-2xl overflow-hidden shadow-md" style={{ height: '320px' }}>
+              <Image src={IMG_CLOVER} alt="Clover restaurant payment devices" fill className="object-cover" sizes="(max-width: 768px) 100vw, 33vw" />
+            </div>
+            <div className="relative rounded-2xl overflow-hidden shadow-md" style={{ height: '320px' }}>
+              <Image src={IMG_TYPES} alt="Different payment types accepted" fill className="object-cover" sizes="(max-width: 768px) 100vw, 33vw" />
+            </div>
+            <div className="relative rounded-2xl overflow-hidden shadow-md" style={{ height: '320px' }}>
+              <Image src={IMG_DEVICE} alt="Payment terminal close-up" fill className="object-cover object-center" sizes="(max-width: 768px) 100vw, 33vw" />
+            </div>
+          </div>
+        </div>
       </section>
 
       {/* ─── QUICKBOOKS STRIP ───────────────────────────────────────────────── */}
