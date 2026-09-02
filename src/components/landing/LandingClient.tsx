@@ -19,7 +19,7 @@ import { DecisionCards } from './DecisionCards'
     { label: 'Contact', href: '#contact' },
   ]
 
-const LOGO_URL = 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Process%20logo.png'
+const LOGO_URL = 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Blacklogo.png'
 const JORDAN_PHOTO = 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/Jordanimage.png'
 const IMG_CLOVER = 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/Clover-Restaurant-Devices-1-900x464.webp'
 const IMG_TYPES = 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/different-type-cover_image.jpg'
@@ -161,9 +161,9 @@ export default function LandingClient() {
             <Image
               src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Tap%20clear.png"
               alt="Tap"
-              width={140}
-              height={40}
-              className="h-10 w-auto object-contain"
+              width={420}
+              height={120}
+              className="h-[120px] w-auto object-contain"
             />
           </div>
 
@@ -212,13 +212,13 @@ export default function LandingClient() {
          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
            <div className="flex items-center justify-center md:justify-end">
              <div className="bg-white rounded-2xl p-8 w-full max-w-md text-center md:text-right">
-               <div className="text-4xl font-extrabold text-slate-900">20+</div>
+              <div className="text-6xl font-extrabold text-slate-900">20+</div>
                <div className="mt-2 text-sm text-slate-600">Years of Combined Payment Industry Experience</div>
              </div>
            </div>
            <div className="flex items-center justify-center md:justify-start">
              <div className="bg-white rounded-2xl p-8 w-full max-w-md text-center md:text-left">
-               <div className="text-4xl font-extrabold text-slate-900">$4.5B+</div>
+              <div className="text-6xl font-extrabold text-slate-900">$4.5B+</div>
                <div className="mt-2 text-sm text-slate-600">In Annual Transactions Supported</div>
              </div>
            </div>

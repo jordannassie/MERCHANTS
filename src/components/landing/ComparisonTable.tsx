@@ -4,7 +4,7 @@ import Image from 'next/image'
 import { CheckCircle2, Minus, ArrowRight } from 'lucide-react'
 
 const LOGOS = {
-  pd:     { src: 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Process%20logo.png',                                            alt: 'Process.Direct',  w: 110, h: 28 },
+  pd:     { src: 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Blacklogo.png',                                            alt: 'Process.Direct',  w: 110, h: 28 },
   clover: { src: 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/clover.svg',                                                     alt: 'Clover',          w: 80,  h: 24 },
   toast:  { src: 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Toasts.png',                                                     alt: 'Toast',           w: 80,  h: 28 },
   stripe: { src: 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Stripe_Logo,_revised_2016.svg.webp', alt: 'Stripe',          w: 70,  h: 28 },
