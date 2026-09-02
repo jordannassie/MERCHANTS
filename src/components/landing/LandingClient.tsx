@@ -157,13 +157,19 @@ export default function LandingClient() {
         {/* Hero text content — sits below the image, on white */}
         <div className="relative bg-white pb-20 md:pb-28">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-6">
-            <Shield size={12} /> Helping Texas businesses reduce processing costs
+          <div className="mb-6 flex justify-center">
+            <Image
+              src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Tap%20clear.png"
+              alt="Tap"
+              width={140}
+              height={40}
+              className="h-10 w-auto object-contain"
+            />
           </div>
 
-            <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold text-slate-900 tracking-tight leading-[1.08] mb-6">
-              Save More on<br className="hidden sm:block" /> Every Sale.
-            </h1>
+          <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold text-slate-900 tracking-tight leading-[1.08] mb-6">
+            Save More on<br className="hidden sm:block" /> Every Sale.
+          </h1>
 
             <p className="max-w-2xl mx-auto text-xl md:text-2xl text-slate-500 leading-relaxed mb-10">
               We help businesses lower payment-processing costs and get the right
@@ -327,7 +333,7 @@ export default function LandingClient() {
 
               {/* Jordan's promise */}
               <blockquote className="mb-5 border-l-4 border-blue-500 pl-4 text-slate-600 italic text-base leading-relaxed">
-                "I promise to help save you money and give you excellent support."
+                "Let me help you save money and give you excellent support."
                 <footer className="mt-1 text-xs not-italic font-semibold text-slate-400">— Jordan Nassie</footer>
               </blockquote>
 
