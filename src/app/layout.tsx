@@ -14,10 +14,10 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Merchants",
-    template: "%s | Merchants",
+    default: "Merchant Radar",
+    template: "%s | Merchant Radar",
   },
-  description: "Next.js app wired for Supabase and Netlify.",
+  description: "We help businesses lower payment-processing costs and get the right payment equipment for the way they sell.",
 };
 
 export default function RootLayout({
