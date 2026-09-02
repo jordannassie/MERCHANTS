@@ -53,8 +53,27 @@ export default async function PipelinePage({ searchParams }: PageProps) {
     return q
   }
 
-  // Fetch filtered pipeline leads (main query)
-  const { data: rawLeads, error: leadsError } = await makeQuery(SELECT_FULL, hasPhone)
+  // Run all three queries concurrently
+  const [
+    { data: rawLeads, error: leadsError },
+    { count: totalCount },
+    { count: callableCount },
+  ] = await Promise.all([
+    makeQuery(SELECT_FULL, hasPhone),
+
+    supabase
+      .from('leads')
+      .select('*', { count: 'exact', head: true })
+      .in('status', [...PIPELINE_STATUSES])
+      .or(NON_CHAIN),
+
+    supabase
+      .from('leads')
+      .select('*', { count: 'exact', head: true })
+      .in('status', [...PIPELINE_STATUSES])
+      .or(NON_CHAIN)
+      .or('permit_phone.not.is.null,primary_phone.not.is.null'),
+  ])
 
   let leadsData: Lead[]
   if (leadsError) {
@@ -64,21 +83,6 @@ export default async function PipelinePage({ searchParams }: PageProps) {
   } else {
     leadsData = (rawLeads ?? []) as unknown as Lead[]
   }
-
-  // Total count for filter bar (all pipeline leads regardless of phone filter)
-  const { count: totalCount } = await supabase
-    .from('leads')
-    .select('*', { count: 'exact', head: true })
-    .in('status', [...PIPELINE_STATUSES])
-    .or(NON_CHAIN)
-
-  // Callable count (used in filter bar pill)
-  const { count: callableCount } = await supabase
-    .from('leads')
-    .select('*', { count: 'exact', head: true })
-    .in('status', [...PIPELINE_STATUSES])
-    .or(NON_CHAIN)
-    .or('permit_phone.not.is.null,primary_phone.not.is.null')
 
   // Group by status — counts reflect the current filter
   const byStatus = PIPELINE_STATUSES.reduce<Record<string, Lead[]>>((acc, s) => {

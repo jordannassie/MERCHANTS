@@ -1,5 +1,6 @@
 import { AppNav } from '@/components/AppNav'
 import { ensureWorkspaceTerritory } from '@/lib/workspace'
+import { NavigationProgress } from '@/components/ui/NavigationProgress'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   // Bootstrap the global territory idempotently on every load.
@@ -12,6 +13,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <NavigationProgress />
       <AppNav userName="Jordan" />
       <div className="md:pl-56">
         <main className="pb-20 md:pb-0 min-h-screen">

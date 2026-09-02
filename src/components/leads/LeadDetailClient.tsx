@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/Button'
 import { Dialog } from '@/components/ui/Dialog'
 import { LogCallDialog } from './LogCallDialog'
 import { ContactsSection } from './ContactsSection'
-import { NotepadPanel } from './NotepadPanel'
+import { MainNoteSection } from './MainNoteSection'
 import {
   Phone, Globe, MapPin, Star, ChevronLeft, Copy, ExternalLink,
   MessageSquare, Clock, Edit2, Check, Info, Briefcase, FileText,
@@ -35,10 +35,14 @@ export function LeadDetailClient({ lead: initialLead, contacts: initialContacts,
   const [activities, setActivities] = useState(initialActivities)
   const [logCallOpen, setLogCallOpen] = useState(false)
   const [noteOpen, setNoteOpen] = useState(false)
-  const [mainNoteOpen, setMainNoteOpen] = useState(false)
-  // Local main_note state so display updates immediately after saving
-  const [mainNote, setMainNote] = useState<string | null>(lead.main_note ?? null)
   const [editOpen, setEditOpen] = useState(false)
+
+  function scrollToNote() {
+    const el = document.getElementById('main-note')
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth' })
+    setTimeout(() => el.querySelector('textarea')?.focus(), 400)
+  }
   const [copied, setCopied] = useState(false)
   const [editForm, setEditForm] = useState({
     primary_phone: lead.primary_phone ?? '',
@@ -119,12 +123,13 @@ export function LeadDetailClient({ lead: initialLead, contacts: initialContacts,
               </a>
             )}
             <button
-              onClick={() => setMainNoteOpen(true)}
+              onClick={scrollToNote}
               className="flex items-center gap-1.5 px-3 py-2 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 text-sm font-semibold rounded-lg transition-colors"
+              title="Jump to Main Note"
             >
               <FileText size={14} />
               Note
-              {mainNote && <span className="w-2 h-2 rounded-full bg-yellow-700 ml-0.5" />}
+              {lead.main_note && <span className="w-2 h-2 rounded-full bg-yellow-700 ml-0.5" />}
             </button>
             <Button variant="secondary" size="sm" onClick={() => setLogCallOpen(true)}>Log Call</Button>
             <Button variant="secondary" size="sm" onClick={() => setNoteOpen(true)}>Add Note</Button>
@@ -313,6 +318,17 @@ export function LeadDetailClient({ lead: initialLead, contacts: initialContacts,
         )}
       </div>
 
+      {/* ── Main Note (permanent, always visible) ─────────────────────────── */}
+      <MainNoteSection
+        leadId={lead.id}
+        leadName={displayName}
+        initialNote={lead.main_note ?? null}
+        initialUpdatedAt={lead.main_note_updated_at ?? null}
+        existingActivities={activities
+          .filter(a => a.activity_type === 'note')
+          .map(a => ({ id: a.id, notes: a.notes, occurred_at: a.occurred_at }))}
+      />
+
       {/* Mobile sticky actions */}
       <div className="md:hidden fixed bottom-20 inset-x-4 z-30">
         <div className="bg-white rounded-xl border border-gray-200 shadow-lg p-3 flex gap-2">
@@ -325,8 +341,9 @@ export function LeadDetailClient({ lead: initialLead, contacts: initialContacts,
             </a>
           ) : null}
           <button
-            onClick={() => setMainNoteOpen(true)}
+            onClick={scrollToNote}
             className="flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-semibold text-yellow-900 bg-yellow-400 hover:bg-yellow-500 rounded-lg transition-colors"
+            title="Jump to Main Note"
           >
             <FileText size={15} /> Note
           </button>
@@ -370,22 +387,6 @@ export function LeadDetailClient({ lead: initialLead, contacts: initialContacts,
           router.refresh()
         }}
       />
-
-      {/* Main Notepad — persistent single note per lead */}
-      {mainNoteOpen && (
-        <NotepadPanel
-          key={lead.id}
-          leadId={lead.id}
-          leadName={displayName}
-          initialNote={mainNote}
-          initialUpdatedAt={lead.main_note_updated_at ?? null}
-          existingActivities={activities
-            .filter(a => a.activity_type === 'note')
-            .map(a => ({ id: a.id, notes: a.notes, occurred_at: a.occurred_at }))}
-          onClose={() => setMainNoteOpen(false)}
-          onSaved={(note) => setMainNote(note || null)}
-        />
-      )}
 
       {/* Edit CRM Dialog */}
       <Dialog open={editOpen} onClose={() => setEditOpen(false)} title="Edit CRM Information">

@@ -44,18 +44,6 @@ export default async function DashboardPage() {
   const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0)
   const todayEnd = new Date(now); todayEnd.setHours(23, 59, 59, 999)
 
-  // Clean up any import runs stuck in 'running' for more than 30 minutes
-  // (Netlify functions time out and the finally block may never run)
-  try {
-    const staleMs = now.getTime() - 30 * 60 * 1000
-    const staleThreshold = new Date(staleMs).toISOString()
-    const staleCompleted = now.toISOString()
-    await db.from('import_runs')
-      .update({ status: 'failed', error_message: 'Import timed out — marked stale', completed_at: staleCompleted })
-      .eq('status', 'running')
-      .lt('started_at', staleThreshold)
-  } catch { /* non-critical */ }
-
   // Shared column list for call-list leads
   const CALL_COLS = 'id,display_name,outlet_name,outlet_city,outlet_state,priority,status,score,primary_phone,permit_phone,permit_issue_date,first_sales_date,naics_code,category'
 
