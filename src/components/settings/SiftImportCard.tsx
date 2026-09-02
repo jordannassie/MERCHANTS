@@ -1,21 +1,42 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Upload, CheckCircle, AlertCircle, Loader2, ExternalLink, Download, Key } from 'lucide-react'
+import { Upload, CheckCircle, AlertCircle, Loader2, ExternalLink, Download, Key, Eye } from 'lucide-react'
 
 const SIFT_KEY_URL = 'https://data-secure.comptroller.texas.gov/main/view'
 
+interface SkipReasons {
+  missingTaxpayerNumber?: number
+  blankOutletNumber?: number
+  malformedRow?: number
+  missingPhone?: number
+  invalidPhone?: number
+  taxpayerNotFound?: number
+  outletNotFound?: number
+}
+
 interface ImportSummary {
   rowsParsed?: number
-  leadsMatched?: number
+  rowsWithPhone?: number
+  validPhones?: number
+  exactMatches?: number
   phonesAdded?: number
+  alreadySaved?: number
+  saveErrors?: number
+  skipReasons?: SkipReasons
+  // Auto-import field names
+  leadsMatched?: number
   phonesSkipped?: number
   noPhone?: number
   errorCount?: number
-  // Legacy manual-upload field names
-  matched?: number
-  updated?: number
-  skipped?: number
+}
+
+interface PreviewMatch {
+  leadId: string
+  displayName: string
+  taxpayerNumber: string
+  outletNumber: string
+  maskedPhone: string
 }
 
 interface LastImport {
@@ -30,6 +51,7 @@ interface LastImport {
 
 export function SiftImportCard() {
   const inputRef = useRef<HTMLInputElement>(null)
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
 
   // ── Auto-import state ──────────────────────────────────────────────────────
   const [siftKeyConfigured, setSiftKeyConfigured] = useState<boolean | null>(null)
@@ -37,11 +59,16 @@ export function SiftImportCard() {
   const [availableFile, setAvailableFile] = useState<string | null>(null)
   const [lastImport, setLastImport] = useState<LastImport | null>(null)
   const [autoLoading, setAutoLoading] = useState(false)
-  const [autoResult, setAutoResult] = useState<{ summary?: ImportSummary; filename?: string; cached?: boolean; error?: string; errorCode?: string } | null>(null)
+  const [autoResult, setAutoResult] = useState<{
+    summary?: ImportSummary; filename?: string; cached?: boolean; error?: string; errorCode?: string
+  } | null>(null)
 
   // ── Manual upload state ────────────────────────────────────────────────────
   const [manualLoading, setManualLoading] = useState(false)
-  const [manualResult, setManualResult] = useState<{ summary?: ImportSummary; error?: string } | null>(null)
+  const [manualResult, setManualResult] = useState<{
+    summary?: ImportSummary; error?: string; preview?: PreviewMatch[]; pendingCount?: number
+  } | null>(null)
+  const [confirmLoading, setConfirmLoading] = useState(false)
 
   // ── Load initial status ────────────────────────────────────────────────────
   useEffect(() => {
@@ -50,11 +77,11 @@ export function SiftImportCard() {
         const text = await r.text()
         try { return JSON.parse(text) } catch { return {} }
       })
-      .then(d => {
-        setSiftKeyConfigured(d.siftKeyConfigured ?? false)
-        setStpAccessible(d.stpAccessible ?? false)
-        setAvailableFile(d.availableFile ?? null)
-        setLastImport(d.lastImport ?? null)
+      .then((d: Record<string, unknown>) => {
+        setSiftKeyConfigured((d.siftKeyConfigured as boolean | undefined) ?? false)
+        setStpAccessible((d.stpAccessible as boolean | undefined) ?? false)
+        setAvailableFile((d.availableFile as string | undefined) ?? null)
+        setLastImport((d.lastImport as LastImport | undefined) ?? null)
       })
       .catch(() => setSiftKeyConfigured(false))
   }, [])
@@ -101,29 +128,59 @@ export function SiftImportCard() {
     }
   }
 
-  // ── Manual file upload handler ─────────────────────────────────────────────
+  // ── Manual file upload — preview first ────────────────────────────────────
   async function handleFile(file: File) {
     if (!file) return
+    setPendingFile(file)
     setManualLoading(true)
     setManualResult(null)
     try {
       const form = new FormData()
       form.append('file', file)
+      form.append('preview', 'true')
       const res = await fetch('/api/import/sift-permits', { method: 'POST', body: form })
       const text = await res.text()
       let json: Record<string, unknown>
       try { json = JSON.parse(text) } catch {
         throw new Error(`Server error (HTTP ${res.status}) — try again`)
       }
-      if (res.ok) {
-        setManualResult({ summary: json.summary as ImportSummary | undefined })
+      if (!res.ok) {
+        setManualResult({ error: String(json.error ?? 'Preview failed') })
       } else {
-        setManualResult({ error: String(json.error ?? 'Import failed') })
+        const preview = json.preview as PreviewMatch[] | undefined
+        const summary = json.summary as ImportSummary | undefined
+        setManualResult({ preview, summary, pendingCount: summary?.exactMatches ?? 0 })
       }
     } catch (e) {
       setManualResult({ error: String(e) })
     } finally {
       setManualLoading(false)
+    }
+  }
+
+  // ── Confirm save ──────────────────────────────────────────────────────────
+  async function handleConfirmSave() {
+    if (!pendingFile || confirmLoading) return
+    setConfirmLoading(true)
+    try {
+      const form = new FormData()
+      form.append('file', pendingFile)
+      const res = await fetch('/api/import/sift-permits', { method: 'POST', body: form })
+      const text = await res.text()
+      let json: Record<string, unknown>
+      try { json = JSON.parse(text) } catch {
+        throw new Error(`Server error (HTTP ${res.status}) — try again`)
+      }
+      if (!res.ok) {
+        setManualResult({ error: String(json.error ?? 'Import failed') })
+      } else {
+        setManualResult({ summary: json.summary as ImportSummary | undefined })
+        setPendingFile(null)
+      }
+    } catch (e) {
+      setManualResult({ error: String(e) })
+    } finally {
+      setConfirmLoading(false)
     }
   }
 
@@ -233,7 +290,6 @@ export function SiftImportCard() {
             </button>
           </div>
 
-          {/* Auto-import result */}
           {autoResult?.error && (
             <div className="flex items-start gap-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
               <AlertCircle size={12} className="shrink-0 mt-0.5" />
@@ -246,20 +302,14 @@ export function SiftImportCard() {
               <CheckCircle size={12} />
               <span>
                 <span className="font-mono">{autoResult.filename}</span> was already imported.{' '}
-                <button
-                  onClick={() => handleAutoImport(true)}
-                  className="underline font-medium"
-                  disabled={autoLoading}
-                >
+                <button onClick={() => handleAutoImport(true)} className="underline font-medium" disabled={autoLoading}>
                   Re-import anyway
                 </button>
               </span>
             </div>
           )}
 
-          {autoResult?.summary && (
-            <ImportResultBox summary={autoResult.summary} filename={autoResult.filename} />
-          )}
+          {autoResult?.summary && <ImportResultBox summary={autoResult.summary} filename={autoResult.filename} />}
         </div>
       )}
 
@@ -273,12 +323,8 @@ export function SiftImportCard() {
           <ol className="list-decimal list-inside space-y-0.5 ml-1">
             <li>
               Register a free account at{' '}
-              <a
-                href="https://data-secure.comptroller.texas.gov/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline inline-flex items-center gap-0.5"
-              >
+              <a href="https://data-secure.comptroller.texas.gov/" target="_blank" rel="noopener noreferrer"
+                className="underline inline-flex items-center gap-0.5">
                 data-secure.comptroller.texas.gov <ExternalLink size={9} />
               </a>
             </li>
@@ -296,7 +342,7 @@ export function SiftImportCard() {
           {manualLoading ? (
             <div className="flex flex-col items-center gap-2 text-gray-500">
               <Loader2 size={24} className="animate-spin text-blue-500" />
-              <span className="text-sm">Importing permit phones…</span>
+              <span className="text-sm">Analysing permit file…</span>
             </div>
           ) : (
             <div className="flex flex-col items-center gap-2 text-gray-400">
@@ -314,6 +360,7 @@ export function SiftImportCard() {
           />
         </div>
 
+        {/* Error */}
         {manualResult?.error && (
           <div className="mt-3 flex items-start gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
             <AlertCircle size={14} className="shrink-0 mt-0.5" />
@@ -321,7 +368,75 @@ export function SiftImportCard() {
           </div>
         )}
 
-        {manualResult?.summary && (
+        {/* Preview mode — show before saving */}
+        {manualResult?.preview && !confirmLoading && !manualResult?.summary?.phonesAdded && (
+          <div className="mt-3 space-y-3">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2.5 space-y-2">
+              <div className="flex items-center gap-2 text-sm font-semibold text-blue-700">
+                <Eye size={14} />
+                Preview — {manualResult.pendingCount ?? 0} match{(manualResult.pendingCount ?? 0) !== 1 ? 'es' : ''} found
+              </div>
+              {(manualResult.pendingCount ?? 0) > 0 ? (
+                <>
+                  <p className="text-xs text-blue-600">Showing up to 10 proposed matches. No phones saved yet.</p>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-xs">
+                      <thead>
+                        <tr className="text-left text-blue-500 border-b border-blue-200">
+                          <th className="pb-1 pr-3 font-medium">Business</th>
+                          <th className="pb-1 pr-3 font-medium">Taxpayer #</th>
+                          <th className="pb-1 pr-3 font-medium">Outlet</th>
+                          <th className="pb-1 font-medium">Phone</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {manualResult.preview.map(m => (
+                          <tr key={m.leadId} className="border-b border-blue-100 last:border-0">
+                            <td className="py-1 pr-3 text-gray-700 max-w-[160px] truncate">{m.displayName}</td>
+                            <td className="py-1 pr-3 font-mono text-gray-500">{m.taxpayerNumber}</td>
+                            <td className="py-1 pr-3 font-mono text-gray-500">{m.outletNumber}</td>
+                            <td className="py-1 font-mono text-gray-700">{m.maskedPhone}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {(manualResult.pendingCount ?? 0) > 10 && (
+                    <p className="text-xs text-blue-500">… and {(manualResult.pendingCount ?? 0) - 10} more</p>
+                  )}
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={handleConfirmSave}
+                      disabled={confirmLoading}
+                      className="inline-flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+                    >
+                      {confirmLoading
+                        ? <><Loader2 size={12} className="animate-spin" /> Saving…</>
+                        : <><CheckCircle size={12} /> Save {manualResult.pendingCount} phone{(manualResult.pendingCount ?? 0) !== 1 ? 's' : ''}</>
+                      }
+                    </button>
+                    <button
+                      onClick={() => { setManualResult(null); setPendingFile(null) }}
+                      className="text-sm text-gray-500 hover:text-gray-700 px-2"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <ZeroMatchDiagnostic summary={manualResult.summary} />
+              )}
+            </div>
+
+            {/* Skip-reason breakdown */}
+            {manualResult.summary && (
+              <SkipReasonBox summary={manualResult.summary} />
+            )}
+          </div>
+        )}
+
+        {/* Confirmed save result */}
+        {manualResult?.summary && manualResult.summary.phonesAdded !== undefined && (
           <div className="mt-3">
             <ImportResultBox summary={manualResult.summary} />
           </div>
@@ -331,14 +446,16 @@ export function SiftImportCard() {
   )
 }
 
+// ── ImportResultBox ─────────────────────────────────────────────────────────
+
 function ImportResultBox({ summary, filename }: { summary: ImportSummary; filename?: string }) {
-  // Normalise field names from both auto (camelCase) and manual (snake_case) routes
   const rowsParsed  = summary.rowsParsed   ?? 0
-  const matched     = summary.leadsMatched ?? summary.matched  ?? 0
-  const phonesAdded = summary.phonesAdded  ?? summary.updated  ?? 0
-  const skipped     = summary.phonesSkipped ?? summary.skipped ?? 0
-  const noPhone     = summary.noPhone      ?? 0
-  const errors      = summary.errorCount   ?? 0
+  const rowsPhone   = summary.rowsWithPhone ?? summary.validPhones ?? 0
+  const exactMatch  = summary.exactMatches  ?? summary.leadsMatched ?? 0
+  const phonesAdded = summary.phonesAdded   ?? 0
+  const already     = summary.alreadySaved  ?? 0
+  const skipped     = summary.phonesSkipped ?? 0
+  const errors      = summary.saveErrors    ?? summary.errorCount ?? 0
 
   return (
     <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2.5 space-y-1.5">
@@ -348,13 +465,75 @@ function ImportResultBox({ summary, filename }: { summary: ImportSummary; filena
       </div>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-gray-600">
         <div><dt className="text-gray-400 inline">Rows parsed: </dt><dd className="inline font-medium">{rowsParsed.toLocaleString()}</dd></div>
-        <div><dt className="text-gray-400 inline">Leads matched: </dt><dd className="inline font-medium">{matched.toLocaleString()}</dd></div>
+        <div><dt className="text-gray-400 inline">Rows with phone: </dt><dd className="inline font-medium">{rowsPhone.toLocaleString()}</dd></div>
+        <div><dt className="text-gray-400 inline">Exact matches: </dt><dd className="inline font-medium">{exactMatch.toLocaleString()}</dd></div>
         <div><dt className="text-gray-400 inline">Phones saved: </dt><dd className="inline font-semibold text-green-700">{phonesAdded.toLocaleString()}</dd></div>
-        <div><dt className="text-gray-400 inline">Skipped: </dt><dd className="inline">{(skipped + noPhone).toLocaleString()}</dd></div>
-        {errors > 0 && (
-          <div className="col-span-2"><dt className="text-red-400 inline">Errors: </dt><dd className="inline text-red-600">{errors}</dd></div>
-        )}
+        {already > 0 && <div><dt className="text-gray-400 inline">Already saved: </dt><dd className="inline">{already.toLocaleString()}</dd></div>}
+        {skipped > 0 && <div><dt className="text-gray-400 inline">Skipped: </dt><dd className="inline">{skipped.toLocaleString()}</dd></div>}
+        {errors > 0 && <div className="col-span-2"><dt className="text-red-400 inline">Errors: </dt><dd className="inline text-red-600">{errors}</dd></div>}
       </dl>
+      {summary.skipReasons && <SkipReasonBox summary={summary} />}
+    </div>
+  )
+}
+
+// ── SkipReasonBox ───────────────────────────────────────────────────────────
+
+function SkipReasonBox({ summary }: { summary: ImportSummary }) {
+  const sr = summary.skipReasons
+  if (!sr) return null
+
+  const items: { label: string; count: number }[] = [
+    { label: 'Missing taxpayer number', count: sr.missingTaxpayerNumber ?? 0 },
+    { label: 'Blank outlet number (DIRECT PAY)', count: sr.blankOutletNumber ?? 0 },
+    { label: 'Malformed row', count: sr.malformedRow ?? 0 },
+    { label: 'No phone number', count: sr.missingPhone ?? 0 },
+    { label: 'Invalid phone format', count: sr.invalidPhone ?? 0 },
+    { label: 'Taxpayer not in your leads', count: sr.taxpayerNotFound ?? 0 },
+    { label: 'Outlet number mismatch', count: sr.outletNotFound ?? 0 },
+  ].filter(i => i.count > 0)
+
+  if (!items.length) return null
+
+  return (
+    <div className="text-xs border border-gray-200 rounded-lg px-3 py-2 space-y-1">
+      <p className="font-medium text-gray-500">Skip reason breakdown:</p>
+      {items.map(i => (
+        <div key={i.label} className="flex justify-between gap-4 text-gray-500">
+          <span>{i.label}</span>
+          <span className="font-mono font-medium text-gray-700">{i.count.toLocaleString()}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ── ZeroMatchDiagnostic ─────────────────────────────────────────────────────
+
+function ZeroMatchDiagnostic({ summary }: { summary?: ImportSummary }) {
+  if (!summary) return null
+  const sr = summary.skipReasons ?? {}
+
+  const taxpayerNotFound = sr.taxpayerNotFound ?? 0
+  const outletNotFound   = sr.outletNotFound ?? 0
+  const missingPhone     = sr.missingPhone ?? 0
+  const total            = summary.rowsParsed ?? 0
+
+  let hint = ''
+  if (taxpayerNotFound > 0 && outletNotFound === 0) {
+    hint = `All ${taxpayerNotFound.toLocaleString()} rows had a taxpayer number not in your leads. This file covers all of Texas — leads outside your tracked territory will not match. Import more leads first.`
+  } else if (outletNotFound > 0) {
+    hint = `${outletNotFound.toLocaleString()} rows found a matching taxpayer but the outlet number did not match. This may indicate the outlet was imported with a different number. Check that taxpayer_number and outlet_number are correct in your lead data.`
+  } else if (missingPhone === total) {
+    hint = 'No rows contained a phone number. This may be the standard permit file rather than the ph (phone) variant. Download stpMM-DDph.zip specifically.'
+  } else {
+    hint = 'No matches found. This SIFT file covers all of Texas — only businesses you have already imported as leads can match.'
+  }
+
+  return (
+    <div className="space-y-1">
+      <p className="text-sm font-medium text-amber-700">No matches found in your leads</p>
+      <p className="text-xs text-amber-600">{hint}</p>
     </div>
   )
 }

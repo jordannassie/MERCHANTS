@@ -41,3 +41,11 @@ next-env.d.ts
 
 # Local Netlify folder
 .netlify
+
+# Texas Comptroller SIFT permit-phone files (contain telephone data — never commit)
+stp*ph.zip
+stp*ph.csv
+stp*ph.txt
+stp*-ph.zip
+stp*-ph.csv
+stp*-ph.txt

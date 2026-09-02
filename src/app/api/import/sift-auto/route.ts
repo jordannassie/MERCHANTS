@@ -29,7 +29,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { unzipSync } from 'fflate'
 import { createServiceClient } from '@/lib/supabase/service'
 import { normalizePhone } from '@/lib/phone-normalize'
-import { parseSiftFile } from '@/lib/sift-parser'
+import { parseSiftFile, normalizeOutletNumber } from '@/lib/sift-parser'
 import {
   siftListFiles,
   findLatestPermitPhoneFile,
@@ -37,6 +37,8 @@ import {
   siftGetDownloadUrl,
   downloadFile,
 } from '@/lib/sift-api'
+
+const BATCH_SIZE = 100  // taxpayer IDs per DB query chunk
 
 const SIFT_KEY_REGISTRATION_URL = 'https://data-secure.comptroller.texas.gov/main/view'
 
@@ -228,42 +230,66 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }, { status: 422 })
   }
 
-  // ── 8. Save permit phones ────────────────────────────────────────────────────
+  // ── 8. Prepare rows and batch-fetch matching leads ───────────────────────────
   const importedAt = new Date().toISOString()
   const source = `sift_auto:${filename}`
 
-  let matched = 0, updated = 0, skipped = 0, noPhone = 0
-  const rowErrors: string[] = []
-
+  // Build list of rows that have valid phones
+  interface ValidSiftRow { taxpayerNumber: string; outletNumber: string; normalizedPhone: string; rowNum: number }
+  let noPhone = 0, skipped = 0
+  const validRows: ValidSiftRow[] = []
   for (const row of rows) {
     if (!row.phone) { noPhone++; continue }
-
     const normalized = normalizePhone(row.phone)
     if (!normalized) { skipped++; continue }
+    validRows.push({ taxpayerNumber: row.taxpayerNumber, outletNumber: row.outletNumber, normalizedPhone: normalized, rowNum: row.rowNum })
+  }
 
-    const { data: lead, error: findErr } = await db
+  // Batch-query DB leads by taxpayer_number chunks
+  interface LeadRecord { id: string; taxpayer_number: string; outlet_number: string | null; permit_phone: string | null }
+  const uniqueTaxpayers = [...new Set(validRows.map(r => r.taxpayerNumber))]
+  const allLeads: LeadRecord[] = []
+
+  for (let i = 0; i < uniqueTaxpayers.length; i += BATCH_SIZE) {
+    const chunk = uniqueTaxpayers.slice(i, i + BATCH_SIZE)
+    const { data } = await db
       .from('leads')
-      .select('id, permit_phone')
-      .eq('taxpayer_number', row.taxpayerNumber)
-      .eq('outlet_number', row.outletNumber)
-      .maybeSingle()
+      .select('id, taxpayer_number, outlet_number, permit_phone')
+      .in('taxpayer_number', chunk)
+    if (data) allLeads.push(...(data as LeadRecord[]))
+  }
 
-    if (findErr) {
-      rowErrors.push(`Row ${row.rowNum}: ${findErr.message}`)
-      continue
-    }
-    if (!lead) continue // Not a lead we're tracking
+  // Index leads by taxpayer_number
+  const leadsByTaxpayer = new Map<string, LeadRecord[]>()
+  for (const lead of allLeads) {
+    if (!lead.taxpayer_number) continue
+    const arr = leadsByTaxpayer.get(lead.taxpayer_number) ?? []
+    arr.push(lead)
+    leadsByTaxpayer.set(lead.taxpayer_number, arr)
+  }
+
+  // Match and save
+  let matched = 0, updated = 0
+  const rowErrors: string[] = []
+
+  for (const row of validRows) {
+    const leads = leadsByTaxpayer.get(row.taxpayerNumber)
+    if (!leads?.length) continue
+
+    const exact = leads.find(l => normalizeOutletNumber(l.outlet_number) === row.outletNumber)
+    if (!exact) continue
 
     matched++
+    if (exact.permit_phone === row.normalizedPhone) continue  // idempotent
 
     const { error: upErr } = await db
       .from('leads')
       .update({
-        permit_phone: normalized,
+        permit_phone: row.normalizedPhone,
         permit_phone_source: source,
         permit_phone_imported_at: importedAt,
       })
-      .eq('id', lead.id)
+      .eq('id', exact.id)
 
     if (upErr) {
       rowErrors.push(`Row ${row.rowNum}: ${upErr.message}`)

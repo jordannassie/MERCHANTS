@@ -1,52 +1,100 @@
 /**
  * Parser for Texas Comptroller SIFT weekly new-permit phone files.
  *
- * The weekly "ph" variant (stpMM-DDph.zip) contains a text file with 20 columns
- * — the standard 19-column Socrata layout plus a telephone column at position 20.
+ * Verified layout from stp08-31ph.csv (22 columns, no header row):
+ *   [0]  taxpayer_number           — 11-digit string
+ *   [1]  outlet_number             — e.g. "00001", "00002", or "" (DIRECT PAY)
+ *   [2]  taxpayer_name
+ *   [3]  taxpayer_address
+ *   [4]  taxpayer_city
+ *   [5]  taxpayer_state
+ *   [6]  taxpayer_zip_code
+ *   [7]  taxpayer_county_code
+ *   [8]  taxpayer_phone
+ *   [9]  outlet_name
+ *   [10] outlet_address
+ *   [11] outlet_city
+ *   [12] outlet_state
+ *   [13] outlet_zip_code
+ *   [14] outlet_county_code
+ *   [15] telephone  ← PERMIT PHONE (the field this file exists to deliver)
+ *   [16] taxpayer_type             — "SALES TAX", "DIRECT PAY", etc.
+ *   [17] state_code                — numeric (unquoted)
+ *   [18] outlet_naics_code
+ *   [19] outlet_permit_issue_date  — YYYYMMDD
+ *   [20] outlet_first_sales_date   — YYYYMMDD
+ *   [21] (empty trailing field)
  *
- * Match key: taxpayer_number (col 1) + outlet_number (col 9).
- * Never use name or address alone for matching.
+ * Match key: taxpayer_number (col 0) + outlet_number (col 1).
+ * Never match by name or address alone.
+ *
+ * Outlet-number normalization: strip non-digits → parseInt → String.
+ * "00001", "1", "00000001" all normalize to "1" and will match the same lead.
+ * Taxpayer numbers are kept as-is strings (11 digits); never cast to JS Number.
  */
 
-// Known phone column header variants the TX Comptroller file might use
+// Known phone column header variants (for header-detected files)
 const PHONE_COLUMN_CANDIDATES = [
   'telephone', 'phone', 'phone_number', 'taxpayer_phone',
   'outlet_phone', 'contact_phone', 'tel', 'phone_no',
 ]
 
-// The 20-column field order for the ph variant (used when file has no header row)
+// Verified 22-column fixed layout (no header row in production files)
 const FIXED_COLUMN_ORDER = [
-  'taxpayer_number', 'taxpayer_name', 'taxpayer_address', 'taxpayer_city',
-  'taxpayer_state', 'taxpayer_zip_code', 'taxpayer_county_code',
-  'taxpayer_organization_type', 'outlet_number', 'outlet_name',
-  'outlet_address', 'outlet_city', 'outlet_state', 'outlet_zip_code',
-  'outlet_county_code', 'outlet_naics_code',
-  'outlet_inside_outside_city_limits_indicator',
-  'outlet_permit_issue_date', 'outlet_first_sales_date',
-  'telephone', // column 20 — present only in the ph file
+  'taxpayer_number',            // [0]
+  'outlet_number',              // [1]  ← was incorrectly at index 8 before
+  'taxpayer_name',              // [2]
+  'taxpayer_address',           // [3]
+  'taxpayer_city',              // [4]
+  'taxpayer_state',             // [5]
+  'taxpayer_zip_code',          // [6]
+  'taxpayer_county_code',       // [7]
+  'taxpayer_phone',             // [8]
+  'outlet_name',                // [9]
+  'outlet_address',             // [10]
+  'outlet_city',                // [11]
+  'outlet_state',               // [12]
+  'outlet_zip_code',            // [13]
+  'outlet_county_code',         // [14]
+  'telephone',                  // [15] ← PERMIT PHONE (was incorrectly at index 19)
+  'taxpayer_type',              // [16]
+  'state_code',                 // [17]
+  'outlet_naics_code',          // [18]
+  'outlet_permit_issue_date',   // [19]
+  'outlet_first_sales_date',    // [20]
+  // [21] empty trailing field
 ]
 
 export interface SiftPermitRow {
-  taxpayerNumber: string
-  outletNumber: string
-  phone: string | null
+  taxpayerNumber: string   // normalized 11-digit string, no JS Number cast
+  outletNumber: string     // normalized to integer string ("1", "2", …)
+  outletNumberRaw: string  // raw value from CSV for diagnostics
+  phone: string | null     // raw phone string from col 15; null if blank/stub
   rowNum: number
+}
+
+export interface SiftParseSkipReasons {
+  missingTaxpayerNumber: number
+  blankOutletNumber: number   // DIRECT PAY or other blank-outlet rows
+  malformedRow: number        // wrong number of columns
 }
 
 export interface SiftParseResult {
   rows: SiftPermitRow[]
   format: 'header' | 'positional' | 'empty'
   phoneColFound: boolean
+  skipReasons: SiftParseSkipReasons
 }
 
 /**
- * Split a single delimited line into fields.
- * Tries tab, pipe, then full RFC-4180 CSV in that order.
+ * Split a single delimited line into fields (RFC-4180 CSV, or tab/pipe fallback).
  */
-function splitLine(line: string): string[] {
+export function splitLine(line: string): string[] {
+  // Try tab first (some SIFT files are tab-delimited)
   if (line.includes('\t')) return line.split('\t').map(f => f.trim())
-  if (line.includes('|'))  return line.split('|').map(f => f.trim())
-  // CSV: handle quoted fields
+  // Try pipe
+  if (line.includes('|')) return line.split('|').map(f => f.trim())
+  // Full RFC-4180 CSV
   const fields: string[] = []
   let cur = '', inQ = false
   for (let i = 0; i < line.length; i++) {
@@ -60,23 +108,52 @@ function splitLine(line: string): string[] {
 }
 
 /**
+ * Normalize a taxpayer_number to an 11-digit string.
+ * Strips all non-digit characters, then pads with leading zeros to 11 digits.
+ * NEVER converts to a JS Number — 11-digit values exceed safe integer range.
+ */
+export function normalizeTaxpayerNumber(raw: string): string {
+  const digits = raw.replace(/\D/g, '')
+  if (!digits || digits === '00000000000') return ''
+  return digits.padStart(11, '0')
+}
+
+/**
+ * Normalize an outlet_number for flexible matching.
+ * Converts "00001", "0001", "1", "00000001" → "1"
+ * Returns "" for blank/whitespace-only input (DIRECT PAY rows).
+ */
+export function normalizeOutletNumber(raw: string | null | undefined): string {
+  if (!raw) return ''
+  const digits = raw.replace(/\D/g, '')
+  if (!digits) return ''
+  const n = parseInt(digits, 10)
+  if (isNaN(n) || n === 0) return ''
+  return String(n)
+}
+
+/**
  * Parse the full text of a SIFT permit-phone file.
- *
- * @param text  The raw file contents as a UTF-8 string.
- * @param limit Optional row limit for testing (omit to parse all rows).
  */
 export function parseSiftFile(text: string, limit?: number): SiftParseResult {
   const lines = text.split(/\r?\n/).filter(l => l.trim())
-  if (!lines.length) return { rows: [], format: 'empty', phoneColFound: false }
+  if (!lines.length) {
+    return {
+      rows: [],
+      format: 'empty',
+      phoneColFound: false,
+      skipReasons: { missingTaxpayerNumber: 0, blankOutletNumber: 0, malformedRow: 0 },
+    }
+  }
 
   const firstFields = splitLine(lines[0])
   let hasHeader = false
-  let phoneColIdx = -1
-  let taxpayerColIdx = 0
-  let outletColIdx = 8
+  let phoneColIdx = FIXED_COLUMN_ORDER.indexOf('telephone')       // 15
+  let taxpayerColIdx = FIXED_COLUMN_ORDER.indexOf('taxpayer_number') // 0
+  let outletColIdx = FIXED_COLUMN_ORDER.indexOf('outlet_number')   // 1
   let format: 'header' | 'positional' = 'positional'
 
-  // Detect header row by looking for taxpayer_number / similar
+  // Detect header row by looking for known field names
   const lowerFirst = firstFields.map(f => f.toLowerCase().replace(/[^a-z0-9_]/g, '_'))
   if (
     lowerFirst.includes('taxpayer_number') ||
@@ -86,40 +163,73 @@ export function parseSiftFile(text: string, limit?: number): SiftParseResult {
     hasHeader = true
     taxpayerColIdx = lowerFirst.findIndex(f => f.includes('taxpayer_number') || f.includes('taxpayer_id'))
     outletColIdx   = lowerFirst.findIndex(f => f.includes('outlet_number') || f.includes('location_number'))
-    phoneColIdx    = lowerFirst.findIndex(f => PHONE_COLUMN_CANDIDATES.some(p => f.includes(p)))
+
+    // Prefer the bare 'telephone' column when present (the permit phone column).
+    // Fall back to iterating PHONE_COLUMN_CANDIDATES with exact then substring matching
+    // to avoid picking 'taxpayer_phone' over 'telephone'.
+    const exactPhone = lowerFirst.findIndex(f => f === 'telephone' || f === 'phone' || f === 'tel')
+    if (exactPhone >= 0) {
+      phoneColIdx = exactPhone
+    } else {
+      // Exact match against each candidate
+      let found = -1
+      for (const cand of PHONE_COLUMN_CANDIDATES) {
+        const idx = lowerFirst.findIndex(f => f === cand)
+        if (idx >= 0) { found = idx; break }
+      }
+      // Substring fallback
+      if (found < 0) {
+        found = lowerFirst.findIndex(f => PHONE_COLUMN_CANDIDATES.some(p => f.includes(p)))
+      }
+      phoneColIdx = found
+    }
     format = 'header'
-  } else {
-    taxpayerColIdx = FIXED_COLUMN_ORDER.indexOf('taxpayer_number')
-    outletColIdx   = FIXED_COLUMN_ORDER.indexOf('outlet_number')
-    phoneColIdx    = FIXED_COLUMN_ORDER.indexOf('telephone')
-    format = 'positional'
   }
 
   const dataLines = hasHeader ? lines.slice(1) : lines
   const maxRows = limit ?? dataLines.length
   const rows: SiftPermitRow[] = []
+  const skip = { missingTaxpayerNumber: 0, blankOutletNumber: 0, malformedRow: 0 }
 
   for (let i = 0; i < Math.min(dataLines.length, maxRows); i++) {
     const line = dataLines[i]
     if (!line.trim()) continue
     const fields = splitLine(line)
 
+    // Sanity check: positional files should have at least 16 columns
+    if (!hasHeader && fields.length < 16) {
+      skip.malformedRow++
+      continue
+    }
+
     const taxpayerRaw = fields[taxpayerColIdx] ?? ''
-    const outletRaw   = fields[outletColIdx] ?? ''
-    const phoneRaw    = phoneColIdx >= 0 ? (fields[phoneColIdx] ?? '') : ''
+    const outletRaw   = (fields[outletColIdx] ?? '').trim()
+    const phoneRaw    = phoneColIdx >= 0 ? (fields[phoneColIdx] ?? '').trim() : ''
 
-    const taxpayerNumber = taxpayerRaw.replace(/\D/g, '').padStart(11, '0')
-    const outletNumber   = outletRaw.replace(/\D/g, '').padStart(4, '0')
+    const taxpayerNumber = normalizeTaxpayerNumber(taxpayerRaw)
+    if (!taxpayerNumber) { skip.missingTaxpayerNumber++; continue }
 
-    if (!taxpayerNumber || taxpayerNumber === '00000000000') continue
+    const outletNumber = normalizeOutletNumber(outletRaw)
+    // DIRECT PAY permits have a blank outlet_number — skip them, they won't
+    // match any lead we're tracking (our import skips blank outlet rows too)
+    if (!outletNumber) { skip.blankOutletNumber++; continue }
+
+    // A phone of "0      0" or similar stub → keep as null (validated in route)
+    const phone = phoneRaw || null
 
     rows.push({
       taxpayerNumber,
       outletNumber,
-      phone: phoneRaw.trim() || null,
+      outletNumberRaw: outletRaw,
+      phone,
       rowNum: i + (hasHeader ? 2 : 1),
     })
   }
 
-  return { rows, format, phoneColFound: phoneColIdx >= 0 }
+  return {
+    rows,
+    format,
+    phoneColFound: phoneColIdx >= 0,
+    skipReasons: skip,
+  }
 }
