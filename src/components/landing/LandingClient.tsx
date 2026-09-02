@@ -367,16 +367,11 @@ export default function LandingClient() {
                 </a>
               </div>
 
-              {/* Signature */}
-              <div className="mt-6 flex justify-center md:justify-start">
-                <Image
-                  src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/INITIAL.png"
-                  alt="Jordan Nassie signature"
-                  width={140}
-                  height={60}
-                  className="h-14 w-auto object-contain opacity-80"
-                />
-              </div>
+              {/* Jordan's promise */}
+              <blockquote className="mt-6 border-l-4 border-blue-500 pl-4 text-slate-600 italic text-base leading-relaxed">
+                "I promise to save you money and give you excellent support."
+                <footer className="mt-1 text-xs not-italic font-semibold text-slate-400">— Jordan Nassie</footer>
+              </blockquote>
             </div>
           </div>
         </div>
