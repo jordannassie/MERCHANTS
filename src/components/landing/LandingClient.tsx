@@ -71,7 +71,7 @@ export default function LandingClient() {
     <div className="min-h-screen bg-white text-slate-900 font-sans">
 
       {/* ─── UTILITY TOP BAR ────────────────────────────────────────────────── */}
-      <div className="bg-slate-800 text-slate-300 text-xs">
+      <div className="sticky top-0 z-50 bg-slate-800 text-slate-300 text-xs">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-8 flex items-center justify-end gap-3">
           <button
             onClick={() => scrollTo('#contact')}
@@ -92,7 +92,7 @@ export default function LandingClient() {
       </div>
 
       {/* ─── STICKY HEADER ──────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-100">
+      <header className="sticky top-8 z-40 bg-white/95 backdrop-blur border-b border-slate-100">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           {/* Logo */}
           <Link href="/" className="flex items-center">
