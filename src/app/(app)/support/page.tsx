@@ -40,7 +40,7 @@ export default function SupportPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/support')
+      const res = await fetch('/api/admin/contacts')
       if (res.ok) setRequests(await res.json())
     } finally {
       setLoading(false)
@@ -53,7 +53,7 @@ export default function SupportPage() {
     if (!confirm('Delete this support request?')) return
     setDeleting(id)
     try {
-      await fetch(`/api/support/${id}`, { method: 'DELETE' })
+      await fetch(`/api/admin/contacts/${id}`, { method: 'DELETE' })
       setRequests(r => r.filter(x => x.id !== id))
     } finally {
       setDeleting(null)

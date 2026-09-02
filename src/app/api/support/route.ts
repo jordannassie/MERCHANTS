@@ -34,9 +34,28 @@ export async function POST(request: NextRequest) {
 
   const fullComments = subject ? `[${subject}]\n\n${comments}` : comments
 
+  // Primary: attempt to insert into public.contacts (map fields)
+  let contactError = null
+  try {
+    const full_name = `${firstName} ${lastName}`.trim()
+    const { error: cErr } = await db
+      .from('contacts')
+      .insert({
+        full_name,
+        business_phone: phone,
+        email,
+        notes: fullComments,
+        inquiry_type,
+      })
+    contactError = cErr
+  } catch (e) {
+    contactError = e
+  }
+
+  // Also keep a backup in support_requests for the support admin view
   const { error } = await db.from('support_requests').insert({
     first_name: firstName,
-    last_name:  lastName,
+    last_name: lastName,
     phone,
     email,
     comments: fullComments,
