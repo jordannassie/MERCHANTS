@@ -253,6 +253,23 @@ export default function LandingClient() {
         <Image src={IMG_DEVICE} alt="Payment terminal close-up" fill className="object-cover object-center" sizes="100vw" />
       </section>
 
+      {/* ─── QUICKBOOKS STRIP ───────────────────────────────────────────────── */}
+      <section className="bg-white border-y border-slate-100 py-6">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-center gap-5">
+          <Image
+            src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/quickbooks.png"
+            alt="QuickBooks"
+            width={160}
+            height={44}
+            className="h-10 w-auto object-contain"
+          />
+          <div className="hidden sm:block w-px h-8 bg-slate-200" />
+          <p className="text-slate-600 text-sm font-medium text-center sm:text-left">
+            Syncs seamlessly with your QuickBooks software — no double entry, no headaches.
+          </p>
+        </div>
+      </section>
+
       {/* ─── BIO: Jordan Nassie ─────────────────────────────────────────────── */}
       <section id="about" className="bg-white py-20 md:py-28">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
