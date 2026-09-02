@@ -573,7 +573,7 @@ export default function LandingClient() {
 function VideoPlaceholder() {
   const [playing, setPlaying] = useState(false)
 
-  const VIDEO_SRC = ''
+  const VIDEO_SRC = 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/video/vss.mp4'
 
   if (!VIDEO_SRC) {
     return (
