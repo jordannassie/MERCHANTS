@@ -1,4 +1,5 @@
 import { AppNav } from '@/components/AppNav'
+import { MobileTopBar } from '@/components/ui/MobileTopBar'
 import { ensureWorkspaceTerritory } from '@/lib/workspace'
 import { NavigationProgress } from '@/components/ui/NavigationProgress'
 
@@ -15,6 +16,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen bg-gray-50">
       <NavigationProgress />
       <AppNav userName="Jordan" />
+      <MobileTopBar />
       <div className="md:pl-56">
         <main className="pb-20 md:pb-0 min-h-screen">
           {children}
