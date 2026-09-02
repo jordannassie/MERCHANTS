@@ -318,6 +318,20 @@ export function ContactPanel({ lead: initialLead, contacts: initialContacts, pla
         </div>
       </div>
 
+      {/* ── Corporate chain warning ── */}
+      {lead.category === 'corporate_chain' && (
+        <div className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs">
+          <span className="shrink-0 text-base leading-none">🏢</span>
+          <div className="space-y-0.5">
+            <p className="font-semibold text-amber-800">Corporate chain — not recommended</p>
+            <p className="text-amber-700">
+              Payment-processing decisions for this business are made centrally, not by the local manager.
+              Any officer found is a <strong>corporate officer, not a local purchasing authority</strong>.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ── Best callable phone (contact priority) ── */}
       <div className="space-y-3">
         {bestPhone ? (
@@ -715,19 +729,37 @@ function EntityResearchSection({
                 )}
               </div>
 
+              {/* Chain warning: corporate officers are NOT local decision-makers */}
+              {lead.category === 'corporate_chain' && (
+                <div className="border border-amber-200 rounded-lg p-3 bg-amber-50 space-y-1 text-xs">
+                  <p className="font-semibold text-amber-800 flex items-center gap-1.5">
+                    🏢 Corporate chain detected
+                  </p>
+                  <p className="text-amber-700">
+                    Payment-processing decisions for corporate chains are made centrally — not by individual location managers.
+                    Officers listed here are corporate executives, not local purchasing authorities.
+                  </p>
+                </div>
+              )}
+
               {/* Decision maker from official record */}
               {entityRecord.primary_contact_name ? (
-                <div className="border border-blue-100 rounded-lg p-3 bg-blue-50 space-y-1">
-                  <p className="text-[10px] uppercase tracking-wider text-blue-500 font-semibold mb-1">
-                    Possible Decision-Maker (Official Record)
+                <div className={`border rounded-lg p-3 space-y-1 ${lead.category === 'corporate_chain' ? 'border-amber-200 bg-amber-50' : 'border-blue-100 bg-blue-50'}`}>
+                  <p className={`text-[10px] uppercase tracking-wider font-semibold mb-1 ${lead.category === 'corporate_chain' ? 'text-amber-600' : 'text-blue-500'}`}>
+                    {lead.category === 'corporate_chain' ? 'Corporate Officer (Official Record)' : 'Possible Decision-Maker (Official Record)'}
                   </p>
                   <div className="flex items-center gap-2">
-                    <User size={12} className="text-blue-400 shrink-0" />
+                    <User size={12} className={`shrink-0 ${lead.category === 'corporate_chain' ? 'text-amber-400' : 'text-blue-400'}`} />
                     <span className="text-sm font-semibold text-gray-900">{entityRecord.primary_contact_name}</span>
                   </div>
                   {entityRecord.primary_contact_title && (
                     <p className="text-xs text-gray-600 pl-4">
                       Official title: <span className="font-medium">{entityRecord.primary_contact_title}</span>
+                    </p>
+                  )}
+                  {lead.category === 'corporate_chain' && (
+                    <p className="text-[11px] font-semibold text-amber-700 pl-4">
+                      Corporate officer — not verified as local purchasing authority
                     </p>
                   )}
                   {entityRecord.entity_confidence != null && (

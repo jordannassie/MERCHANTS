@@ -131,6 +131,8 @@ export async function POST() {
           permitIssueDate: permitDate,
           firstSalesDate,
           businessName: displayName,
+          outletName: outletName,
+          taxpayerName: taxpayerName,
           outletAddress: normalize(raw.outlet_address),
           taxpayerOrganizationType: normalize(raw.taxpayer_organization_type),
         })
@@ -178,6 +180,7 @@ export async function POST() {
               score: advanced.has(existing.status) ? existing.score : scored.score,
               priority: advanced.has(existing.status) ? existing.priority : scored.priority,
               score_reasons: scored.reasons,
+              category: scored.category ?? undefined,
             })
             .eq('id', existing.id)
 
@@ -195,6 +198,7 @@ export async function POST() {
             score: scored.score,
             priority: scored.priority,
             score_reasons: scored.reasons,
+            category: scored.category ?? undefined,
             status: 'new',
             starred: false,
           })

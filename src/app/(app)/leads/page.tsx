@@ -21,6 +21,9 @@ export default async function LeadsPage({ searchParams }: PageProps) {
   const from = (page - 1) * LEADS_PER_PAGE
   const to = from + LEADS_PER_PAGE - 1
 
+  // hideCorporateChains defaults to TRUE — user must explicitly pass showChains=true to see them
+  const hideCorporateChains = sp.showChains !== 'true'
+
   const filters: LeadsFilters = {
     search: sp.search || '',
     status: (sp.status as LeadsFilters['status']) || '',
@@ -41,6 +44,7 @@ export default async function LeadsPage({ searchParams }: PageProps) {
     missingWebsite: sp.missingWebsite === 'true',
     enriched: sp.enriched === 'true',
     needsReview: sp.needsReview === 'true',
+    hideCorporateChains,
     sort: (sp.sort as LeadsFilters['sort']) || 'score',
     order: (sp.order as 'asc' | 'desc') || 'desc',
     page,
@@ -74,6 +78,7 @@ export default async function LeadsPage({ searchParams }: PageProps) {
   if (filters.missingWebsite) query = query.is('website', null)
   if (filters.enriched) query = query.eq('enrichment_status', 'completed')
   if (filters.needsReview) query = query.eq('enrichment_status', 'pending')
+  if (filters.hideCorporateChains) query = query.not('category', 'eq', 'corporate_chain')
 
   const sortCol =
     filters.sort === 'score' ? 'score'

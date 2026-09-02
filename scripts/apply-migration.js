@@ -129,6 +129,15 @@ async function main() {
   } else {
     console.log('[migrate] ✓ 009 sift_import_log present')
   }
+
+  // Check if 010 chain detection is applied (leads.category = 'corporate_chain' may exist already)
+  // Migration 010 is always re-run (it's idempotent) to catch any new leads since last run.
+  // We detect whether it's needed by looking for any chain leads not yet categorized.
+  const sql010 = readMigration('010_mark_chain_leads.sql')
+  if (sql010) {
+    console.log('[migrate] Applying 010_mark_chain_leads (idempotent)…')
+    await applyMigration('010_mark_chain_leads.sql', sql010)
+  }
 }
 
 async function applyMigration(filename, sql) {

@@ -1,10 +1,13 @@
 import { resolveNaics, naicsScoreModifier } from './naics'
+import { detectChain, CHAIN_SCORE_PENALTY } from './chains'
 
 export interface ScoringInput {
   naicsCode: string | null
   permitIssueDate: string | null
   firstSalesDate: string | null
   businessName: string | null
+  outletName?: string | null
+  taxpayerName?: string | null
   outletAddress: string | null
   taxpayerOrganizationType: string | null
 }
@@ -13,6 +16,10 @@ export interface ScoringResult {
   score: number
   priority: 'hot' | 'good' | 'low' | 'skip'
   reasons: string[]
+  /** Set to 'corporate_chain' when a known chain is detected */
+  category: string | null
+  /** Name of the detected chain brand, or null */
+  detectedChain: string | null
 }
 
 export function scoreLead(input: ScoringInput, now: Date = new Date()): ScoringResult {
@@ -95,14 +102,29 @@ export function scoreLead(input: ScoringInput, now: Date = new Date()): ScoringR
     score -= 40; reasons.push('Taxpayer org type: government')
   }
 
+  // ── Chain / corporate detection ───────────────────────────────────────────
+  const { isChain, chainName } = detectChain(input.outletName, input.taxpayerName)
+  if (isChain) {
+    score -= CHAIN_SCORE_PENALTY
+    reasons.push(
+      `${chainName ?? 'Corporate chain'} — payment-processing decisions are made centrally, not by local management`
+    )
+  }
+
   // ── Clamp ─────────────────────────────────────────────────────────────────
   score = Math.max(0, Math.min(100, score))
 
   let priority: 'hot' | 'good' | 'low' | 'skip'
-  if (score >= 75) priority = 'hot'
+  if (score >= 75) priority = isChain ? 'good' : 'hot'  // chains can never be HOT
   else if (score >= 50) priority = 'good'
   else if (score >= 25) priority = 'low'
   else priority = 'skip'
 
-  return { score, priority, reasons }
+  return {
+    score,
+    priority,
+    reasons,
+    category: isChain ? 'corporate_chain' : null,
+    detectedChain: chainName,
+  }
 }

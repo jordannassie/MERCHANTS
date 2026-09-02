@@ -269,9 +269,15 @@ export function LeadsTable({ leads }: Props) {
                           <span className="text-gray-600 text-xs leading-snug line-clamp-2 break-words">{lead.outlet_city}</span>
                         )}
                         {col.key === 'category' && (
-                          <span className="text-gray-500 text-xs leading-snug line-clamp-2">
-                            {lead.category || (lead.naics_code ? `NAICS ${lead.naics_code}` : '—')}
-                          </span>
+                          lead.category === 'corporate_chain' ? (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200 whitespace-nowrap">
+                              🏢 Corporate Chain
+                            </span>
+                          ) : (
+                            <span className="text-gray-500 text-xs leading-snug line-clamp-2">
+                              {lead.category || (lead.naics_code ? `NAICS ${lead.naics_code}` : '—')}
+                            </span>
+                          )
                         )}
                         {col.key === 'permitDate' && (
                           <span className="text-gray-600 text-xs whitespace-nowrap">{fmtDate(lead.permit_issue_date) || '—'}</span>
@@ -322,8 +328,13 @@ export function LeadsTable({ leads }: Props) {
                         {name}
                       </Link>
                     </div>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      {lead.outlet_city}{lead.category ? ` · ${lead.category}` : ''}
+                    <p className="text-xs text-gray-500 mt-0.5 flex flex-wrap items-center gap-1">
+                      {lead.outlet_city}
+                      {lead.category === 'corporate_chain' && (
+                        <span className="inline-flex items-center gap-0.5 px-1 py-0 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200">
+                          🏢 Chain
+                        </span>
+                      )}
                     </p>
                     {lead.first_sales_date && (
                       <p className="text-xs text-gray-400 mt-0.5">Opens {fmtDate(lead.first_sales_date)}</p>

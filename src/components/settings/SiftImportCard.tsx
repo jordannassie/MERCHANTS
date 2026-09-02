@@ -204,7 +204,7 @@ export function SiftImportCard() {
                   Available: <span className="font-mono">{availableFile}</span> — never imported
                 </p>
               ) : (
-                <p className="text-xs text-gray-400">No previous import recorded</p>
+                <p className="text-xs text-gray-400">No permit-phone file imported yet</p>
               )}
             </div>
             <button

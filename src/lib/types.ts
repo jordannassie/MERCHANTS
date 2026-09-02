@@ -226,6 +226,8 @@ export interface LeadsFilters {
   missingWebsite?: boolean
   enriched?: boolean
   needsReview?: boolean
+  /** When true, corporate-chain leads (category = 'corporate_chain') are hidden. Default: true. */
+  hideCorporateChains?: boolean
   sort?: LeadSortField
   order?: 'asc' | 'desc'
   page?: number

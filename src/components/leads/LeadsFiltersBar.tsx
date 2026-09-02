@@ -52,6 +52,8 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
       if (next.missingWebsite) params.set('missingWebsite', 'true')
       if (next.enriched) params.set('enriched', 'true')
       if (next.needsReview) params.set('needsReview', 'true')
+      // showChains: set only when explicitly showing chains (default is hidden)
+      if (next.hideCorporateChains === false) params.set('showChains', 'true')
       if (next.sort && next.sort !== 'score') params.set('sort', next.sort)
       if (next.order && next.order !== 'desc') params.set('order', next.order)
       return params
@@ -89,7 +91,7 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
     filters.firstSalesDateFrom || filters.firstSalesDateTo ||
     filters.openingSoon || filters.neverContacted || filters.followUpDue || filters.starred ||
     filters.hasPhone || filters.missingPhone || filters.hasWebsite || filters.missingWebsite ||
-    filters.enriched || filters.needsReview
+    filters.enriched || filters.needsReview || !filters.hideCorporateChains
   )
 
   return (
@@ -234,6 +236,19 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
             {label}
           </button>
         ))}
+
+        {/* Corporate chain toggle — chains are hidden by default */}
+        <button
+          onClick={() => set({ hideCorporateChains: !filters.hideCorporateChains })}
+          className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+            filters.hideCorporateChains === false
+              ? 'bg-amber-500 text-white border-amber-500'
+              : 'bg-white text-gray-600 border-gray-300 hover:border-amber-400'
+          }`}
+          title="Corporate chains (Chipotle, McDonald's, etc.) are hidden by default — payment decisions are made centrally"
+        >
+          {filters.hideCorporateChains === false ? '🏢 Chains visible' : '🏢 Show chains'}
+        </button>
 
         {active && (
           <button
