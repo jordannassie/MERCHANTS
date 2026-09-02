@@ -8,8 +8,22 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
+# Daily SIFT permit-phone import
+# Runs at 07:00 UTC (02:00 CDT / 01:00 CST) — after the TX Comptroller
+# publishes new weekly files. Imports are idempotent; the same file is
+# never processed twice.
+[functions]
+  directory = "netlify/functions"
+
+[[scheduled-functions]]
+  name = "sift-phone-cron"
+  schedule = "0 7 * * *"
+
 # Set secrets in the Netlify UI (Site configuration → Environment variables).
 # NEVER commit real keys here.
+# Required keys:
+#   CPA_SIFT_API_KEY  — SIFT API (separate from CPA_API_KEY for franchise tax)
+#   CPA_API_KEY       — Texas Comptroller franchise-tax API
 # [context.production.environment]
 #   NEXT_PUBLIC_SUPABASE_URL      = "https://your-project.supabase.co"
 #   NEXT_PUBLIC_SUPABASE_ANON_KEY = "your-anon-key"

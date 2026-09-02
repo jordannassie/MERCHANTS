@@ -120,6 +120,15 @@ async function main() {
   } else {
     console.log('[migrate] ✓ 008 permit_phone + entity_records present')
   }
+
+  // Check if 009 table exists (sift_import_log)
+  const tbl009 = await columnExists('sift_import_log', 'filename')
+  if (!tbl009) {
+    const sql009 = readMigration('009_sift_import_log.sql')
+    if (sql009) await applyMigration('009_sift_import_log.sql', sql009)
+  } else {
+    console.log('[migrate] ✓ 009 sift_import_log present')
+  }
 }
 
 async function applyMigration(filename, sql) {
