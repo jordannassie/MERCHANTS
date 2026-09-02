@@ -6,7 +6,7 @@ import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
 import {
   ChevronRight, Play, Shield, ArrowRight,
-  BarChart2, CheckCircle, CreditCard, Phone, Mail, LogIn, LifeBuoy,
+  CheckCircle, Phone, Mail, LogIn, LifeBuoy,
 } from 'lucide-react'
 import { PinDialog } from './PinDialog'
 import { ComparisonTable } from './ComparisonTable'
@@ -23,23 +23,6 @@ const IMG_CLOVER = 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/p
 const IMG_TYPES = 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/different-type-cover_image.jpg'
 const IMG_DEVICE = 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/H479a5103a8714372ada840a8ca05057dr.png_300x300.avif'
 
-const SAVINGS_CARDS = [
-  {
-    icon: BarChart2,
-    title: 'Review Your Current Costs',
-    body: 'We examine your current processing setup and identify unnecessary fees and charges that can be reduced or eliminated.',
-  },
-  {
-    icon: CreditCard,
-    title: 'Compare Better Options',
-    body: 'We help you compare pricing and equipment options side by side — without confusing technical language or pressure.',
-  },
-  {
-    icon: CheckCircle,
-    title: 'Start Taking Payments',
-    body: 'Get the payment equipment and ongoing support your business needs to operate confidently from day one.',
-  },
-]
 
 
 const EMPTY_FORM = { firstName: '', lastName: '', phone: '', email: '', comments: '' }
@@ -171,7 +154,7 @@ export default function LandingClient() {
             </div>
 
             <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold text-slate-900 tracking-tight leading-[1.08] mb-6">
-              Keep More of<br className="hidden sm:block" /> Every Sale.
+              Save More on<br className="hidden sm:block" /> Every Sale.
             </h1>
 
             <p className="max-w-2xl mx-auto text-xl md:text-2xl text-slate-500 leading-relaxed mb-10">
@@ -233,35 +216,6 @@ export default function LandingClient() {
         </div>
       </section>
 
-      {/* ─── SAVINGS CARDS ──────────────────────────────────────────────────── */}
-      <section id="savings" className="bg-white py-20 md:py-28">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-14">
-            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">
-              Small Processing Changes Can Create Real Savings.
-            </h2>
-            <p className="text-lg text-slate-500 max-w-2xl mx-auto">
-              Most businesses are overpaying for payment processing without realising it.
-              Here is how we help.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {SAVINGS_CARDS.map(({ icon: Icon, title, body }) => (
-              <div
-                key={title}
-                className="bg-white border border-slate-100 rounded-2xl p-7 shadow-sm hover:shadow-md transition-shadow"
-              >
-                <div className="w-11 h-11 bg-blue-50 rounded-xl flex items-center justify-center mb-5">
-                  <Icon size={20} className="text-blue-600" />
-                </div>
-                <h3 className="font-bold text-slate-900 text-lg mb-2">{title}</h3>
-                <p className="text-slate-500 text-sm leading-relaxed">{body}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
 
       {/* ─── COMPARISON TABLE ───────────────────────────────────────────────── */}
