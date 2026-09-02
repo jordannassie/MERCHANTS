@@ -231,9 +231,9 @@ export default function LandingClient() {
           <Image
             src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/quickbooks.png"
             alt="QuickBooks"
-            width={160}
-            height={44}
-            className="h-10 w-auto object-contain"
+            width={320}
+            height={88}
+            className="h-20 w-auto object-contain"
           />
           <div className="hidden sm:block w-px h-8 bg-slate-200" />
           <p className="text-slate-600 text-sm font-medium text-center sm:text-left">
@@ -454,9 +454,10 @@ export default function LandingClient() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">Phone</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">Phone <span className="text-red-500">*</span></label>
                     <input
                       type="tel"
+                      required
                       value={form.phone}
                       onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
                       className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"

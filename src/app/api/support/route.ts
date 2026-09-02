@@ -15,7 +15,7 @@ export async function GET() {
 const schema = z.object({
   firstName: z.string().min(1),
   lastName:  z.string().min(1),
-  phone:     z.string().optional().default(''),
+  phone:     z.string().min(1),
   email:     z.string().email(),
   comments:  z.string().optional().default(''),
   subject:   z.string().optional().default(''),
