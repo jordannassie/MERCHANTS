@@ -2,6 +2,16 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { z } from 'zod'
 
+export async function GET() {
+  const db = createServiceClient()
+  const { data, error } = await db
+    .from('support_requests')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json(data)
+}
+
 const schema = z.object({
   firstName: z.string().min(1),
   lastName:  z.string().min(1),

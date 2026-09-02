@@ -1,9 +1,18 @@
-import { Metadata } from 'next'
-import { createServiceClient } from '@/lib/supabase/service'
-import { LifeBuoy, Mail, Phone, Clock } from 'lucide-react'
+'use client'
 
-export const metadata: Metadata = { title: 'Support Requests' }
-export const dynamic = 'force-dynamic'
+import { useEffect, useState, useCallback } from 'react'
+import { LifeBuoy, Mail, Phone, Clock, Trash2 } from 'lucide-react'
+
+type SupportRequest = {
+  id: string
+  first_name: string
+  last_name: string
+  phone: string
+  email: string
+  comments: string
+  status: string
+  created_at: string
+}
 
 function statusBadge(status: string) {
   const cfg: Record<string, string> = {
@@ -21,12 +30,35 @@ function statusBadge(status: string) {
   )
 }
 
-export default async function SupportPage() {
-  const db = createServiceClient()
-  const { data: requests } = await db
-    .from('support_requests')
-    .select('*')
-    .order('created_at', { ascending: false })
+export default function SupportPage() {
+  const [requests, setRequests] = useState<SupportRequest[]>([])
+  const [loading, setLoading] = useState(true)
+  const [deleting, setDeleting] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/support')
+      if (res.ok) setRequests(await res.json())
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  async function handleDelete(id: string) {
+    if (!confirm('Delete this support request?')) return
+    setDeleting(id)
+    try {
+      await fetch(`/api/support/${id}`, { method: 'DELETE' })
+      setRequests(r => r.filter(x => x.id !== id))
+    } finally {
+      setDeleting(null)
+    }
+  }
+
+  const newCount = requests.filter(r => r.status === 'new').length
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
@@ -41,13 +73,14 @@ export default async function SupportPage() {
         </div>
         <div className="ml-auto">
           <span className="bg-blue-600 text-white text-xs font-bold px-2.5 py-1 rounded-full">
-            {requests?.filter(r => r.status === 'new').length ?? 0} new
+            {newCount} new
           </span>
         </div>
       </div>
 
-      {/* Table */}
-      {!requests || requests.length === 0 ? (
+      {loading ? (
+        <div className="text-center py-16 text-gray-400 text-sm">Loading…</div>
+      ) : requests.length === 0 ? (
         <div className="bg-white border border-gray-100 rounded-2xl p-16 text-center">
           <LifeBuoy size={32} className="text-gray-300 mx-auto mb-3" />
           <p className="text-gray-400 text-sm">No support requests yet.</p>
@@ -84,7 +117,18 @@ export default async function SupportPage() {
                     </span>
                   </div>
                 </div>
+
+                {/* Delete button */}
+                <button
+                  onClick={() => handleDelete(r.id)}
+                  disabled={deleting === r.id}
+                  className="shrink-0 flex items-center gap-1.5 text-xs text-gray-400 hover:text-red-600 hover:bg-red-50 px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-40"
+                >
+                  <Trash2 size={13} />
+                  {deleting === r.id ? 'Deleting…' : 'Delete'}
+                </button>
               </div>
+
               {r.comments && (
                 <div className="mt-3 pt-3 border-t border-gray-50">
                   <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{r.comments}</p>

@@ -188,6 +188,17 @@ export default function LandingClient() {
               </span>
             ))}
           </div>
+
+          {/* Accepted cards */}
+          <div className="mt-10 flex justify-center">
+            <Image
+              src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Cards.png"
+              alt="Accepted: Amex, Visa, Mastercard, Discover"
+              width={320}
+              height={60}
+              className="h-12 w-auto object-contain"
+            />
+          </div>
         </div>
       </section>
 
@@ -240,16 +251,30 @@ export default function LandingClient() {
 
       {/* ─── IMAGE GALLERY ──────────────────────────────────────────────────── */}
       <section className="bg-white py-14">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <div className="relative rounded-2xl overflow-hidden shadow-md" style={{ height: '320px' }}>
-              <Image src={IMG_CLOVER} alt="Clover restaurant payment devices" fill className="object-cover" sizes="(max-width: 768px) 100vw, 33vw" />
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-5">
+          {/* Large top image */}
+          <div className="relative rounded-2xl overflow-hidden shadow-md w-full" style={{ height: '420px' }}>
+            <Image
+              src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/POSS.png"
+              alt="POS system in cafe"
+              fill
+              className="object-cover object-center"
+              sizes="100vw"
+            />
+          </div>
+          {/* Two images below */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="relative rounded-2xl overflow-hidden shadow-md" style={{ height: '300px' }}>
+              <Image src={IMG_CLOVER} alt="Clover restaurant payment devices" fill className="object-cover" sizes="(max-width: 768px) 100vw, 50vw" />
             </div>
-            <div className="relative rounded-2xl overflow-hidden shadow-md" style={{ height: '320px' }}>
-              <Image src={IMG_TYPES} alt="Different payment types accepted" fill className="object-cover" sizes="(max-width: 768px) 100vw, 33vw" />
-            </div>
-            <div className="relative rounded-2xl overflow-hidden shadow-md" style={{ height: '320px' }}>
-              <Image src={IMG_DEVICE} alt="Payment terminal close-up" fill className="object-cover object-center" sizes="(max-width: 768px) 100vw, 33vw" />
+            <div className="relative rounded-2xl overflow-hidden shadow-md" style={{ height: '300px' }}>
+              <Image
+                src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/POS.png"
+                alt="POS hardware lineup"
+                fill
+                className="object-cover object-center"
+                sizes="(max-width: 768px) 100vw, 50vw"
+              />
             </div>
           </div>
         </div>
@@ -326,6 +351,17 @@ export default function LandingClient() {
                 >
                   <Mail size={15} /> jordannassie@gmail.com
                 </a>
+              </div>
+
+              {/* Signature */}
+              <div className="mt-6 flex justify-center md:justify-start">
+                <Image
+                  src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/INITIAL.png"
+                  alt="Jordan Nassie signature"
+                  width={140}
+                  height={60}
+                  className="h-14 w-auto object-contain opacity-80"
+                />
               </div>
             </div>
           </div>
@@ -486,6 +522,14 @@ export default function LandingClient() {
             </div>
             <div className="flex items-center gap-5 text-xs text-slate-400">
               <a href="#" className="hover:text-slate-700 transition-colors">Privacy</a>
+              <a
+                href="https://agentportal.tsys.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-slate-700 transition-colors font-medium"
+              >
+                Agent Portal
+              </a>
               <button
                 onClick={() => setPinOpen(true)}
                 className="hover:text-slate-600 transition-colors text-xs"
