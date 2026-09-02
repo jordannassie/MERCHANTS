@@ -11,7 +11,6 @@ import {
 import { PinDialog } from './PinDialog'
 
 const NAV_LINKS = [
-  { label: 'How It Works', href: '#how-it-works' },
   { label: 'Savings', href: '#savings' },
   { label: 'About', href: '#about' },
   { label: 'Contact', href: '#contact' },
@@ -41,23 +40,6 @@ const SAVINGS_CARDS = [
   },
 ]
 
-const HOW_STEPS = [
-  {
-    num: '1',
-    title: 'Tell us about your business',
-    body: 'Share a few details about how your business operates and what you\'re currently paying for payment processing.',
-  },
-  {
-    num: '2',
-    title: 'Review your current processing',
-    body: 'We analyse your current setup and identify where costs can be reduced without changing the way you work.',
-  },
-  {
-    num: '3',
-    title: 'Receive a straightforward recommendation',
-    body: 'Get a clear, honest recommendation with no pressure — a solution that fits your business and your budget.',
-  },
-]
 
 const EMPTY_FORM = { firstName: '', lastName: '', phone: '', email: '', comments: '' }
 
@@ -255,31 +237,6 @@ export default function LandingClient() {
         </div>
       </section>
 
-      {/* ─── HOW IT WORKS ───────────────────────────────────────────────────── */}
-      <section id="how-it-works" className="bg-slate-50 py-20 md:py-28">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-14">
-            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">
-              How It Works
-            </h2>
-            <p className="text-lg text-slate-500 max-w-xl mx-auto">
-              Three simple steps. No commitment required.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {HOW_STEPS.map(({ num, title, body }) => (
-              <div key={num} className="flex flex-col">
-                <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-base mb-5 shrink-0">
-                  {num}
-                </div>
-                <h3 className="font-bold text-slate-900 text-lg mb-2">{title}</h3>
-                <p className="text-slate-500 text-sm leading-relaxed">{body}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
       {/* ─── FULL-WIDTH IMAGE 1 ──────────────────────────────────────────────── */}
       <section className="relative w-full overflow-hidden" style={{ height: '480px' }}>
@@ -300,13 +257,23 @@ export default function LandingClient() {
       <section id="about" className="bg-white py-20 md:py-28">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row items-center gap-12">
-            <div className="shrink-0">
+            {/* Photos: Jordan + Texas mural */}
+            <div className="shrink-0 flex flex-col sm:flex-row md:flex-col gap-4 items-center">
               <div className="relative w-56 h-56 md:w-64 md:h-64 rounded-2xl overflow-hidden shadow-xl ring-4 ring-blue-50">
                 <Image
                   src={JORDAN_PHOTO}
                   alt="Jordan Nassie"
                   fill
                   className="object-cover"
+                  sizes="(max-width: 768px) 224px, 256px"
+                />
+              </div>
+              <div className="relative w-56 h-36 md:w-64 md:h-40 rounded-2xl overflow-hidden shadow-lg">
+                <Image
+                  src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/texas.png"
+                  alt="Texas"
+                  fill
+                  className="object-cover object-center"
                   sizes="(max-width: 768px) 224px, 256px"
                 />
               </div>
