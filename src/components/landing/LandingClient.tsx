@@ -141,63 +141,77 @@ export default function LandingClient() {
       </header>
 
       {/* ─── HERO ───────────────────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden bg-white pt-20 pb-28 md:pt-28 md:pb-36">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0"
-          style={{
-            backgroundImage:
-              'radial-gradient(circle at 70% 40%, rgba(59,130,246,0.07) 0%, transparent 60%)',
-          }}
-        />
+      <section className="relative bg-white overflow-hidden">
+        {/* Full-width hero image fading to white */}
+        <div className="relative w-full" style={{ height: '520px' }}>
+          <Image
+            src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/coffe.png"
+            alt="Café payment counter"
+            fill
+            priority
+            className="object-cover object-center"
+            sizes="100vw"
+          />
+          {/* Gradient fade to white at the bottom */}
+          <div
+            aria-hidden
+            className="absolute inset-0"
+            style={{
+              background: 'linear-gradient(to bottom, rgba(255,255,255,0) 30%, rgba(255,255,255,0.7) 70%, #ffffff 100%)',
+            }}
+          />
+        </div>
 
-        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-6">
-            <Shield size={12} /> Helping Texas businesses reduce processing costs
-          </div>
+        {/* Hero text content — sits below the image, on white */}
+        <div className="relative bg-white pb-20 md:pb-28">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-6">
+              <Shield size={12} /> Helping Texas businesses reduce processing costs
+            </div>
 
-          <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold text-slate-900 tracking-tight leading-[1.08] mb-6">
-            Keep More of<br className="hidden sm:block" /> Every Sale.
-          </h1>
+            <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold text-slate-900 tracking-tight leading-[1.08] mb-6">
+              Keep More of<br className="hidden sm:block" /> Every Sale.
+            </h1>
 
-          <p className="max-w-2xl mx-auto text-xl md:text-2xl text-slate-500 leading-relaxed mb-10">
-            We help businesses lower payment-processing costs and get the right
-            payment equipment for the way they sell.
-          </p>
+            <p className="max-w-2xl mx-auto text-xl md:text-2xl text-slate-500 leading-relaxed mb-10">
+              We help businesses lower payment-processing costs and get the right
+              payment equipment for the way they sell.
+            </p>
 
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <button
-              onClick={() => scrollTo('#contact')}
-              className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-base px-8 py-4 rounded-xl shadow-lg shadow-blue-200 transition-all"
-            >
-              Request a Free Review <ArrowRight size={16} />
-            </button>
-            <button
-              onClick={() => scrollTo('#video')}
-              className="inline-flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-base px-8 py-4 rounded-xl border border-slate-200 transition-all"
-            >
-              <Play size={14} className="fill-slate-700" /> Watch How It Works
-            </button>
-          </div>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <button
+                onClick={() => scrollTo('#contact')}
+                className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-base px-8 py-4 rounded-xl shadow-lg shadow-blue-200 transition-all"
+              >
+                Request a Free Review <ArrowRight size={16} />
+              </button>
+              <button
+                onClick={() => scrollTo('#video')}
+                className="inline-flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-base px-8 py-4 rounded-xl border border-slate-200 transition-all"
+              >
+                <Play size={14} className="fill-slate-700" /> Watch How It Works
+              </button>
+            </div>
 
-          {/* Trust indicators */}
-          <div className="mt-12 flex flex-wrap justify-center gap-6 text-xs text-slate-400 font-medium">
-            {['No pressure', 'No jargon', 'Free initial review', 'Texas-based'].map(t => (
-              <span key={t} className="flex items-center gap-1.5">
-                <CheckCircle size={11} className="text-blue-400" /> {t}
-              </span>
-            ))}
-          </div>
+            {/* Trust indicators */}
+            <div className="mt-12 flex flex-wrap justify-center gap-6 text-xs text-slate-400 font-medium">
+              {['No pressure', 'No jargon', 'Free initial review', 'Texas-based'].map(t => (
+                <span key={t} className="flex items-center gap-1.5">
+                  <CheckCircle size={11} className="text-blue-400" /> {t}
+                </span>
+              ))}
+            </div>
 
-          {/* Accepted cards */}
-          <div className="mt-10 flex justify-center">
-            <Image
-              src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Cards.png"
-              alt="Accepted: Amex, Visa, Mastercard, Discover"
-              width={320}
-              height={60}
-              className="h-12 w-auto object-contain"
-            />
+            {/* Accepted cards */}
+            <div className="mt-10 flex justify-center">
+              <Image
+                src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Cards.png"
+                alt="Accepted: Amex, Visa, Mastercard, Discover"
+                width={320}
+                height={60}
+                className="h-12 w-auto object-contain"
+              />
+            </div>
           </div>
         </div>
       </section>
