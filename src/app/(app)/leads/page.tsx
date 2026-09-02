@@ -7,6 +7,10 @@ import { LeadsFiltersBar } from '@/components/leads/LeadsFiltersBar'
 import { LeadsTable } from '@/components/leads/LeadsTable'
 import { BulkEnrichBar } from '@/components/leads/BulkEnrichBar'
 import { Pagination } from '@/components/ui/Pagination'
+import { RefreshButton } from '@/components/ui/RefreshButton'
+
+// NULL-safe non-chain filter — neq silently excludes NULL rows in PostgreSQL
+const NON_CHAIN = 'category.is.null,category.neq.corporate_chain'
 
 export const metadata: Metadata = { title: 'Leads — Merchant Radar' }
 export const dynamic = 'force-dynamic'
@@ -72,15 +76,17 @@ export default async function LeadsPage({ searchParams }: PageProps) {
   if (filters.neverContacted) query = query.is('last_contacted_at', null)
   if (filters.followUpDue) query = query.lte('next_follow_up_at', new Date().toISOString())
   if (filters.starred) query = query.eq('starred', true)
-  if (filters.hasPhone) query = query.not('primary_phone', 'is', null)
-  if (filters.missingPhone) query = query.is('primary_phone', null)
+  // hasPhone: lead has any callable phone (permit phone or manually entered)
+  if (filters.hasPhone) query = query.or('primary_phone.not.is.null,permit_phone.not.is.null')
+  // missingPhone: truly no phone of any kind
+  if (filters.missingPhone) query = query.is('primary_phone', null).is('permit_phone', null)
   if (filters.hasWebsite) query = query.not('website', 'is', null)
   if (filters.missingWebsite) query = query.is('website', null)
   if (filters.enriched) query = query.eq('enrichment_status', 'completed')
   if (filters.needsReview) query = query.eq('enrichment_status', 'pending')
-  // category IS NULL (most existing leads) must also pass through this filter.
-  // PostgREST's neq excludes NULLs, so we explicitly OR category.is.null.
-  if (filters.hideCorporateChains) query = query.or('category.neq.corporate_chain,category.is.null')
+  // NULL-safe chain filter: category IS NULL (independent leads) must pass through.
+  // neq silently excludes NULL rows in PostgreSQL — use explicit OR instead.
+  if (filters.hideCorporateChains) query = query.or(NON_CHAIN)
 
   const sortCol =
     filters.sort === 'score' ? 'score'
@@ -129,12 +135,15 @@ export default async function LeadsPage({ searchParams }: PageProps) {
             </p>
           )}
         </div>
-        <a
-          href={`/api/leads/export?${new URLSearchParams(sp).toString()}`}
-          className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors"
-        >
-          Export CSV
-        </a>
+        <div className="flex items-center gap-2">
+          <RefreshButton />
+          <a
+            href={`/api/leads/export?${new URLSearchParams(sp).toString()}`}
+            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors"
+          >
+            Export CSV
+          </a>
+        </div>
       </div>
 
       <LeadsFiltersBar filters={filters} counties={counties} />

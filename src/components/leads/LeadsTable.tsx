@@ -287,11 +287,19 @@ export function LeadsTable({ leads }: Props) {
                             {lead.first_sales_date ? fmtDate(lead.first_sales_date) : '—'}
                           </span>
                         )}
-                        {col.key === 'phone' && (
-                          lead.primary_phone
-                            ? <a href={`tel:${lead.primary_phone}`} className="text-blue-600 hover:underline flex items-center gap-1 text-xs whitespace-nowrap"><Phone size={11} />{fmtPhone(lead.primary_phone)}</a>
+                        {col.key === 'phone' && (() => {
+                          const phone = lead.permit_phone ?? lead.primary_phone
+                          return phone
+                            ? (
+                              <a href={`tel:${phone}`} className="text-blue-600 hover:underline flex items-center gap-1 text-xs whitespace-nowrap">
+                                <Phone size={11} />{fmtPhone(phone)}
+                                {lead.permit_phone && !lead.primary_phone && (
+                                  <span className="text-[10px] text-gray-400">permit</span>
+                                )}
+                              </a>
+                            )
                             : <span className="text-gray-300 text-xs">—</span>
-                        )}
+                        })()}
                         {col.key === 'status' && (
                           <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[lead.status]}`}>
                             {lead.status.replace('_', ' ')}
@@ -351,12 +359,12 @@ export function LeadsTable({ leads }: Props) {
                   <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[lead.status]}`}>
                     {lead.status.replace('_', ' ')}
                   </span>
-                  {lead.primary_phone && (
-                    <a href={`tel:${lead.primary_phone}`} className="text-xs text-blue-600 flex items-center gap-1 hover:underline">
-                      <Phone size={10} />{fmtPhone(lead.primary_phone)}
+                  {(lead.permit_phone ?? lead.primary_phone) && (
+                    <a href={`tel:${(lead.permit_phone ?? lead.primary_phone)!}`} className="text-xs text-blue-600 flex items-center gap-1 hover:underline">
+                      <Phone size={10} />{fmtPhone((lead.permit_phone ?? lead.primary_phone)!)}
                     </a>
                   )}
-                  {!lead.primary_phone && lead.website && (
+                  {!(lead.permit_phone ?? lead.primary_phone) && lead.website && (
                     <a href={lead.website} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 flex items-center gap-1">
                       <Globe size={10} />Website
                     </a>
@@ -387,9 +395,10 @@ function ScoreCell({ score, priority, size = 'default' }: { score: number; prior
 }
 
 function ActionCell({ lead }: { lead: Lead }) {
-  if (lead.primary_phone) {
+  const phone = lead.permit_phone ?? lead.primary_phone
+  if (phone) {
     return (
-      <a href={`tel:${lead.primary_phone}`}
+      <a href={`tel:${phone}`}
         className="inline-flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors whitespace-nowrap">
         <Phone size={10} /> Call
       </a>

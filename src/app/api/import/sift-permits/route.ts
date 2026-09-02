@@ -210,26 +210,34 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }, { status: 200 })  // 200 so UI displays summary rather than throwing
   }
 
-  // ── Save permit phones ──────────────────────────────────────────────────────
+  // ── Save permit phones — parallel batches of 20 concurrent updates ──────────
+  // Sequential updates for 400+ leads would risk hitting Netlify's 10s timeout.
+  // Promise.all in chunks of 20 processes ~441 updates in ~1.2 seconds.
   const importedAt = new Date().toISOString()
   const source = 'sift_weekly'
-  let saved = 0, saveErrors = 0
+  const CONCURRENT = 20
+  const attempted = exactMatches.length
+  let updated = 0, failed = 0
+  const saveErrors: string[] = []
 
-  for (const { lead, normalizedPhone, rowNum } of exactMatches) {
-    const { error: upErr } = await db
-      .from('leads')
-      .update({
-        permit_phone: normalizedPhone,
-        permit_phone_source: source,
-        permit_phone_imported_at: importedAt,
+  for (let i = 0; i < exactMatches.length; i += CONCURRENT) {
+    const chunk = exactMatches.slice(i, i + CONCURRENT)
+    const results = await Promise.all(
+      chunk.map(async ({ lead, normalizedPhone, rowNum }) => {
+        const { error } = await db
+          .from('leads')
+          .update({
+            permit_phone: normalizedPhone,
+            permit_phone_source: source,
+            permit_phone_imported_at: importedAt,
+          })
+          .eq('id', lead.id)
+        return { ok: !error, msg: error ? `Row ${rowNum}: ${error.message}` : null }
       })
-      .eq('id', lead.id)
-
-    if (upErr) {
-      console.error(`[sift-permits] Row ${rowNum} update error:`, upErr.message)
-      saveErrors++
-    } else {
-      saved++
+    )
+    for (const r of results) {
+      if (r.ok) updated++
+      else { failed++; if (saveErrors.length < 10) saveErrors.push(r.msg!) }
     }
   }
 
@@ -241,9 +249,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       rowsWithPhone: validRows.length + missingPhone + invalidPhone,
       validPhones: validRows.length,
       exactMatches: exactMatches.length,
-      phonesAdded: saved,
+      attempted,
+      phonesAdded: updated,
       alreadySaved,
-      saveErrors,
+      failed,
+      errors: saveErrors,
       skipReasons: {
         ...skipReasons,
         missingPhone,

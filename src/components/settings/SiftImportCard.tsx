@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Upload, CheckCircle, AlertCircle, Loader2, ExternalLink, Download, Key, Eye } from 'lucide-react'
 
 const SIFT_KEY_URL = 'https://data-secure.comptroller.texas.gov/main/view'
@@ -20,9 +21,12 @@ interface ImportSummary {
   rowsWithPhone?: number
   validPhones?: number
   exactMatches?: number
+  attempted?: number
   phonesAdded?: number
   alreadySaved?: number
-  saveErrors?: number
+  failed?: number
+  errors?: string[]
+  saveErrors?: number    // legacy field
   skipReasons?: SkipReasons
   // Auto-import field names
   leadsMatched?: number
@@ -50,6 +54,7 @@ interface LastImport {
 }
 
 export function SiftImportCard() {
+  const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
 
@@ -174,8 +179,11 @@ export function SiftImportCard() {
       if (!res.ok) {
         setManualResult({ error: String(json.error ?? 'Import failed') })
       } else {
-        setManualResult({ summary: json.summary as ImportSummary | undefined })
+        const summary = json.summary as ImportSummary | undefined
+        setManualResult({ summary })
         setPendingFile(null)
+        // Auto-refresh server components so Leads/Dashboard reflect new phones
+        if ((summary?.phonesAdded ?? 0) > 0) router.refresh()
       }
     } catch (e) {
       setManualResult({ error: String(e) })
@@ -452,26 +460,37 @@ function ImportResultBox({ summary, filename }: { summary: ImportSummary; filena
   const rowsParsed  = summary.rowsParsed   ?? 0
   const rowsPhone   = summary.rowsWithPhone ?? summary.validPhones ?? 0
   const exactMatch  = summary.exactMatches  ?? summary.leadsMatched ?? 0
+  const attempted   = summary.attempted     ?? exactMatch
   const phonesAdded = summary.phonesAdded   ?? 0
   const already     = summary.alreadySaved  ?? 0
+  const failed      = summary.failed        ?? summary.saveErrors ?? summary.errorCount ?? 0
   const skipped     = summary.phonesSkipped ?? 0
-  const errors      = summary.saveErrors    ?? summary.errorCount ?? 0
+  const errMsgs     = summary.errors        ?? []
+  const allSaved    = phonesAdded === attempted && attempted > 0
 
   return (
-    <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2.5 space-y-1.5">
-      <div className="flex items-center gap-2 text-sm font-semibold text-green-700">
+    <div className={`border rounded-lg px-3 py-2.5 space-y-1.5 ${allSaved ? 'bg-green-50 border-green-200' : failed > 0 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
+      <div className={`flex items-center gap-2 text-sm font-semibold ${failed > 0 ? 'text-amber-700' : 'text-green-700'}`}>
         <CheckCircle size={14} />
-        Import complete{filename && <span className="font-mono font-normal text-xs ml-1">{filename}</span>}
+        {phonesAdded > 0 ? `${phonesAdded.toLocaleString()} phone${phonesAdded !== 1 ? 's' : ''} saved` : 'Import complete'}
+        {filename && <span className="font-mono font-normal text-xs ml-1">{filename}</span>}
       </div>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-gray-600">
         <div><dt className="text-gray-400 inline">Rows parsed: </dt><dd className="inline font-medium">{rowsParsed.toLocaleString()}</dd></div>
         <div><dt className="text-gray-400 inline">Rows with phone: </dt><dd className="inline font-medium">{rowsPhone.toLocaleString()}</dd></div>
         <div><dt className="text-gray-400 inline">Exact matches: </dt><dd className="inline font-medium">{exactMatch.toLocaleString()}</dd></div>
-        <div><dt className="text-gray-400 inline">Phones saved: </dt><dd className="inline font-semibold text-green-700">{phonesAdded.toLocaleString()}</dd></div>
+        <div><dt className="text-gray-400 inline">Attempted saves: </dt><dd className="inline font-medium">{attempted.toLocaleString()}</dd></div>
+        <div><dt className="text-gray-400 inline">Phones saved: </dt><dd className={`inline font-semibold ${phonesAdded > 0 ? 'text-green-700' : 'text-gray-500'}`}>{phonesAdded.toLocaleString()}</dd></div>
         {already > 0 && <div><dt className="text-gray-400 inline">Already saved: </dt><dd className="inline">{already.toLocaleString()}</dd></div>}
         {skipped > 0 && <div><dt className="text-gray-400 inline">Skipped: </dt><dd className="inline">{skipped.toLocaleString()}</dd></div>}
-        {errors > 0 && <div className="col-span-2"><dt className="text-red-400 inline">Errors: </dt><dd className="inline text-red-600">{errors}</dd></div>}
+        {failed > 0 && <div className="col-span-2"><dt className="text-red-400 inline">Failed: </dt><dd className="inline text-red-600">{failed}</dd></div>}
       </dl>
+      {errMsgs.length > 0 && (
+        <div className="text-xs text-red-600 space-y-0.5 border-t border-red-200 pt-1.5">
+          {errMsgs.slice(0, 3).map((e, i) => <div key={i}>{e}</div>)}
+          {errMsgs.length > 3 && <div>… and {errMsgs.length - 3} more</div>}
+        </div>
+      )}
       {summary.skipReasons && <SkipReasonBox summary={summary} />}
     </div>
   )

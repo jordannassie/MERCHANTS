@@ -3,7 +3,12 @@ import Link from 'next/link'
 import { createServiceClient } from '@/lib/supabase/service'
 import { fmtDate, fmtPhone } from '@/lib/utils'
 import { ImportButton } from '@/components/ImportButton'
+import { RefreshButton } from '@/components/ui/RefreshButton'
 import { Users, Flame, CalendarClock, Calendar, Phone, ArrowDown, Pencil, ChevronsRight } from 'lucide-react'
+
+// NULL-safe non-chain filter: category IS NULL (independent leads) OR category != 'corporate_chain'
+// Must use this form — .neq() silently excludes NULL rows in PostgreSQL.
+const NON_CHAIN = 'category.is.null,category.neq.corporate_chain'
 
 export const metadata: Metadata = { title: 'Dashboard — Merchant Radar' }
 export const dynamic = 'force-dynamic'
@@ -39,6 +44,18 @@ export default async function DashboardPage() {
   const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0)
   const todayEnd = new Date(now); todayEnd.setHours(23, 59, 59, 999)
 
+  // Clean up any import runs stuck in 'running' for more than 30 minutes
+  // (Netlify functions time out and the finally block may never run)
+  try {
+    const staleMs = now.getTime() - 30 * 60 * 1000
+    const staleThreshold = new Date(staleMs).toISOString()
+    const staleCompleted = now.toISOString()
+    await db.from('import_runs')
+      .update({ status: 'failed', error_message: 'Import timed out — marked stale', completed_at: staleCompleted })
+      .eq('status', 'running')
+      .lt('started_at', staleThreshold)
+  } catch { /* non-critical */ }
+
   const [
     { count: totalLeads },
     { count: hotLeads },
@@ -50,11 +67,26 @@ export default async function DashboardPage() {
     { data: territory },
   ] = await Promise.all([
     db.from('leads').select('*', { count: 'exact', head: true }),
-    db.from('leads').select('*', { count: 'exact', head: true }).eq('priority', 'hot').not('status', 'in', '(won,lost,do_not_contact)').or('category.neq.corporate_chain,category.is.null'),
-    db.from('leads').select('*', { count: 'exact', head: true }).lte('next_follow_up_at', todayEnd.toISOString()).not('status', 'in', '(won,lost,do_not_contact)'),
+    db.from('leads').select('*', { count: 'exact', head: true })
+      .eq('priority', 'hot')
+      .not('status', 'in', '(won,lost,do_not_contact)')
+      .or(NON_CHAIN),
+    db.from('leads').select('*', { count: 'exact', head: true })
+      .lte('next_follow_up_at', todayEnd.toISOString())
+      .not('status', 'in', '(won,lost,do_not_contact)'),
     db.from('leads').select('*', { count: 'exact', head: true }).eq('status', 'appointment'),
-    db.from('leads').select('id,display_name,outlet_name,outlet_city,outlet_state,priority,status,score,primary_phone,permit_issue_date,first_sales_date,naics_code,google_place_id,enrichment_status,category').not('status', 'in', '(won,lost,do_not_contact)').or('category.neq.corporate_chain,category.is.null').order('score', { ascending: false }).limit(5),
-    db.from('leads').select('id,display_name,outlet_city,outlet_state,primary_phone,next_follow_up_at,status,naics_code').lte('next_follow_up_at', todayEnd.toISOString()).gte('next_follow_up_at', todayStart.toISOString()).order('next_follow_up_at').limit(6),
+    db.from('leads')
+      .select('id,display_name,outlet_name,outlet_city,outlet_state,priority,status,score,primary_phone,permit_phone,permit_issue_date,first_sales_date,naics_code,google_place_id,enrichment_status,category')
+      .not('status', 'in', '(won,lost,do_not_contact)')
+      .or(NON_CHAIN)
+      .order('score', { ascending: false })
+      .limit(5),
+    db.from('leads')
+      .select('id,display_name,outlet_city,outlet_state,primary_phone,permit_phone,next_follow_up_at,status,naics_code')
+      .lte('next_follow_up_at', todayEnd.toISOString())
+      .gte('next_follow_up_at', todayStart.toISOString())
+      .order('next_follow_up_at')
+      .limit(6),
     db.from('import_runs').select('*').order('started_at', { ascending: false }).limit(1),
     db.from('territories').select('*').eq('is_active', true).limit(1),
   ])
@@ -74,9 +106,12 @@ export default async function DashboardPage() {
     <div className="px-4 md:px-8 py-6 max-w-7xl mx-auto space-y-6">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-gray-900">{greeting()}, {firstName}</h1>
-        <ImportButton territory={activeTerritory} lastRun={lastRun} />
+        <div className="flex items-center gap-2">
+          <RefreshButton />
+          <ImportButton territory={activeTerritory} lastRun={lastRun} />
+        </div>
       </div>
 
       {/* Stats */}
@@ -152,31 +187,40 @@ export default async function DashboardPage() {
                       ) : '—'}
                     </td>
                     <td className="px-3 py-3">
-                      {lead.primary_phone ? (
-                        <a href={`tel:${lead.primary_phone}`}
-                          className="flex items-center gap-1 text-xs text-blue-600 hover:underline">
-                          <Phone size={11} /> {fmtPhone(lead.primary_phone)}
-                        </a>
-                      ) : (
-                        <Link href={`/leads/${lead.id}`}
-                          className="text-xs text-gray-400 hover:text-blue-600 flex items-center gap-1">
-                          <Phone size={10} className="opacity-40" />
-                          Find Contact
-                        </Link>
-                      )}
+                      {(() => {
+                        const phone = lead.permit_phone ?? lead.primary_phone
+                        return phone ? (
+                          <a href={`tel:${phone}`}
+                            className="flex items-center gap-1 text-xs text-blue-600 hover:underline">
+                            <Phone size={11} /> {fmtPhone(phone)}
+                            {lead.permit_phone && !lead.primary_phone && (
+                              <span className="text-[10px] text-gray-400 ml-0.5">permit</span>
+                            )}
+                          </a>
+                        ) : (
+                          <Link href={`/leads/${lead.id}`}
+                            className="text-xs text-gray-400 hover:text-blue-600 flex items-center gap-1">
+                            <Phone size={10} className="opacity-40" />
+                            Find Contact
+                          </Link>
+                        )
+                      })()}
                     </td>
                     <td className="px-3 py-3 text-right">
-                      {lead.primary_phone ? (
-                        <a href={`tel:${lead.primary_phone}`}
-                          className="inline-flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors whitespace-nowrap">
-                          <Phone size={11} /> Call
-                        </a>
-                      ) : (
-                        <Link href={`/leads/${lead.id}`}
-                          className="inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors whitespace-nowrap">
-                          Find
-                        </Link>
-                      )}
+                      {(() => {
+                        const phone = lead.permit_phone ?? lead.primary_phone
+                        return phone ? (
+                          <a href={`tel:${phone}`}
+                            className="inline-flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors whitespace-nowrap">
+                            <Phone size={11} /> Call
+                          </a>
+                        ) : (
+                          <Link href={`/leads/${lead.id}`}
+                            className="inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors whitespace-nowrap">
+                            Find
+                          </Link>
+                        )
+                      })()}
                     </td>
                   </tr>
                 ))}
@@ -208,9 +252,9 @@ export default async function DashboardPage() {
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-gray-900 truncate">{lead.display_name || '(Unnamed)'}</p>
                         <p className="text-xs text-gray-500">{lead.outlet_city}{lead.outlet_state ? `, ${lead.outlet_state}` : ''}</p>
-                        {lead.primary_phone && (
+                        {(lead.permit_phone ?? lead.primary_phone) && (
                           <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
-                            <Phone size={10} /> {fmtPhone(lead.primary_phone)}
+                            <Phone size={10} /> {fmtPhone((lead.permit_phone ?? lead.primary_phone)!)}
                           </p>
                         )}
                       </div>
