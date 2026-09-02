@@ -12,9 +12,10 @@ import { Dialog } from '@/components/ui/Dialog'
 import { LogCallDialog } from './LogCallDialog'
 import { ContactsSection } from './ContactsSection'
 import { MainNoteSection } from './MainNoteSection'
+import { ScriptPanel } from './ScriptPanel'
 import {
   Phone, Globe, MapPin, Star, ChevronLeft, Copy, ExternalLink,
-  MessageSquare, Clock, Edit2, Check, Info, Briefcase, FileText,
+  MessageSquare, Clock, Edit2, Check, Info, Briefcase, FileText, BookOpen,
 } from 'lucide-react'
 import { updateLeadCRM, starLead, updateLeadStatus } from '@/lib/actions/leads'
 import { ContactPanel } from './ContactPanel'
@@ -35,6 +36,7 @@ export function LeadDetailClient({ lead: initialLead, contacts: initialContacts,
   const [activities, setActivities] = useState(initialActivities)
   const [logCallOpen, setLogCallOpen] = useState(false)
   const [noteOpen, setNoteOpen] = useState(false)
+  const [scriptOpen, setScriptOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
 
   function scrollToNote() {
@@ -354,10 +356,10 @@ export function LeadDetailClient({ lead: initialLead, contacts: initialContacts,
             Log Call
           </button>
           <button
-            onClick={() => setNoteOpen(true)}
-            className="flex-1 py-3 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+            onClick={() => setScriptOpen(true)}
+            className="flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
           >
-            Add Note
+            <BookOpen size={14} /> Script
           </button>
         </div>
       </div>
@@ -387,6 +389,15 @@ export function LeadDetailClient({ lead: initialLead, contacts: initialContacts,
           router.refresh()
         }}
       />
+
+      {/* Call Script Panel (mobile bottom-sheet style) */}
+      {scriptOpen && (
+        <ScriptPanel
+          businessName={displayName}
+          phone={lead.permit_phone ?? lead.primary_phone ?? null}
+          onClose={() => setScriptOpen(false)}
+        />
+      )}
 
       {/* Edit CRM Dialog */}
       <Dialog open={editOpen} onClose={() => setEditOpen(false)} title="Edit CRM Information">

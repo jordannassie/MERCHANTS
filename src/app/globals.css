@@ -23,3 +23,7 @@ body {
 @media (max-width: 640px) {
   button, a, [role="button"] { min-height: 44px; }
 }
+
+/* Hide scrollbar on scroll containers where native bar is unwanted */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }

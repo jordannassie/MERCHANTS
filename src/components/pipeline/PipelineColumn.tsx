@@ -34,10 +34,10 @@ export function PipelineColumn({ status, label, leads }: Props) {
   }
 
   return (
-    <div className="flex-shrink-0 w-64">
-      {/* Column header */}
+    <div className="flex-shrink-0 w-64 min-w-[256px]">
+      {/* Column header — sticky while scrolling vertically */}
       <div
-        className={`rounded-lg px-3 py-1.5 mb-3 flex items-center justify-between ${COL_COLORS[status] ?? 'bg-gray-100'}`}
+        className={`sticky top-0 z-10 rounded-lg px-3 py-1.5 mb-3 flex items-center justify-between ${COL_COLORS[status] ?? 'bg-gray-100'}`}
       >
         <span className="text-sm font-medium">{label}</span>
         <span className="text-xs font-medium">{leads.length}</span>
