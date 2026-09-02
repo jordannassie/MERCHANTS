@@ -2,6 +2,28 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { z } from 'zod'
 
+// GET /api/activities?leadId=<uuid>[&type=note]
+export async function GET(request: NextRequest) {
+  const sp = request.nextUrl.searchParams
+  const leadId = sp.get('leadId')
+  if (!leadId) return NextResponse.json({ error: 'leadId required' }, { status: 400 })
+
+  const db = createServiceClient()
+  let q = db
+    .from('activities')
+    .select('id, notes, activity_type, occurred_at')
+    .eq('lead_id', leadId)
+    .order('occurred_at', { ascending: false })
+    .limit(50)
+
+  const type = sp.get('type')
+  if (type) q = q.eq('activity_type', type)
+
+  const { data, error } = await q
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ activities: data ?? [] })
+}
+
 const schema = z.object({
   leadId: z.string().uuid(),
   activityType: z.enum(['call', 'note', 'email', 'meeting', 'status_change']),

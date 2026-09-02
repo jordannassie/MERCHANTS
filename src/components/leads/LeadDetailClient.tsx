@@ -11,9 +11,10 @@ import { Button } from '@/components/ui/Button'
 import { Dialog } from '@/components/ui/Dialog'
 import { LogCallDialog } from './LogCallDialog'
 import { ContactsSection } from './ContactsSection'
+import { NotepadPanel } from './NotepadPanel'
 import {
   Phone, Globe, MapPin, Star, ChevronLeft, Copy, ExternalLink,
-  MessageSquare, Clock, Edit2, Check, Info, Briefcase,
+  MessageSquare, Clock, Edit2, Check, Info, Briefcase, FileText,
 } from 'lucide-react'
 import { updateLeadCRM, starLead, updateLeadStatus } from '@/lib/actions/leads'
 import { ContactPanel } from './ContactPanel'
@@ -34,6 +35,9 @@ export function LeadDetailClient({ lead: initialLead, contacts: initialContacts,
   const [activities, setActivities] = useState(initialActivities)
   const [logCallOpen, setLogCallOpen] = useState(false)
   const [noteOpen, setNoteOpen] = useState(false)
+  const [mainNoteOpen, setMainNoteOpen] = useState(false)
+  // Local main_note state so display updates immediately after saving
+  const [mainNote, setMainNote] = useState<string | null>(lead.main_note ?? null)
   const [editOpen, setEditOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const [editForm, setEditForm] = useState({
@@ -104,14 +108,24 @@ export function LeadDetailClient({ lead: initialLead, contacts: initialContacts,
             </div>
           </div>
 
-          {/* CTA buttons — sticky on mobile */}
+          {/* CTA buttons — desktop */}
           <div className="hidden md:flex items-center gap-2 shrink-0">
-            {lead.primary_phone && (
-              <a href={`tel:${lead.primary_phone}`}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors">
-                <Phone size={14} /> Call {fmtPhone(lead.primary_phone)}
+            {(lead.permit_phone ?? lead.primary_phone) && (
+              <a
+                href={`tel:${lead.permit_phone ?? lead.primary_phone}`}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Phone size={14} /> Call {fmtPhone(lead.permit_phone ?? lead.primary_phone ?? '')}
               </a>
             )}
+            <button
+              onClick={() => setMainNoteOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 text-sm font-semibold rounded-lg transition-colors"
+            >
+              <FileText size={14} />
+              Note
+              {mainNote && <span className="w-2 h-2 rounded-full bg-yellow-700 ml-0.5" />}
+            </button>
             <Button variant="secondary" size="sm" onClick={() => setLogCallOpen(true)}>Log Call</Button>
             <Button variant="secondary" size="sm" onClick={() => setNoteOpen(true)}>Add Note</Button>
           </div>
@@ -302,18 +316,30 @@ export function LeadDetailClient({ lead: initialLead, contacts: initialContacts,
       {/* Mobile sticky actions */}
       <div className="md:hidden fixed bottom-20 inset-x-4 z-30">
         <div className="bg-white rounded-xl border border-gray-200 shadow-lg p-3 flex gap-2">
-          {lead.primary_phone ? (
-            <a href={`tel:${lead.primary_phone}`}
-              className="flex-1 flex items-center justify-center gap-2 py-3 bg-blue-600 text-white text-sm font-semibold rounded-lg">
+          {(lead.permit_phone ?? lead.primary_phone) ? (
+            <a
+              href={`tel:${lead.permit_phone ?? lead.primary_phone}`}
+              className="flex-1 flex items-center justify-center gap-2 py-3 bg-blue-600 text-white text-sm font-semibold rounded-lg"
+            >
               <Phone size={16} /> Call
             </a>
           ) : null}
-          <button onClick={() => setLogCallOpen(true)}
-            className="flex-1 py-3 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
+          <button
+            onClick={() => setMainNoteOpen(true)}
+            className="flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-semibold text-yellow-900 bg-yellow-400 hover:bg-yellow-500 rounded-lg transition-colors"
+          >
+            <FileText size={15} /> Note
+          </button>
+          <button
+            onClick={() => setLogCallOpen(true)}
+            className="flex-1 py-3 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
             Log Call
           </button>
-          <button onClick={() => setNoteOpen(true)}
-            className="flex-1 py-3 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
+          <button
+            onClick={() => setNoteOpen(true)}
+            className="flex-1 py-3 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
             Add Note
           </button>
         </div>
@@ -333,7 +359,7 @@ export function LeadDetailClient({ lead: initialLead, contacts: initialContacts,
         }}
       />
 
-      {/* Quick Note Dialog */}
+      {/* Quick Note Dialog (creates an activity log entry) */}
       <QuickNoteDialog
         open={noteOpen}
         onClose={() => setNoteOpen(false)}
@@ -344,6 +370,22 @@ export function LeadDetailClient({ lead: initialLead, contacts: initialContacts,
           router.refresh()
         }}
       />
+
+      {/* Main Notepad — persistent single note per lead */}
+      {mainNoteOpen && (
+        <NotepadPanel
+          key={lead.id}
+          leadId={lead.id}
+          leadName={displayName}
+          initialNote={mainNote}
+          initialUpdatedAt={lead.main_note_updated_at ?? null}
+          existingActivities={activities
+            .filter(a => a.activity_type === 'note')
+            .map(a => ({ id: a.id, notes: a.notes, occurred_at: a.occurred_at }))}
+          onClose={() => setMainNoteOpen(false)}
+          onSaved={(note) => setMainNote(note || null)}
+        />
+      )}
 
       {/* Edit CRM Dialog */}
       <Dialog open={editOpen} onClose={() => setEditOpen(false)} title="Edit CRM Information">

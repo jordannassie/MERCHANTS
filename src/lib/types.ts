@@ -93,6 +93,9 @@ export interface Lead {
   permit_phone: string | null
   permit_phone_source: string | null
   permit_phone_imported_at: string | null
+  // Persistent main notepad (migration 011)
+  main_note: string | null
+  main_note_updated_at: string | null
   created_at: string
   updated_at: string
 }
