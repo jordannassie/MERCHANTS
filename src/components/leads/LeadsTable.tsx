@@ -7,6 +7,7 @@ import { fmtDate, fmtPhone } from '@/lib/utils'
 import { Phone } from 'lucide-react'
 import { LEAD_STATUSES, COUNTY_NAMES } from '@/lib/constants'
 import type { LeadStatus } from '@/lib/types'
+import { buildOutreachMessage } from '@/lib/outreach'
 
 interface Props { leads: Lead[] }
 
@@ -105,9 +106,7 @@ export function LeadsTable({ leads }: Props) {
           const phone = lead.permit_phone ?? lead.primary_phone
           const normalized = phone ? phone.replace(/\D/g, '') : ''
           const businessName = lead.display_name || lead.outlet_name
-          const sms = businessName
-            ? `Hi, this is Jordan with Process.Direct. I saw that ${businessName} is getting set up in Texas. Have you already gotten your card processing/POS set up?\n\nhttps://process.direct`
-            : `Hi, this is Jordan with Process.Direct. I saw that your business is getting set up in Texas. Have you already gotten your card processing/POS set up?\n\nhttps://process.direct`
+          const sms = buildOutreachMessage(businessName)
 
           return (
             <div
