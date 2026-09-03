@@ -152,7 +152,7 @@ export function ComparisonTable({ onScrollToContact }: { onScrollToContact: () =
               {/* Process.Direct */}
               <div className="px-4 py-3 bg-green-50 border-b border-green-100">
                 <div className="flex items-center justify-between mb-2">
-                  <Image src={LOGOS.pd.src} alt={LOGOS.pd.alt} width={90} height={22} className="h-5 w-auto object-contain" />
+                  <Image src={LOGOS.pd.src} alt={LOGOS.pd.alt} width={180} height={44} className="h-10 w-auto object-contain" />
                   <span className="text-[10px] bg-green-500 text-white font-bold px-2 py-0.5 rounded-full">Best</span>
                 </div>
                 <PdCell text={row.pd} />
