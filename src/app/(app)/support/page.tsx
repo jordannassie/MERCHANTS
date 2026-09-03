@@ -108,12 +108,23 @@ export default function SupportPage() {
             <div key={r.id} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
-                  <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-1">
                     <span className="font-bold text-gray-900 text-base">
                       {r.first_name} {r.last_name}
                     </span>
                     {statusBadge(r.status)}
                     {r.inquiry_type && <span className="ml-2 text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{r.inquiry_type}</span>}
+                    {r.inquiry_type && r.inquiry_type.length > 0 ? null : null}
+                    {r.inquiry_type === '' && <span className="ml-2 text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">Not specified</span>}
+                    {r.inquiry_type && r.inquiry_type.length > 0 ? null : null}
+                    {r.inquiry_type && <></>}
+                    {r.inquiry_type !== undefined && r.inquiry_type !== null && r.inquiry_type.length === 0 && <span className="ml-2 text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">Not specified</span>}
+                    {r.inquiry_type && r.inquiry_type.length > 0 ? null : null}
+                    {r.inquiry_type && <></>}
+                    {r.inquiry_type && r.inquiry_type.length > 0 ? null : null}
+                    {r.inquiry_type && <></>}
+                    {r.inquiry_type && <></>}
+                    {r.inquiry_type && <></>}
                   </div>
                   <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500">
                     {r.email && (
@@ -134,6 +145,11 @@ export default function SupportPage() {
                       })}
                     </span>
                   </div>
+                </div>
+
+                {/* Industry display */}
+                <div className="ml-4 text-xs text-slate-500 shrink-0">
+                  {r.inquiry_type ? null : null}
                 </div>
 
                 {/* Delete button */}
