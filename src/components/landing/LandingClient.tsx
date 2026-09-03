@@ -134,7 +134,7 @@ export default function LandingClient() {
       {/* ─── HERO ───────────────────────────────────────────────────────────── */}
       <section className="relative bg-white overflow-hidden">
         {/* Full-width hero image fading to white */}
-        <div className="relative w-full" style={{ height: '520px' }}>
+        <div className="relative w-full" style={{ height: '260px' }}>
           <Image
             src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/coffe.png"
             alt="Café payment counter"
