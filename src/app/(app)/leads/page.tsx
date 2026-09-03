@@ -63,7 +63,28 @@ export default async function LeadsPage({ searchParams }: PageProps) {
   const { data: territories } = await supabase.from('territories').select('*').eq('is_active', true).limit(1)
   const activeTerritory = territories?.[0] ?? null
   const regionParam = filters.region || (activeTerritory?.region ?? 'DFW')
-  const regionCounties = getRegionCounties(regionParam)
+  let regionCounties = getRegionCounties(regionParam)
+
+  // Special-case Other Texas: compute all county codes present in DB, then exclude named metro counties
+  if (regionParam === 'Other Texas') {
+    const { data: allCountyRows } = await supabase
+      .from('leads')
+      .select('outlet_county_code')
+      .not('outlet_county_code', 'is', null)
+
+    const allCodes = Array.from(new Set((allCountyRows ?? []).map((r: any) => r.outlet_county_code).filter(Boolean)))
+    // Build union of named metros
+    const { DFW_COUNTY_ALLOWLIST } = await import('@/lib/importer-utils')
+    const { REGION_DEFINITIONS } = await import('@/lib/regions')
+    const metroCodes = new Set<string>([
+      ...REGION_DEFINITIONS.DFW,
+      ...REGION_DEFINITIONS.Houston,
+      ...REGION_DEFINITIONS.Austin,
+      ...REGION_DEFINITIONS['San Antonio'],
+      ...REGION_DEFINITIONS['El Paso'],
+    ])
+    regionCounties = allCodes.filter((c: string) => !metroCodes.has(c))
+  }
 
   let query = supabase
     .from('leads')
