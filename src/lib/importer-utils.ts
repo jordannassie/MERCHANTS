@@ -54,6 +54,14 @@ export function buildSoQLWhere(cutoffIso: string, validCodes: string[]): string 
   return `outlet_permit_issue_date >= '${cutoffIso}' AND (${countyFilter})`
 }
 
+/**
+ * Build a statewide (ALL Texas) SoQL WHERE clause — no county restriction.
+ * Use this for the statewide import path.
+ */
+export function buildSoQLWhereStatewide(cutoffIso: string): string {
+  return `outlet_permit_issue_date >= '${cutoffIso}'`
+}
+
 /** Allowlist of valid DFW-area county codes (mirrors the edge function constant). */
 export const DFW_COUNTY_ALLOWLIST: ReadonlySet<string> = new Set([
   '043', '057', '061', '070', '111', '116', '126', '129', '184', '199', '213', '220', '249',

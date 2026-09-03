@@ -4,7 +4,16 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { fmtDate, fmtPhone } from '@/lib/utils'
 import { ImportButton } from '@/components/ImportButton'
 import { RefreshButton } from '@/components/ui/RefreshButton'
-import { Users, Flame, CalendarClock, Calendar, Phone, ArrowDown, Pencil, ChevronsRight } from 'lucide-react'
+import { Users, Flame, CalendarClock, Calendar, Phone, ArrowDown, Pencil, ChevronsRight, Database } from 'lucide-react'
+import { REGION_DEFINITIONS } from '@/lib/regions'
+
+const ALL_METRO_CODES = new Set([
+  ...REGION_DEFINITIONS.DFW,
+  ...REGION_DEFINITIONS.Houston,
+  ...REGION_DEFINITIONS.Austin,
+  ...REGION_DEFINITIONS['San Antonio'],
+  ...REGION_DEFINITIONS['El Paso'],
+])
 
 // NULL-safe non-chain filter: category IS NULL (independent leads) OR category != 'corporate_chain'
 // Must use this form — .neq() silently excludes NULL rows in PostgreSQL.
@@ -122,6 +131,52 @@ export default async function DashboardPage() {
 
     db.from('import_runs').select('*').order('started_at', { ascending: false }).limit(1),
   ])
+
+  // ── Diagnostics: statewide DB counts + region callable breakdown ────────────
+  const [
+    { count: totalAllLeads },
+    { count: totalWithPhone },
+    { count: totalWithoutPhone },
+    { count: totalWithPermitPhone },
+    { data: callableCountyRows },
+    { data: lastSiftLog },
+  ] = await Promise.all([
+    db.from('leads').select('*', { count: 'exact', head: true }),
+    db.from('leads').select('*', { count: 'exact', head: true })
+      .or('permit_phone.not.is.null,primary_phone.not.is.null'),
+    db.from('leads').select('*', { count: 'exact', head: true })
+      .is('permit_phone', null).is('primary_phone', null),
+    db.from('leads').select('*', { count: 'exact', head: true })
+      .not('permit_phone', 'is', null),
+    db.from('leads')
+      .select('outlet_county_code')
+      .or('permit_phone.not.is.null,primary_phone.not.is.null')
+      .not('outlet_county_code', 'is', null),
+    db.from('sift_import_log')
+      .select('filename, status, records_parsed, leads_matched, phones_added, phones_skipped, imported_at')
+      .order('imported_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ])
+
+  // Per-region callable counts
+  const callableByCounty = new Map<string, number>()
+  for (const row of (callableCountyRows ?? []) as { outlet_county_code: string }[]) {
+    if (!row.outlet_county_code) continue
+    callableByCounty.set(row.outlet_county_code, (callableByCounty.get(row.outlet_county_code) ?? 0) + 1)
+  }
+  function sumForCodes(codes: string[]): number {
+    return codes.reduce((sum, c) => sum + (callableByCounty.get(c) ?? 0), 0)
+  }
+  const otherTexasCodes = [...callableByCounty.keys()].filter(c => !ALL_METRO_CODES.has(c))
+  const regionCallable = {
+    DFW:           sumForCodes(REGION_DEFINITIONS.DFW),
+    Houston:       sumForCodes(REGION_DEFINITIONS.Houston),
+    Austin:        sumForCodes(REGION_DEFINITIONS.Austin),
+    'San Antonio': sumForCodes(REGION_DEFINITIONS['San Antonio']),
+    'El Paso':     sumForCodes(REGION_DEFINITIONS['El Paso']),
+    'Other Texas': sumForCodes(otherTexasCodes),
+  }
 
   // Merge callable leads with hot-no-phone fallback if fewer than 10 callable leads
   const callableIds = new Set((callableLeads ?? []).map(l => l.id))
@@ -360,6 +415,74 @@ export default async function DashboardPage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* ── Texas Database Diagnostics ── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Database size={16} className="text-blue-500" />
+          <h2 className="font-semibold text-gray-900">Texas Database</h2>
+        </div>
+
+        {/* Overall counts */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+          {[
+            { label: 'Total businesses', value: (totalAllLeads ?? 0).toLocaleString() },
+            { label: 'With phone', value: (totalWithPhone ?? 0).toLocaleString(), highlight: true },
+            { label: 'No phone', value: (totalWithoutPhone ?? 0).toLocaleString() },
+            { label: 'Permit phone', value: (totalWithPermitPhone ?? 0).toLocaleString() },
+          ].map(s => (
+            <div key={s.label} className="text-center bg-gray-50 rounded-xl p-3">
+              <p className={`text-xl font-bold ${s.highlight ? 'text-blue-600' : 'text-gray-800'}`}>{s.value}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{s.label}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Region callable counts */}
+        <div className="mb-4">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Callable leads by region</p>
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+            {(Object.entries(regionCallable) as [string, number][]).map(([region, count]) => (
+              <Link
+                key={region}
+                href={`/leads?region=${encodeURIComponent(region)}&status=new`}
+                className="text-center bg-blue-50 hover:bg-blue-100 rounded-lg p-2 transition-colors"
+              >
+                <p className="text-lg font-bold text-blue-700">{count.toLocaleString()}</p>
+                <p className="text-[10px] text-blue-600 leading-tight">{region}</p>
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        {/* Last SIFT import */}
+        {lastSiftLog && (
+          <div className="border-t border-gray-100 pt-4">
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Last SIFT phone import</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: 'File', value: lastSiftLog.filename?.replace(/^.*\//, '') ?? '—' },
+                { label: 'Rows parsed', value: (lastSiftLog.records_parsed ?? 0).toLocaleString() },
+                { label: 'Leads matched', value: (lastSiftLog.leads_matched ?? 0).toLocaleString() },
+                { label: 'Phones added', value: (lastSiftLog.phones_added ?? 0).toLocaleString(), highlight: true },
+              ].map(s => (
+                <div key={s.label} className="text-center bg-gray-50 rounded-xl p-3">
+                  <p className={`text-base font-bold truncate ${s.highlight ? 'text-green-600' : 'text-gray-800'}`}>{s.value}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{s.label}</p>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-gray-400 mt-2">
+              Imported {new Date(lastSiftLog.imported_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+              {(lastSiftLog.leads_matched ?? 0) < (lastSiftLog.records_parsed ?? 0) && (
+                <span className="ml-2 text-amber-600 font-medium">
+                  ⚠ {((lastSiftLog.records_parsed ?? 0) - (lastSiftLog.leads_matched ?? 0)).toLocaleString()} SIFT rows unmatched — run &quot;Import Texas Leads&quot; to pull statewide permit records, then re-upload the SIFT file.
+                </span>
+              )}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   )

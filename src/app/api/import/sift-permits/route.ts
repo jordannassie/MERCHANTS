@@ -306,6 +306,11 @@ function exactMatchDiagnostic({
     }
   }
 
-  parts.push('This file covers all of Texas — leads outside your DFW territory will not match.')
+  if (taxpayerNotFound > 0) {
+    parts.push(
+      `Tip: Run "Import Texas Leads" first to ensure statewide permit records exist in the ` +
+      `database, then re-upload this SIFT file to match phones against the full statewide set.`
+    )
+  }
   return parts.join(' ')
 }
