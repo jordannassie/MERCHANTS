@@ -66,7 +66,7 @@ export default async function DashboardPage({
   searchParams: Promise<Record<string, string | undefined>>
 }) {
   const sp     = await searchParams
-  const region = (REGIONS.includes(sp.region as Region) ? sp.region : 'DFW') as Region
+  const region = (REGIONS.includes(sp.region as Region) ? sp.region : 'All Texas') as Region
 
   // Counties for this region — empty array = All Texas (no county filter)
   const counties = region === 'All Texas' ? [] : getRegionCounties(region)
@@ -140,7 +140,7 @@ export default async function DashboardPage({
           return (
             <Link
               key={r}
-              href={r === 'DFW' ? '/dashboard' : `/dashboard?region=${encodeURIComponent(r)}`}
+              href={r === 'All Texas' ? '/dashboard' : `/dashboard?region=${encodeURIComponent(r)}`}
               className={`text-sm px-3 py-1.5 rounded-lg border font-medium transition-colors ${
                 active
                   ? 'bg-blue-600 text-white border-blue-600'

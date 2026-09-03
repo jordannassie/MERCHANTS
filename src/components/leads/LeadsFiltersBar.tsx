@@ -76,7 +76,9 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
       if (next.missingWebsite)    params.set('missingWebsite', 'true')
       if (next.enriched)          params.set('enriched', 'true')
       if (next.needsReview)       params.set('needsReview', 'true')
-      if ((next.hideCorporateChains as boolean) === false) params.set('showChains', 'true')
+      // hideCorporateChains is opt-in now (default false = show all leads)
+      // Only write the param when hiding chains is explicitly enabled
+      if ((next.hideCorporateChains as boolean) === true) params.set('showChains', 'false')
       if (next.sort && next.sort !== 'score') params.set('sort', next.sort as string)
       if (next.order && next.order !== 'desc') params.set('order', next.order as string)
 

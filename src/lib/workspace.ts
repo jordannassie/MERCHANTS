@@ -25,15 +25,28 @@ export async function ensureWorkspaceTerritory() {
     .limit(1)
     .maybeSingle()
 
-  if (existing) return existing
+  if (existing) {
+    // Auto-upgrade the saved-view region from the old system default ('DFW')
+    // to 'All Texas' — this only fires when the territory still has the
+    // original auto-created value, not a value the user explicitly chose.
+    if (existing.region === 'DFW') {
+      await supabase
+        .from('territories')
+        .update({ region: 'All Texas' })
+        .eq('id', existing.id)
+      return { ...existing, region: 'All Texas' }
+    }
+    return existing
+  }
 
   const { data: created, error } = await supabase
     .from('territories')
     .insert({
-      name: 'Dallas–Fort Worth',
+      name: 'All Texas',
       county_codes: DEFAULT_DFW_COUNTY_CODES,
-      days_to_import: 14,
+      days_to_import: 30,
       is_active: true,
+      region: 'All Texas',
     })
     .select()
     .single()

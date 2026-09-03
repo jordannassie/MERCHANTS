@@ -34,7 +34,9 @@ export default async function LeadsPage({ searchParams }: PageProps) {
   const from = (page - 1) * LEADS_PER_PAGE
   const to   = from + LEADS_PER_PAGE - 1
 
-  const hideCorporateChains = sp.showChains !== 'true'
+  // hideCorporateChains is NOT a default — must be explicitly opted-in via ?showChains=false
+  // Keeping it as a hidden default caused the Leads count to silently differ from Imports
+  const hideCorporateChains = sp.showChains === 'false'
   const hasPhone = sp.hasPhone !== 'false'
 
   const filters: LeadsFilters = {
@@ -53,7 +55,7 @@ export default async function LeadsPage({ searchParams }: PageProps) {
     starred:           sp.starred === 'true',
     hasPhone,
     missingPhone:      sp.missingPhone === 'true',
-    region:            sp.region || '',
+    region:            sp.region || 'All Texas',
     hasWebsite:        sp.hasWebsite === 'true',
     missingWebsite:    sp.missingWebsite === 'true',
     enriched:          sp.enriched === 'true',
@@ -68,7 +70,9 @@ export default async function LeadsPage({ searchParams }: PageProps) {
   const { data: territories } = await supabase
     .from('territories').select('region,days_to_import').eq('is_active', true).limit(1)
   const activeTerritory = territories?.[0] ?? null
-  const regionParam = filters.region || (activeTerritory?.region ?? 'DFW')
+  // Default region is 'All Texas' (already set in filters above).
+  // Explicit URL param or territory saved view override it, but 'All Texas' is the baseline.
+  const regionParam = filters.region || activeTerritory?.region || 'All Texas'
 
   // "Other Texas" — compute from static county map (no DB scan)
   let regionCounties: string[]
@@ -185,6 +189,13 @@ export default async function LeadsPage({ searchParams }: PageProps) {
   const { count: totalAll } = await supabase
     .from('leads').select('*', { count: 'exact', head: true })
 
+  // ── Total callable All Texas (all statuses) — matches Imports diagnostics logic ──
+  // permit_phone OR primary_phone — no region/status/chain restriction
+  const { count: totalCallableAllTX } = await supabase
+    .from('leads')
+    .select('*', { count: 'exact', head: true })
+    .or('permit_phone.not.is.null,primary_phone.not.is.null')
+
   const hasAnyLeads = totalCount > 0 || Object.values({
     search: filters.search, status: filters.status,
     priority: filters.priority, county: filters.county,
@@ -195,12 +206,29 @@ export default async function LeadsPage({ searchParams }: PageProps) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Leads</h1>
-          {totalCount > 0 && hasAnyLeads && (
-            <p className="text-sm text-gray-500 mt-0.5">
-              {totalCount.toLocaleString()}{' '}
-              {filters.hasPhone ? 'callable lead' : 'lead'}{totalCount !== 1 ? 's' : ''}
-            </p>
-          )}
+          {/* Dual count: total callable statewide vs current filtered queue */}
+          <div className="mt-0.5 space-y-0.5">
+            {(totalCallableAllTX ?? 0) > 0 && (
+              <p className="text-sm text-gray-500">
+                <span className="font-semibold text-gray-700">{(totalCallableAllTX ?? 0).toLocaleString()}</span>
+                {' '}total callable in Texas
+              </p>
+            )}
+            {hasAnyLeads && (
+              <p className="text-sm text-gray-400">
+                <span className="font-semibold text-gray-600">{totalCount.toLocaleString()}</span>
+                {' '}in current queue
+                {filters.status && (filters.status as string) !== 'all' && (
+                  <span className="ml-1 text-gray-400">
+                    ({filters.status === 'new' ? 'New' : filters.status})
+                  </span>
+                )}
+                {filters.region && filters.region !== 'All Texas' && (
+                  <span className="ml-1 text-gray-400">· {filters.region}</span>
+                )}
+              </p>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <RefreshButton />
