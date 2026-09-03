@@ -31,6 +31,7 @@ export interface Territory {
   name: string
   county_codes: string[]
   days_to_import: number
+  region?: string
   is_active: boolean
   created_at: string
   updated_at: string

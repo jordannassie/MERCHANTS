@@ -12,6 +12,7 @@ interface Props { territory: Territory }
 export function TerritoryForm({ territory }: Props) {
   const router = useRouter()
   const [name, setName] = useState(territory.name)
+  const [region, setRegion] = useState<string>( (territory as any).region ?? 'DFW')
   const [countyCodes, setCountyCodes] = useState<string[]>(territory.county_codes)
   const [daysToImport, setDaysToImport] = useState(territory.days_to_import)
   const [loading, setLoading] = useState(false)
@@ -23,7 +24,7 @@ export function TerritoryForm({ territory }: Props) {
 
   async function save() {
     setLoading(true)
-    await updateTerritory(territory.id, { name, county_codes: countyCodes, days_to_import: daysToImport })
+    await updateTerritory(territory.id, { name, county_codes: countyCodes, days_to_import: daysToImport, region })
     setLoading(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
@@ -32,13 +33,27 @@ export function TerritoryForm({ territory }: Props) {
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <h2 className="font-medium text-gray-900 mb-4">Territory Settings</h2>
+      <h2 className="font-medium text-gray-900 mb-4">Saved View Settings</h2>
 
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Territory Name</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Saved View Name</label>
           <input type="text" value={name} onChange={e => setName(e.target.value)}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Default Region</label>
+          <select value={region} onChange={e => setRegion(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+            <option value="DFW">DFW</option>
+            <option value="Houston">Houston</option>
+            <option value="Austin">Austin</option>
+            <option value="San Antonio">San Antonio</option>
+            <option value="El Paso">El Paso</option>
+            <option value="All Texas">All Texas</option>
+            <option value="Other Texas">Other Texas</option>
+          </select>
+          <p className="text-xs text-gray-400 mt-1">This controls the default working area shown in the dashboard. It does not restrict statewide imports.</p>
         </div>
 
         <div>
@@ -55,25 +70,27 @@ export function TerritoryForm({ territory }: Props) {
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Counties ({countyCodes.length} selected)
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            {Object.entries(DFW_COUNTIES).map(([code, name]) => (
-              <label key={code} className="flex items-center gap-2 text-sm cursor-pointer">
-                <input type="checkbox" checked={countyCodes.includes(code)} onChange={() => toggleCounty(code)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                <span className="text-gray-700">{name}</span>
-                <span className="text-gray-400 text-xs">({code})</span>
-              </label>
-            ))}
+        {region === 'DFW' && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Counties ({countyCodes.length} selected)
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {Object.entries(DFW_COUNTIES).map(([code, name]) => (
+                <label key={code} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" checked={countyCodes.includes(code)} onChange={() => toggleCounty(code)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                  <span className="text-gray-700">{name}</span>
+                  <span className="text-gray-400 text-xs">({code})</span>
+                </label>
+              ))}
+            </div>
+            <p className="text-xs text-gray-400 mt-2">Hood (111) and Somervell (213) can be added here.</p>
           </div>
-          <p className="text-xs text-gray-400 mt-2">Hood (111) and Somervell (213) can be added here.</p>
-        </div>
+        )}
 
         <Button variant="primary" onClick={save} loading={loading}>
-          {saved ? '✓ Saved' : 'Save Territory'}
+          {saved ? '✓ Saved' : 'Save View'}
         </Button>
       </div>
     </div>
