@@ -13,9 +13,11 @@ const TEXAS_API = 'https://data.texas.gov/resource/jrea-zgmq.json'
 
 /**
  * Records per Socrata API page.
- * 5 000 keeps each page fast while minimising round-trips.
+ * 1 000 keeps each page well inside the Netlify function budget while
+ * minimising round-trips for the auto-loop.
+ * (Previous value of 5 000 caused N+1 UPDATE timeouts.)
  */
-const PAGE_SIZE = 5_000
+const PAGE_SIZE = 1_000
 
 /**
  * Wall-clock budget per invocation (ms).
@@ -24,6 +26,12 @@ const PAGE_SIZE = 5_000
  * so the caller can immediately resume.
  */
 const BUDGET_MS = 18_000
+
+/**
+ * Batch size for DB upsert/insert operations.
+ * Keeps each Supabase call small and predictable.
+ */
+const DB_BATCH = 500
 
 const TEXAS_FIELDS = [
   'taxpayer_number', 'taxpayer_name', 'taxpayer_address', 'taxpayer_city',
@@ -139,7 +147,6 @@ export async function POST(req: NextRequest) {
     while (true) {
       // Check time budget BEFORE fetching next page
       if (Date.now() > deadline) {
-        // currentOffset is the next page we haven't fetched yet — return it as checkpoint
         break
       }
 
@@ -162,7 +169,9 @@ export async function POST(req: NextRequest) {
       const page: Record<string, string>[] = await resp.json()
       fetched += page.length
 
-      // Batch-lookup existing leads for this page to avoid N individual queries
+      // ── Lookup existing leads for this page ────────────────────────────────
+      // Batch by taxpayer_number in chunks of 200 to stay well inside
+      // Supabase's query size limits.
       const taxpayerOutletPairs = page
         .map(raw => ({
           taxpayerNum: normalize(raw.taxpayer_number),
@@ -175,9 +184,9 @@ export async function POST(req: NextRequest) {
       interface ExistingLead { id: string; taxpayer_number: string; outlet_number: string | null; status: string; score: number; priority: string }
       const existingLeads: ExistingLead[] = []
 
-      const CHUNK = 200
-      for (let i = 0; i < uniqueTaxpayers.length; i += CHUNK) {
-        const chunk = uniqueTaxpayers.slice(i, i + CHUNK)
+      const LOOKUP_CHUNK = 200
+      for (let i = 0; i < uniqueTaxpayers.length; i += LOOKUP_CHUNK) {
+        const chunk = uniqueTaxpayers.slice(i, i + LOOKUP_CHUNK)
         const { data } = await db
           .from('leads')
           .select('id, taxpayer_number, outlet_number, status, score, priority')
@@ -192,18 +201,30 @@ export async function POST(req: NextRequest) {
         existingMap.set(`${lead.taxpayer_number}|${lead.outlet_number}`, lead)
       }
 
+      // ── Classify records as new inserts vs existing updates ───────────────
+      // New records: inserted with status='new', starred=false.
+      // Existing records: upserted — only source + score fields are touched;
+      //   CRM fields (status, starred, primary_phone, etc.) are NOT in the
+      //   payload and are therefore preserved by PostgreSQL's ON CONFLICT DO UPDATE.
+      const ADVANCED_STATUSES = new Set(['connected', 'follow_up', 'appointment', 'won'])
+
       const toInsert: Record<string, unknown>[] = []
+      const toUpdate: Record<string, unknown>[] = []
 
       for (const raw of page) {
-        const taxpayerNum  = normalize(raw.taxpayer_number)
-        const outletNum    = normalize(raw.outlet_number)
-        const permitDate   = parseDate(raw.outlet_permit_issue_date)
-        const outletCounty = normalize(raw.outlet_county_code)
+        const taxpayerNum = normalize(raw.taxpayer_number)
+        const outletNum   = normalize(raw.outlet_number)
+        const permitDate  = parseDate(raw.outlet_permit_issue_date)
 
-        if (!taxpayerNum || !outletNum || !permitDate || !outletCounty) {
+        // taxpayer, outlet, and permit date are hard requirements
+        if (!taxpayerNum || !outletNum || !permitDate) {
           skipped++
           continue
         }
+
+        // outlet_county_code may be null/blank for some permit types —
+        // do NOT skip; store null and let the lead through.
+        const outletCounty = normalize(raw.outlet_county_code)
 
         const firstSalesDate = parseDate(raw.outlet_first_sales_date)
         const outletName     = normalize(raw.outlet_name)
@@ -249,22 +270,19 @@ export async function POST(req: NextRequest) {
         const existing = existingMap.get(key)
 
         if (existing) {
-          const advanced = new Set(['connected', 'follow_up', 'appointment', 'won'])
-          const { error: upErr } = await db
-            .from('leads')
-            .update({
-              ...sourceFields,
-              display_name:  displayName,
-              score:         advanced.has(existing.status) ? existing.score    : scored.score,
-              priority:      advanced.has(existing.status) ? existing.priority : scored.priority,
-              score_reasons: scored.reasons,
-              category:      scored.category ?? undefined,
-            })
-            .eq('id', existing.id)
-
-          if (upErr) { skipped++; continue }
-          updated++
+          // Update existing lead — preserve CRM fields by omitting them
+          // from the payload. Score/priority preserved for advanced leads.
+          toUpdate.push({
+            source:        'texas_sales_tax_permits',
+            ...sourceFields,
+            display_name:  displayName,
+            score:         ADVANCED_STATUSES.has(existing.status) ? existing.score    : scored.score,
+            priority:      ADVANCED_STATUSES.has(existing.status) ? existing.priority : scored.priority,
+            score_reasons: scored.reasons,
+            category:      scored.category ?? undefined,
+          })
         } else {
+          // Brand-new record
           toInsert.push({
             territory_id:  territory.id,
             source:        'texas_sales_tax_permits',
@@ -280,10 +298,10 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Bulk insert new records in sub-batches of 200
-      const INSERT_BATCH = 200
-      for (let i = 0; i < toInsert.length; i += INSERT_BATCH) {
-        const batch = toInsert.slice(i, i + INSERT_BATCH)
+      // ── Bulk INSERT new records ────────────────────────────────────────────
+      for (let i = 0; i < toInsert.length; i += DB_BATCH) {
+        if (Date.now() > deadline) break
+        const batch = toInsert.slice(i, i + DB_BATCH)
         const { error: insErr, data: insData } = await db
           .from('leads')
           .insert(batch)
@@ -293,11 +311,33 @@ export async function POST(req: NextRequest) {
           if (insErr.code === '23505') {
             duplicates += batch.length
           } else {
-            console.error('[import/manual] batch insert error:', insErr.message)
+            console.error('[import/manual] batch insert error:', insErr.message, insErr.code)
             skipped += batch.length
           }
         } else {
           inserted += insData?.length ?? batch.length
+        }
+      }
+
+      // ── Bulk UPSERT existing records (source fields only — CRM preserved) ─
+      // Uses ON CONFLICT (source, taxpayer_number, outlet_number) DO UPDATE.
+      // Columns NOT in the payload (status, starred, primary_phone, etc.)
+      // are untouched by PostgreSQL's partial-column upsert semantics.
+      for (let i = 0; i < toUpdate.length; i += DB_BATCH) {
+        if (Date.now() > deadline) break
+        const batch = toUpdate.slice(i, i + DB_BATCH)
+        const { error: upErr } = await db
+          .from('leads')
+          .upsert(batch, {
+            onConflict:      'source,taxpayer_number,outlet_number',
+            ignoreDuplicates: false,
+          })
+
+        if (upErr) {
+          console.error('[import/manual] batch upsert error:', upErr.message, upErr.code)
+          skipped += batch.length
+        } else {
+          updated += batch.length
         }
       }
 
