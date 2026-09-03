@@ -72,6 +72,7 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
 
   // Quick region buttons
   const REGIONS = ['DFW', 'Houston', 'Austin', 'San Antonio', 'All Texas'] as const
+  const [showAdvanced, setShowAdvanced] = useState(false)
 
   // Search: update local state immediately (keeps focus), debounce URL update
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -132,8 +133,8 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
         ))}
       </div>
 
-      {/* Filters row */}
-      <div className="flex flex-wrap gap-2">
+      {/* Top filters: status + optional county/city */}
+      <div className="flex flex-wrap gap-2 items-center">
         <select
           value={filters.status || ''}
           onChange={e => set({ status: e.target.value as LeadsFilters['status'] })}
@@ -143,18 +144,6 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
           <option value="">All statuses</option>
           {LEAD_STATUSES.map(s => (
             <option key={s.value} value={s.value}>{s.label}</option>
-          ))}
-        </select>
-
-        <select
-          value={filters.priority || ''}
-          onChange={e => set({ priority: e.target.value as LeadsFilters['priority'] })}
-          className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-          aria-label="Filter by priority"
-        >
-          <option value="">All priorities</option>
-          {LEAD_PRIORITIES.map(p => (
-            <option key={p.value} value={p.value}>{p.label}</option>
           ))}
         </select>
 
@@ -181,109 +170,48 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
           aria-label="Filter by city"
         />
 
-        <select
-          value={filters.sort || 'score'}
-          onChange={e => set({ sort: e.target.value as LeadsFilters['sort'] })}
-          className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-          aria-label="Sort by"
-        >
-          <option value="score">Sort: Score</option>
-          <option value="permit_issue_date">Sort: Permit Date</option>
-          <option value="first_sales_date">Sort: First Sales</option>
-          <option value="next_follow_up_at">Sort: Follow-up</option>
-          <option value="created_at">Sort: Added</option>
-        </select>
-      </div>
-
-      {/* Permit date range */}
-      <div className="flex flex-wrap gap-2 items-center">
-        <span className="text-xs text-gray-500">Permit date:</span>
-        <input
-          type="date"
-          value={filters.permitDateFrom || ''}
-          onChange={e => set({ permitDateFrom: e.target.value })}
-          className="text-sm border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          aria-label="Permit date from"
-        />
-        <span className="text-xs text-gray-400">to</span>
-        <input
-          type="date"
-          value={filters.permitDateTo || ''}
-          onChange={e => set({ permitDateTo: e.target.value })}
-          className="text-sm border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          aria-label="Permit date to"
-        />
-
-        <span className="text-xs text-gray-500 ml-2">First sales:</span>
-        <input
-          type="date"
-          value={filters.firstSalesDateFrom || ''}
-          onChange={e => set({ firstSalesDateFrom: e.target.value })}
-          className="text-sm border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          aria-label="First sales from"
-        />
-        <span className="text-xs text-gray-400">to</span>
-        <input
-          type="date"
-          value={filters.firstSalesDateTo || ''}
-          onChange={e => set({ firstSalesDateTo: e.target.value })}
-          className="text-sm border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          aria-label="First sales to"
-        />
-      </div>
-
-      {/* Toggles */}
-      <div className="flex flex-wrap gap-2">
-        {[
-          { key: 'openingSoon' as const, label: 'Opening soon' },
-          { key: 'neverContacted' as const, label: 'Never contacted' },
-          { key: 'followUpDue' as const, label: 'Follow-up due' },
-          { key: 'starred' as const, label: '⭐ Starred' },
-          { key: 'hasPhone' as const, label: '📞 Has phone' },
-          { key: 'missingPhone' as const, label: 'Missing phone' },
-          { key: 'hasWebsite' as const, label: '🌐 Has website' },
-          { key: 'missingWebsite' as const, label: 'Missing website' },
-          { key: 'enriched' as const, label: '✓ Contact found' },
-          { key: 'needsReview' as const, label: '⚑ Needs review' },
-        ].map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => set({ [key]: !filters[key] })}
-            className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-              filters[key]
-                ? 'bg-blue-600 text-white border-blue-600'
-                : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-
-        {/* Corporate chain toggle — chains are hidden by default */}
-        <button
-          onClick={() => set({ hideCorporateChains: !filters.hideCorporateChains })}
-          className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-            filters.hideCorporateChains === false
-              ? 'bg-amber-500 text-white border-amber-500'
-              : 'bg-white text-gray-600 border-gray-300 hover:border-amber-400'
-          }`}
-          title="Corporate chains (Chipotle, McDonald's, etc.) are hidden by default — payment decisions are made centrally"
-        >
-          {filters.hideCorporateChains === false ? '🏢 Chains visible' : '🏢 Show chains'}
+        <button onClick={() => setShowAdvanced(s => !s)} className="text-sm ml-1 text-gray-600 px-3 py-1 rounded border border-gray-200">
+          {showAdvanced ? 'Hide filters' : 'More Filters'}
         </button>
-
-        {active && (
-          <button
-            onClick={() => {
-              clearTimeout(debounceRef.current)
-              router.push(pathname)
-            }}
-            className="text-xs px-2.5 py-1 rounded-full border border-gray-300 text-gray-500 hover:bg-gray-100 flex items-center gap-1"
-          >
-            <X size={10} /> Clear filters
-          </button>
-        )}
       </div>
+
+      {/* Advanced filters hidden by default */}
+      {showAdvanced && (
+        <>
+          <div className="flex flex-wrap gap-2 items-center mt-2">
+            <span className="text-xs text-gray-500">Permit date:</span>
+            <input type="date" value={filters.permitDateFrom || ''} onChange={e => set({ permitDateFrom: e.target.value })} className="text-sm border border-gray-200 rounded-lg px-2 py-1" />
+            <span className="text-xs text-gray-400">to</span>
+            <input type="date" value={filters.permitDateTo || ''} onChange={e => set({ permitDateTo: e.target.value })} className="text-sm border border-gray-200 rounded-lg px-2 py-1" />
+            <span className="text-xs text-gray-500 ml-2">First sales:</span>
+            <input type="date" value={filters.firstSalesDateFrom || ''} onChange={e => set({ firstSalesDateFrom: e.target.value })} className="text-sm border border-gray-200 rounded-lg px-2 py-1" />
+            <span className="text-xs text-gray-400">to</span>
+            <input type="date" value={filters.firstSalesDateTo || ''} onChange={e => set({ firstSalesDateTo: e.target.value })} className="text-sm border border-gray-200 rounded-lg px-2 py-1" />
+          </div>
+
+          <div className="flex flex-wrap gap-2 mt-2">
+            {[
+              { key: 'openingSoon' as const, label: 'Opening soon' },
+              { key: 'neverContacted' as const, label: 'Never contacted' },
+              { key: 'followUpDue' as const, label: 'Follow-up due' },
+              { key: 'starred' as const, label: '⭐ Starred' },
+              { key: 'hasPhone' as const, label: '📞 Has phone' },
+              { key: 'missingPhone' as const, label: 'Missing phone' },
+              { key: 'hasWebsite' as const, label: '🌐 Has website' },
+              { key: 'missingWebsite' as const, label: 'Missing website' },
+              { key: 'enriched' as const, label: '✓ Contact found' },
+              { key: 'needsReview' as const, label: '⚑ Needs review' },
+            ].map(({ key, label }) => (
+              <button key={key} onClick={() => set({ [key]: !filters[key] })} className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${filters[key] ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'}`}>{label}</button>
+            ))}
+            <button onClick={() => set({ hideCorporateChains: !filters.hideCorporateChains })} className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${filters.hideCorporateChains === false ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-gray-600 border-gray-300 hover:border-amber-400'}`} title="Corporate chains"> {filters.hideCorporateChains === false ? '🏢 Chains visible' : '🏢 Show chains'}</button>
+          </div>
+
+          <div className="mt-2">
+            <button onClick={() => { clearTimeout(debounceRef.current); router.push(pathname) }} className="text-xs px-2.5 py-1 rounded-full border border-gray-300 text-gray-500 hover:bg-gray-100 flex items-center gap-1"><X size={10}/> Clear filters</button>
+          </div>
+        </>
+      )}
     </div>
   )
 }

@@ -11,7 +11,7 @@ import {
 } from 'lucide-react'
 import { LEAD_STATUSES } from '@/lib/constants'
 import type { LeadStatus } from '@/lib/types'
-import { EnrichmentBadge } from './EnrichmentBadge'
+// Enrichment UI removed from default simplified outreach view
 
 interface Props { leads: Lead[] }
 
@@ -29,7 +29,7 @@ const ALL_COLUMNS: { key: ColKey; label: string; always?: boolean }[] = [
   { key: 'action',     label: 'Action',      always: true },
 ]
 
-const DEFAULT_COLS: ColKey[] = ['score', 'business', 'city', 'category', 'permitDate', 'firstSales', 'phone', 'status', 'action']
+const DEFAULT_COLS: ColKey[] = ['business', 'phone', 'city', 'permitDate', 'firstSales', 'status', 'action']
 const MAX_SELECTION = 25
 
 interface BulkResult {
@@ -254,7 +254,6 @@ export function LeadsTable({ leads }: Props) {
                         {col.key === 'business' && (
                           <div>
                             <div className="flex items-center gap-1.5 min-w-0">
-                              {lead.starred && <Star size={11} className="text-yellow-400 fill-yellow-400 shrink-0" />}
                               <Link
                                 href={`/leads/${lead.id}`}
                                 className="font-medium text-gray-900 hover:text-blue-600 leading-snug line-clamp-2 break-words"
@@ -263,11 +262,7 @@ export function LeadsTable({ leads }: Props) {
                                 {name}
                               </Link>
                             </div>
-                            <EnrichmentBadge
-                              status={lead.enrichment_status}
-                              confidence={(lead as Lead & { contact_match_confidence?: number | null }).contact_match_confidence}
-                              className="mt-1"
-                            />
+                            {/* simplified outreach view: enrichment badge hidden */}
                           </div>
                         )}
                         {col.key === 'city' && (
@@ -376,22 +371,12 @@ export function LeadsTable({ leads }: Props) {
                         {name}
                       </Link>
                     </div>
-                    <p className="text-xs text-gray-500 mt-0.5 flex flex-wrap items-center gap-1">
-                      {lead.outlet_city}
-                      {lead.category === 'corporate_chain' && (
-                        <span className="inline-flex items-center gap-0.5 px-1 py-0 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200">
-                          🏢 Chain
-                        </span>
-                      )}
-                    </p>
+                    <p className="text-sm text-gray-600 mt-0.5">{lead.outlet_city}{lead.outlet_county_code ? `, ${lead.outlet_county_code}` : ''}</p>
                     {lead.first_sales_date && (
                       <p className="text-xs text-gray-400 mt-0.5">Opens {fmtDate(lead.first_sales_date)}</p>
                     )}
                   </div>
-                  <div className="flex flex-col items-end gap-1.5 shrink-0">
-                    <ScoreCell score={lead.score} priority={lead.priority} size="sm" />
-                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${PRIORITY_COLORS[lead.priority]}`}>{lead.priority}</span>
-                  </div>
+                  {/* priority/score removed from simplified outreach row */}
                 </div>
               </div>
               <div className="flex items-center justify-between mt-3 pt-2 border-t border-gray-50 gap-2">

@@ -191,9 +191,7 @@ export default async function LeadsPage({ searchParams }: PageProps) {
 
       <LeadsFiltersBar filters={filters} counties={counties} />
 
-      <div className="mb-4">
-        <BulkEnrichBar />
-      </div>
+      {/* Bulk enrichment hidden in simplified outreach mode */}
 
       {leads && leads.length > 0 ? (
         <>
