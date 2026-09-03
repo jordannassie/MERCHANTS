@@ -71,20 +71,20 @@ export default function LandingClient() {
     <div className="min-h-screen bg-white text-slate-900 font-sans">
 
       {/* ─── UTILITY TOP BAR ────────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-50 bg-slate-800 text-slate-300 text-xs">
+      <div className="sticky top-0 z-50 bg-gray-100 text-gray-600 text-xs border-b border-gray-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-8 flex items-center justify-end gap-3">
           <button
             onClick={() => scrollTo('#contact')}
-            className="flex items-center gap-1 hover:text-white transition-colors"
+            className="flex items-center gap-1 hover:text-gray-900 transition-colors"
           >
             <LifeBuoy size={11} /> Support Request
           </button>
-          <span className="text-slate-600">|</span>
+          <span className="text-gray-300">|</span>
           <a
             href="https://www.mystorecentral.com/auth/login"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1 hover:text-white transition-colors"
+            className="flex items-center gap-1 hover:text-gray-900 transition-colors"
           >
             <LogIn size={11} /> Customer Login
           </a>
