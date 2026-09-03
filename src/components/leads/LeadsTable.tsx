@@ -287,36 +287,57 @@ export function LeadsTable({ leads }: Props) {
                             {lead.first_sales_date ? fmtDate(lead.first_sales_date) : '—'}
                           </span>
                         )}
-                        {col.key === 'phone' && (() => {
+                    {col.key === 'phone' && (() => {
                           const phone = lead.permit_phone ?? lead.primary_phone
                           if (!phone) return <span className="text-gray-300 text-xs">—</span>
                           const normalized = phone.replace(/\D/g, '')
                           return (
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={async () => {
-                                  try {
-                                    await navigator.clipboard.writeText(normalized)
-                                    const el = document.createElement('span')
-                                    el.textContent = 'Copied ✓'
-                                    el.className = 'ml-2 text-xs text-green-600'
-                                    const parent = document.getElementById(`phone-copy-${lead.id}`)
-                                    if (parent) {
-                                      parent.appendChild(el)
-                                      setTimeout(() => el.remove(), 1200)
-                                    }
-                                  } catch {}
-                                }}
-                                id={`phone-copy-${lead.id}`}
-                                className="text-blue-600 hover:underline flex items-center gap-1 text-xs whitespace-nowrap"
-                                title="Copy phone"
-                              >
-                                <Phone size={11} />{fmtPhone(phone)}
-                                {lead.permit_phone && !lead.primary_phone && (
-                                  <span className="text-[10px] text-gray-400">permit</span>
-                                )}
-                              </button>
-                            </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(normalized)
+                                const el = document.createElement('span')
+                                el.textContent = 'Copied ✓'
+                                el.className = 'ml-2 text-xs text-green-600'
+                                const parent = document.getElementById(`phone-copy-${lead.id}`)
+                                if (parent) {
+                                  parent.appendChild(el)
+                                  setTimeout(() => el.remove(), 1200)
+                                }
+                              } catch {}
+                            }}
+                            id={`phone-copy-${lead.id}`}
+                            className="text-blue-600 font-medium text-sm px-2 py-1 rounded-md border border-gray-200"
+                            title="Copy phone"
+                          >
+                            {fmtPhone(phone)}
+                          </button>
+                          <a href={`tel:${phone}`} className="text-xs text-gray-500 px-2">Call</a>
+                          <button
+                            onClick={async () => {
+                              const business = lead.display_name || lead.outlet_name || ''
+                              const sms = business
+                                ? `Hi, this is Jordan with Process.Direct. I saw that ${business} is getting set up in Texas. Have you already gotten your card processing/POS set up?`
+                                : `Hi, this is Jordan with Process.Direct. I saw that your business is getting set up in Texas. Have you already gotten your card processing/POS set up?`
+                              try {
+                                await navigator.clipboard.writeText(sms)
+                                const el = document.createElement('span')
+                                el.textContent = 'Copied ✓'
+                                el.className = 'ml-2 text-xs text-green-600'
+                                const parent = document.getElementById(`copy-sms-${lead.id}`)
+                                if (parent) {
+                                  parent.appendChild(el)
+                                  setTimeout(() => el.remove(), 1200)
+                                }
+                              } catch {}
+                            }}
+                            id={`copy-sms-${lead.id}`}
+                            className="text-xs bg-gray-100 px-2 py-1 rounded-md"
+                          >
+                            Copy SMS
+                          </button>
+                        </div>
                           )
                         })()}
                         {col.key === 'status' && (
@@ -391,10 +412,36 @@ export function LeadsTable({ leads }: Props) {
                     if (res.ok) {
                       const currentStatus = (typeof window !== 'undefined') ? new URLSearchParams(window.location.search).get('status') || 'new' : 'new'
                               if (newStatus !== currentStatus) {
-                        setLeadsList(prev => prev.filter(p => p.id !== lead.id))
-                      } else {
+                                // Auto-advance: remove the row and keep scroll position, then highlight next row
+                                setLeadsList(prev => {
+                                  const idx = prev.findIndex(p => p.id === lead.id)
+                                  const next = prev.filter(p => p.id !== lead.id)
+                                  // schedule DOM highlight in next tick
+                                  setTimeout(() => {
+                                    try {
+                                      const table = document.querySelector('table.w-full')
+                                      if (table) {
+                                        const tbody = table.querySelector('tbody')
+                                        if (tbody) {
+                                          // restore scroll top to previous container if necessary (no jump)
+                                          // highlight the row that took this row's position
+                                          const rows = Array.from(tbody.querySelectorAll('tr'))
+                                          const target = rows[idx] || rows[idx - 1] || rows[0]
+                                          if (target) {
+                                            target.classList.add('ring-2', 'ring-blue-300')
+                                            setTimeout(() => target.classList.remove('ring-2', 'ring-blue-300'), 900)
+                                            // ensure the target is in view but do not jump to top
+                                            target.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+                                          }
+                                        }
+                                      }
+                                    } catch (e) { /* noop */ }
+                                  }, 100)
+                                  return next
+                                })
+                              } else {
                                 setLeadsList(prev => prev.map(p => p.id === lead.id ? { ...p, status: newStatus as LeadStatus } : p))
-                      }
+                              }
                     }
                   }} />
                   {(lead.permit_phone ?? lead.primary_phone) && (() => {
