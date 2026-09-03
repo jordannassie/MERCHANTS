@@ -234,18 +234,35 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const importedAt = new Date().toISOString()
   const source = `sift_auto:${filename}`
 
-  // Build list of rows that have valid phones
+  // ── 8a. Phone validation with fallback tracking ───────────────────────────
+  // row.phone is already the best available (outletPhone ?? taxpayerPhone) from parser.
+  // Track which source was used for the diagnostic report.
   interface ValidSiftRow { taxpayerNumber: string; outletNumber: string; normalizedPhone: string; rowNum: number }
-  let noPhone = 0, skipped = 0
+  let noValidPhone = 0, invalidFormat = 0
+  let usedOutletPhone = 0, usedTaxpayerFallback = 0
+  let totalValidOutletCol = 0, totalValidTaxpayerCol = 0
+
   const validRows: ValidSiftRow[] = []
   for (const row of rows) {
-    if (!row.phone) { noPhone++; continue }
+    // Independent column counts (for reporting, regardless of which is used as best)
+    if (normalizePhone(row.outletPhone))   totalValidOutletCol++
+    if (normalizePhone(row.taxpayerPhone)) totalValidTaxpayerCol++
+
+    if (!row.phone) { noValidPhone++; continue }
     const normalized = normalizePhone(row.phone)
-    if (!normalized) { skipped++; continue }
+    if (!normalized) { invalidFormat++; continue }
+
+    // Track which column supplied the best phone
+    if (normalizePhone(row.outletPhone)) usedOutletPhone++
+    else usedTaxpayerFallback++
+
     validRows.push({ taxpayerNumber: row.taxpayerNumber, outletNumber: row.outletNumber, normalizedPhone: normalized, rowNum: row.rowNum })
   }
 
-  // Batch-query DB leads by taxpayer_number chunks
+  const anyValidPhone = validRows.length   // rows that made it past phone validation
+  const noPhoneTotal  = noValidPhone + invalidFormat
+
+  // ── 8b. Batch-query DB leads by taxpayer_number ───────────────────────────
   interface LeadRecord { id: string; taxpayer_number: string; outlet_number: string | null; permit_phone: string | null }
   const uniqueTaxpayers = [...new Set(validRows.map(r => r.taxpayerNumber))]
   const allLeads: LeadRecord[] = []
@@ -268,32 +285,37 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     leadsByTaxpayer.set(lead.taxpayer_number, arr)
   }
 
-  // Match and save
-  let matched = 0, updated = 0
+  // ── 8c. Match and save ────────────────────────────────────────────────────
+  // Track match outcomes for the diagnostic report
+  let matched = 0, updated = 0, alreadySaved = 0
+  let taxpayerNotFound = 0, outletMismatch = 0, nonOutletRecord = 0
   const rowErrors: string[] = []
 
   for (const row of validRows) {
     const leads = leadsByTaxpayer.get(row.taxpayerNumber)
-    if (!leads?.length) continue
+    if (!leads?.length) { taxpayerNotFound++; continue }
 
     const exact = leads.find(l => normalizeOutletNumber(l.outlet_number) === row.outletNumber)
-    if (!exact) continue
+    if (!exact) {
+      if (row.outletNumber === '0') nonOutletRecord++
+      else outletMismatch++
+      continue
+    }
 
     matched++
-    if (exact.permit_phone === row.normalizedPhone) continue  // idempotent
+    if (exact.permit_phone === row.normalizedPhone) { alreadySaved++; continue }  // idempotent
 
     const { error: upErr } = await db
       .from('leads')
       .update({
-        permit_phone: row.normalizedPhone,
-        permit_phone_source: source,
+        permit_phone:             row.normalizedPhone,
+        permit_phone_source:      source,
         permit_phone_imported_at: importedAt,
       })
       .eq('id', exact.id)
 
     if (upErr) {
       rowErrors.push(`Row ${row.rowNum}: ${upErr.message}`)
-      skipped++
     } else {
       updated++
     }
@@ -303,31 +325,66 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const logEntry = {
     filename,
     file_path: latest.filePath,
-    status: 'completed',
+    status:    'completed',
     records_parsed: rows.length,
-    leads_matched: matched,
-    phones_added: updated,
-    phones_skipped: skipped + noPhone,
-    error_message: rowErrors.length ? rowErrors.slice(0, 5).join('; ') : null,
+    leads_matched:  matched,
+    phones_added:   updated,
+    phones_skipped: noPhoneTotal,
+    // Encode extended stats in error_message as JSON (no schema change needed)
+    error_message: JSON.stringify({
+      phoneSummary: {
+        totalRows:             rows.length,
+        validOutletPhones:     totalValidOutletCol,
+        validTaxpayerPhones:   totalValidTaxpayerCol,
+        rowsWithAnyPhone:      anyValidPhone,
+        rowsWithNoPhone:       noPhoneTotal,
+        usedOutletPhone,
+        usedTaxpayerFallback,
+      },
+      matchBreakdown: {
+        taxpayerNotFound,
+        outletMismatch,
+        nonOutletRecord,
+        alreadySaved,
+        errors: rowErrors.slice(0, 5),
+      },
+    }),
     imported_at: importedAt,
   }
 
   try {
-    await db
-      .from('sift_import_log')
-      .upsert(logEntry, { onConflict: 'filename' })
+    await db.from('sift_import_log').upsert(logEntry, { onConflict: 'filename' })
   } catch (e) { console.error('[sift-auto] log write failed:', e) }
 
   return NextResponse.json({
     filename,
     format,
+    phoneSummary: {
+      totalRows:             rows.length,
+      validOutletPhones:     totalValidOutletCol,
+      validTaxpayerPhones:   totalValidTaxpayerCol,
+      rowsWithAnyPhone:      anyValidPhone,
+      rowsWithNoPhone:       noPhoneTotal,
+      usedOutletPhone,
+      usedTaxpayerFallback,
+    },
+    matchBreakdown: {
+      rowsWithValidPhone:  anyValidPhone,
+      leadsMatched:        matched,
+      phonesAdded:         updated,
+      alreadySaved,
+      taxpayerNotFound,
+      outletMismatch,
+      nonOutletRecord,
+      errors:              rowErrors.length,
+    },
     summary: {
-      rowsParsed: rows.length,
-      leadsMatched: matched,
-      phonesAdded: updated,
-      phonesSkipped: skipped,
-      noPhone,
-      errorCount: rowErrors.length,
+      rowsParsed:    rows.length,
+      leadsMatched:  matched,
+      phonesAdded:   updated,
+      phonesSkipped: noPhoneTotal,
+      noPhone:       noValidPhone,
+      errorCount:    rowErrors.length,
     },
     errors: rowErrors.slice(0, 10),
   })

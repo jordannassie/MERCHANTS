@@ -383,8 +383,8 @@ export default function LandingClient() {
               <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-5">
                 <Shield size={12} /> Simple. Personal. Built for your business.
               </div>
-              <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 leading-tight mb-4">
-                Let’s Get You Set Up
+              <h2 className="text-4xl md:text-5xl font-extrabold text-slate-900 leading-tight mb-5">
+                Contact Us
               </h2>
               <p className="text-slate-500 text-lg leading-relaxed mb-8">
                 Whether you’re opening a new business, replacing equipment, or ready for a better payment solution, we’ll help get you set up quickly and simply.
