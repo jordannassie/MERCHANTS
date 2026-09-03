@@ -13,6 +13,13 @@
  *   007_enrichment_columns.sql
  */
 
+// Guard: do not run migrations during normal deploys unless explicitly requested.
+// Set RUN_MIGRATIONS_ON_DEPLOY=true to enable migrations for a specific deploy.
+if (process.env.RUN_MIGRATIONS_ON_DEPLOY !== 'true') {
+  console.log('Skipping database migrations. RUN_MIGRATIONS_ON_DEPLOY is not true.');
+  process.exit(0);
+}
+
 const fs   = require('fs')
 const path = require('path')
 const https = require('https')
