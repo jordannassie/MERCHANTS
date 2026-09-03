@@ -7,13 +7,30 @@ import { Upload, CheckCircle, AlertCircle, Loader2, ExternalLink, Download, Key,
 const SIFT_KEY_URL = 'https://data-secure.comptroller.texas.gov/main/view'
 
 interface SkipReasons {
+  // Parser-level skips
   missingTaxpayerNumber?: number
   blankOutletNumber?: number
   malformedRow?: number
+  // Phone-level skips (new unified field — replaces missingPhone + invalidPhone)
+  noValidPhone?: number
+  // Legacy fields (pre-fix response compatibility)
   missingPhone?: number
   invalidPhone?: number
+  // Match-level skips
   taxpayerNotFound?: number
-  outletNotFound?: number
+  outletMismatch?: number      // new name
+  outletNotFound?: number      // legacy name (pre-fix)
+  nonOutletRecord?: number     // USE TAX / 00000 outlet with no matching lead
+}
+
+interface PhoneSummary {
+  totalRows?:            number
+  validOutletPhones?:    number   // col-15 valid count
+  validTaxpayerPhones?:  number   // col-8 valid count (independent)
+  rowsWithAnyPhone?:     number   // used outlet || taxpayer fallback
+  rowsWithNoPhone?:      number
+  usedOutletPhone?:      number   // best_phone came from col-15
+  usedTaxpayerFallback?: number   // best_phone came from col-8
 }
 
 interface ImportSummary {
@@ -41,6 +58,7 @@ interface PreviewMatch {
   taxpayerNumber: string
   outletNumber: string
   maskedPhone: string
+  phoneSource?: 'outlet' | 'taxpayer'
 }
 
 interface LastImport {
@@ -71,7 +89,8 @@ export function SiftImportCard() {
   // ── Manual upload state ────────────────────────────────────────────────────
   const [manualLoading, setManualLoading] = useState(false)
   const [manualResult, setManualResult] = useState<{
-    summary?: ImportSummary; error?: string; preview?: PreviewMatch[]; pendingCount?: number
+    summary?: ImportSummary; error?: string; preview?: PreviewMatch[]
+    pendingCount?: number; phoneSummary?: PhoneSummary
   } | null>(null)
   const [confirmLoading, setConfirmLoading] = useState(false)
 
@@ -152,9 +171,10 @@ export function SiftImportCard() {
       if (!res.ok) {
         setManualResult({ error: String(json.error ?? 'Preview failed') })
       } else {
-        const preview = json.preview as PreviewMatch[] | undefined
-        const summary = json.summary as ImportSummary | undefined
-        setManualResult({ preview, summary, pendingCount: summary?.exactMatches ?? 0 })
+        const preview      = json.preview      as PreviewMatch[]  | undefined
+        const summary      = json.summary      as ImportSummary   | undefined
+        const phoneSummary = json.phoneSummary as PhoneSummary    | undefined
+        setManualResult({ preview, summary, phoneSummary, pendingCount: summary?.exactMatches ?? 0 })
       }
     } catch (e) {
       setManualResult({ error: String(e) })
@@ -379,6 +399,12 @@ export function SiftImportCard() {
         {/* Preview mode — show before saving */}
         {manualResult?.preview && !confirmLoading && !manualResult?.summary?.phonesAdded && (
           <div className="mt-3 space-y-3">
+
+            {/* Phone coverage breakdown — always show this first */}
+            {manualResult.phoneSummary && (
+              <PhoneCoverageBox ps={manualResult.phoneSummary} rowsParsed={manualResult.summary?.rowsParsed} />
+            )}
+
             <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2.5 space-y-2">
               <div className="flex items-center gap-2 text-sm font-semibold text-blue-700">
                 <Eye size={14} />
@@ -394,7 +420,8 @@ export function SiftImportCard() {
                           <th className="pb-1 pr-3 font-medium">Business</th>
                           <th className="pb-1 pr-3 font-medium">Taxpayer #</th>
                           <th className="pb-1 pr-3 font-medium">Outlet</th>
-                          <th className="pb-1 font-medium">Phone</th>
+                          <th className="pb-1 pr-3 font-medium">Phone</th>
+                          <th className="pb-1 font-medium text-gray-400">Source</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -403,7 +430,8 @@ export function SiftImportCard() {
                             <td className="py-1 pr-3 text-gray-700 max-w-[160px] truncate">{m.displayName}</td>
                             <td className="py-1 pr-3 font-mono text-gray-500">{m.taxpayerNumber}</td>
                             <td className="py-1 pr-3 font-mono text-gray-500">{m.outletNumber}</td>
-                            <td className="py-1 font-mono text-gray-700">{m.maskedPhone}</td>
+                            <td className="py-1 pr-3 font-mono text-gray-700">{m.maskedPhone}</td>
+                            <td className="py-1 text-gray-400 text-xs">{m.phoneSource === 'taxpayer' ? 'taxpayer' : 'outlet'}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -503,13 +531,15 @@ function SkipReasonBox({ summary }: { summary: ImportSummary }) {
   if (!sr) return null
 
   const items: { label: string; count: number }[] = [
-    { label: 'Missing taxpayer number', count: sr.missingTaxpayerNumber ?? 0 },
-    { label: 'Blank outlet number (DIRECT PAY)', count: sr.blankOutletNumber ?? 0 },
-    { label: 'Malformed row', count: sr.malformedRow ?? 0 },
-    { label: 'No phone number', count: sr.missingPhone ?? 0 },
-    { label: 'Invalid phone format', count: sr.invalidPhone ?? 0 },
-    { label: 'Taxpayer not in your leads', count: sr.taxpayerNotFound ?? 0 },
-    { label: 'Outlet number mismatch', count: sr.outletNotFound ?? 0 },
+    { label: 'Missing taxpayer number',     count: sr.missingTaxpayerNumber ?? 0 },
+    { label: 'Blank outlet number',         count: sr.blankOutletNumber ?? 0 },
+    { label: 'Malformed row',               count: sr.malformedRow ?? 0 },
+    // Unified "no valid phone" (new API) or legacy split (old API)
+    { label: 'No valid phone',              count: sr.noValidPhone ?? ((sr.missingPhone ?? 0) + (sr.invalidPhone ?? 0)) },
+    { label: 'Taxpayer not in your leads',  count: sr.taxpayerNotFound ?? 0 },
+    // Support both new (outletMismatch) and old (outletNotFound) field names
+    { label: 'Outlet number mismatch',      count: sr.outletMismatch ?? sr.outletNotFound ?? 0 },
+    { label: 'USE TAX / 00000 — no lead',   count: sr.nonOutletRecord ?? 0 },
   ].filter(i => i.count > 0)
 
   if (!items.length) return null
@@ -527,6 +557,36 @@ function SkipReasonBox({ summary }: { summary: ImportSummary }) {
   )
 }
 
+// ── PhoneCoverageBox ────────────────────────────────────────────────────────
+
+function PhoneCoverageBox({ ps, rowsParsed }: { ps: PhoneSummary; rowsParsed?: number }) {
+  const total      = rowsParsed ?? ps.totalRows ?? 0
+  const anyPhone   = ps.rowsWithAnyPhone ?? 0
+  const noPhone    = ps.rowsWithNoPhone ?? 0
+  const outletCol  = ps.validOutletPhones ?? 0
+  const taxpCol    = ps.validTaxpayerPhones ?? 0
+  const usedOutlet = ps.usedOutletPhone ?? 0
+  const usedTaxp   = ps.usedTaxpayerFallback ?? 0
+
+  return (
+    <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-xs space-y-1">
+      <p className="font-semibold text-gray-600">Phone coverage (before matching)</p>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-gray-600">
+        <div><span className="text-gray-400">Total rows: </span><strong>{total.toLocaleString()}</strong></div>
+        <div><span className="text-gray-400">Valid outlet phones (col 15): </span><strong>{outletCol.toLocaleString()}</strong></div>
+        <div><span className="text-gray-400">Valid taxpayer phones (col 8): </span><strong>{taxpCol.toLocaleString()}</strong></div>
+        <div><span className="text-gray-400">Rows with any phone: </span><strong className="text-green-700">{anyPhone.toLocaleString()}</strong></div>
+        <div><span className="text-gray-400">No valid phone: </span><strong className={noPhone > 0 ? 'text-amber-600' : ''}>{noPhone.toLocaleString()}</strong></div>
+        {usedTaxp > 0 && (
+          <div className="col-span-2 text-gray-400">
+            Used outlet phone: {usedOutlet.toLocaleString()} · taxpayer fallback: {usedTaxp.toLocaleString()}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── ZeroMatchDiagnostic ─────────────────────────────────────────────────────
 
 function ZeroMatchDiagnostic({ summary }: { summary?: ImportSummary }) {
@@ -534,19 +594,20 @@ function ZeroMatchDiagnostic({ summary }: { summary?: ImportSummary }) {
   const sr = summary.skipReasons ?? {}
 
   const taxpayerNotFound = sr.taxpayerNotFound ?? 0
-  const outletNotFound   = sr.outletNotFound ?? 0
-  const missingPhone     = sr.missingPhone ?? 0
+  // Support both old (outletNotFound) and new (outletMismatch) field names
+  const outletMismatch   = sr.outletMismatch ?? sr.outletNotFound ?? 0
+  const noPhone          = sr.noValidPhone ?? ((sr.missingPhone ?? 0) + (sr.invalidPhone ?? 0))
   const total            = summary.rowsParsed ?? 0
 
   let hint = ''
-  if (taxpayerNotFound > 0 && outletNotFound === 0) {
-    hint = `All ${taxpayerNotFound.toLocaleString()} rows had a taxpayer number not in your leads. This file covers all of Texas — leads outside your tracked territory will not match. Import more leads first.`
-  } else if (outletNotFound > 0) {
-    hint = `${outletNotFound.toLocaleString()} rows found a matching taxpayer but the outlet number did not match. This may indicate the outlet was imported with a different number. Check that taxpayer_number and outlet_number are correct in your lead data.`
-  } else if (missingPhone === total) {
-    hint = 'No rows contained a phone number. This may be the standard permit file rather than the ph (phone) variant. Download stpMM-DDph.zip specifically.'
+  if (taxpayerNotFound > 0 && outletMismatch === 0) {
+    hint = `${taxpayerNotFound.toLocaleString()} rows had a taxpayer number not in your leads. Run "Import Texas Leads" to backfill statewide permit records, then re-upload this SIFT file.`
+  } else if (outletMismatch > 0) {
+    hint = `${outletMismatch.toLocaleString()} rows found a matching taxpayer but the outlet number did not match any DB lead.`
+  } else if (noPhone > 0 && noPhone === total) {
+    hint = 'No rows contained a valid phone number. This may be the standard permit file rather than the ph (phone) variant. Download stpMM-DDph.zip specifically.'
   } else {
-    hint = 'No matches found. This SIFT file covers all of Texas — only businesses you have already imported as leads can match.'
+    hint = 'No matches found. Run "Import Texas Leads" first to ensure statewide permit records exist, then re-upload this SIFT file.'
   }
 
   return (

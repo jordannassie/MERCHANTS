@@ -1,490 +1,235 @@
+/**
+ * Dashboard — simple sales scoreboard.
+ *
+ * Only COUNT queries — no row fetching, no lead tables, no import diagnostics.
+ * Filters by region (URL param ?region=) which NEVER affects imports.
+ */
+
 import { Metadata } from 'next'
 import Link from 'next/link'
 import { createServiceClient } from '@/lib/supabase/service'
-import { fmtDate, fmtPhone } from '@/lib/utils'
-import { ImportButton } from '@/components/ImportButton'
-import { RefreshButton } from '@/components/ui/RefreshButton'
-import { Users, Flame, CalendarClock, Calendar, Phone, ArrowDown, Pencil, ChevronsRight, Database } from 'lucide-react'
-import { REGION_DEFINITIONS } from '@/lib/regions'
-
-const ALL_METRO_CODES = new Set([
-  ...REGION_DEFINITIONS.DFW,
-  ...REGION_DEFINITIONS.Houston,
-  ...REGION_DEFINITIONS.Austin,
-  ...REGION_DEFINITIONS['San Antonio'],
-  ...REGION_DEFINITIONS['El Paso'],
-])
-
-// NULL-safe non-chain filter: category IS NULL (independent leads) OR category != 'corporate_chain'
-// Must use this form — .neq() silently excludes NULL rows in PostgreSQL.
-const NON_CHAIN = 'category.is.null,category.neq.corporate_chain'
+import { getRegionCounties } from '@/lib/regions'
 
 export const metadata: Metadata = { title: 'Dashboard — Merchant Radar' }
 export const dynamic = 'force-dynamic'
 
-function greeting() {
+const REGIONS = ['DFW', 'Houston', 'Austin', 'San Antonio', 'All Texas'] as const
+type Region = typeof REGIONS[number]
+
+function greeting(): string {
   const h = new Date().getHours()
   if (h < 12) return 'Good morning'
   if (h < 17) return 'Good afternoon'
   return 'Good evening'
 }
 
-function ScoreBadge({ score, priority }: { score: number; priority: string }) {
-  const cfg = priority === 'hot'
-    ? 'bg-red-500 text-white'
-    : priority === 'good'
-    ? 'bg-orange-400 text-white'
-    : 'bg-gray-300 text-gray-700'
+// ── Status card config ────────────────────────────────────────────────────────
 
-  const label = priority === 'hot' ? 'HOT' : priority === 'good' ? 'GOOD' : priority === 'low' ? 'OKAY' : 'SKIP'
+const STATUS_CARDS = [
+  { key: 'new',           label: 'New Leads',       href: '/leads?status=new',         color: 'blue'    },
+  { key: 'callable',      label: 'Callable',         href: '/leads?status=new',         color: 'green'   },
+  { key: 'attempted',     label: 'Attempted',        href: '/leads?status=attempted',   color: 'orange'  },
+  { key: 'connected',     label: 'Connected',        href: '/leads?status=connected',   color: 'purple'  },
+  { key: 'follow_up',     label: 'Follow-up',        href: '/leads?status=follow_up',   color: 'yellow'  },
+  { key: 'appointment',   label: 'Appointments',     href: '/leads?status=appointment', color: 'indigo'  },
+  { key: 'won',           label: 'Won',              href: '/leads?status=won',         color: 'emerald' },
+  { key: 'lost_dnc',      label: 'Lost / DNC',       href: '/leads?status=lost',        color: 'gray'    },
+] as const
 
-  return (
-    <div className="flex flex-col items-center gap-0.5 w-12">
-      <span className={`text-sm font-bold w-9 h-9 rounded-full flex items-center justify-center ${cfg}`}>{score}</span>
-      <span className={`text-[10px] font-semibold tracking-wide ${priority === 'hot' ? 'text-red-500' : priority === 'good' ? 'text-orange-400' : 'text-gray-400'}`}>{label}</span>
-    </div>
-  )
+const PIPELINE_ROWS = [
+  { key: 'new',         label: 'New',         href: '/leads?status=new'         },
+  { key: 'attempted',   label: 'Attempted',   href: '/leads?status=attempted'   },
+  { key: 'connected',   label: 'Connected',   href: '/leads?status=connected'   },
+  { key: 'follow_up',   label: 'Follow-up',   href: '/leads?status=follow_up'   },
+  { key: 'appointment', label: 'Appointment', href: '/leads?status=appointment' },
+  { key: 'won',         label: 'Won',         href: '/leads?status=won'         },
+  { key: 'lost_dnc',    label: 'Lost / DNC',  href: '/leads?status=lost'        },
+] as const
+
+// Color classes per card color name
+const COLOR_MAP: Record<string, { bg: string; text: string; num: string; border: string }> = {
+  blue:    { bg: 'bg-blue-50',    text: 'text-blue-600',    num: 'text-blue-700',    border: 'border-blue-100'    },
+  green:   { bg: 'bg-green-50',   text: 'text-green-600',   num: 'text-green-700',   border: 'border-green-100'   },
+  orange:  { bg: 'bg-orange-50',  text: 'text-orange-600',  num: 'text-orange-700',  border: 'border-orange-100'  },
+  purple:  { bg: 'bg-purple-50',  text: 'text-purple-600',  num: 'text-purple-700',  border: 'border-purple-100'  },
+  yellow:  { bg: 'bg-yellow-50',  text: 'text-yellow-600',  num: 'text-yellow-700',  border: 'border-yellow-100'  },
+  indigo:  { bg: 'bg-indigo-50',  text: 'text-indigo-600',  num: 'text-indigo-700',  border: 'border-indigo-100'  },
+  emerald: { bg: 'bg-emerald-50', text: 'text-emerald-600', num: 'text-emerald-700', border: 'border-emerald-100' },
+  gray:    { bg: 'bg-gray-50',    text: 'text-gray-500',    num: 'text-gray-700',    border: 'border-gray-100'    },
 }
 
-export default async function DashboardPage() {
+// ── Page ──────────────────────────────────────────────────────────────────────
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>
+}) {
+  const sp     = await searchParams
+  const region = (REGIONS.includes(sp.region as Region) ? sp.region : 'DFW') as Region
+
+  // Counties for this region — empty array = All Texas (no county filter)
+  const counties = region === 'All Texas' ? [] : getRegionCounties(region)
+
   const db = createServiceClient()
 
-  const now = new Date()
-  const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0)
-  const todayEnd = new Date(now); todayEnd.setHours(23, 59, 59, 999)
-
-  // Shared column list for call-list leads
-  const CALL_COLS = 'id,display_name,outlet_name,outlet_city,outlet_state,priority,status,score,primary_phone,permit_phone,permit_issue_date,first_sales_date,naics_code,category'
-
-  // Load active territory first to determine saved region for default view filtering
-  const { data: territories } = await db.from('territories').select('*').eq('is_active', true).limit(1)
-  const activeTerritory = territories?.[0] ?? null
-  // region-based county list
-  import('@/lib/regions').then(() => {})
-  const { getRegionCounties } = await import('@/lib/regions')
-  const regionCounties = getRegionCounties(activeTerritory?.region ?? 'DFW')
+  // ── COUNT queries — all parallel, no rows fetched ─────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function withCounty(q: any): any {
+    return counties.length > 0 ? q.in('outlet_county_code', counties) : q
+  }
 
   const [
-    { count: totalLeads },
-    { count: hotLeads },
-    { count: followUpsDue },
-    { count: appointments },
-    { data: callableLeads },
-    { count: callableCount },
-    { data: hotNoPhone },
-    { data: todayFollowUps },
-    { data: lastImportArr },
+    { count: cNew },
+    { count: cCallable },
+    { count: cAttempted },
+    { count: cConnected },
+    { count: cFollowUp },
+    { count: cAppointment },
+    { count: cWon },
+    { count: cLostDNC },
   ] = await Promise.all([
-    db.from('leads').select('*', { count: 'exact', head: true }).then(res => regionCounties.length ? db.from('leads').select('*', { count: 'exact', head: true }).in('outlet_county_code', regionCounties).then(r=>r) : res),
+    withCounty(db.from('leads').select('*', { count: 'exact', head: true }).eq('status', 'new')),
 
-    db.from('leads').select('*', { count: 'exact', head: true })
-      .eq('priority', 'hot')
-      .not('status', 'in', '(won,lost,do_not_contact)')
-      .or(NON_CHAIN)
-      .then(res => regionCounties.length ? db.from('leads').select('*', { count: 'exact', head: true }).in('outlet_county_code', regionCounties).eq('priority','hot').not('status','in','(won,lost,do_not_contact)').or(NON_CHAIN).then(r=>r) : res),
+    withCounty(
+      db.from('leads').select('*', { count: 'exact', head: true })
+        .eq('status', 'new')
+        .or('permit_phone.not.is.null,primary_phone.not.is.null')
+    ),
 
-    db.from('leads').select('*', { count: 'exact', head: true })
-      .lte('next_follow_up_at', todayEnd.toISOString())
-      .not('status', 'in', '(won,lost,do_not_contact)')
-      .then(res => regionCounties.length ? db.from('leads').select('*', { count: 'exact', head: true }).in('outlet_county_code', regionCounties).lte('next_follow_up_at', todayEnd.toISOString()).not('status','in','(won,lost,do_not_contact)').then(r=>r) : res),
+    withCounty(db.from('leads').select('*', { count: 'exact', head: true }).eq('status', 'attempted')),
+    withCounty(db.from('leads').select('*', { count: 'exact', head: true }).eq('status', 'connected')),
+    withCounty(db.from('leads').select('*', { count: 'exact', head: true }).eq('status', 'follow_up')),
+    withCounty(db.from('leads').select('*', { count: 'exact', head: true }).eq('status', 'appointment')),
+    withCounty(db.from('leads').select('*', { count: 'exact', head: true }).eq('status', 'won')),
 
-    db.from('leads').select('*', { count: 'exact', head: true }).eq('status', 'appointment')
-      .then(res => regionCounties.length ? db.from('leads').select('*', { count: 'exact', head: true }).in('outlet_county_code', regionCounties).eq('status','appointment').then(r=>r) : res),
-
-    // Primary call list: leads with any callable phone, ordered by score then soonest opening
-    db.from('leads')
-      .select(CALL_COLS)
-      .or('permit_phone.not.is.null,primary_phone.not.is.null')
-      .not('status', 'in', '(won,lost,do_not_contact)')
-      .or(NON_CHAIN)
-      .order('score', { ascending: false })
-      .order('first_sales_date', { ascending: true, nullsFirst: false })
-      .limit(10)
-      .then(res => regionCounties.length ? db.from('leads').select(CALL_COLS).in('outlet_county_code', regionCounties).or('permit_phone.not.is.null,primary_phone.not.is.null').not('status','in','(won,lost,do_not_contact)').or(NON_CHAIN).order('score',{ascending:false}).order('first_sales_date',{ascending:true,nullsFirst:false}).limit(10).then(r=>r) : res),
-
-    // Total callable leads count (for section header)
-    db.from('leads').select('*', { count: 'exact', head: true })
-      .or('permit_phone.not.is.null,primary_phone.not.is.null')
-      .not('status', 'in', '(won,lost,do_not_contact)')
-      .or(NON_CHAIN)
-      .then(res => regionCounties.length ? db.from('leads').select('*',{count:'exact',head:true}).in('outlet_county_code', regionCounties).or('permit_phone.not.is.null,primary_phone.not.is.null').not('status','in','(won,lost,do_not_contact)').or(NON_CHAIN).then(r=>r) : res),
-
-    // Fallback: hot leads without any phone (shown only if callable list has < 10)
-    db.from('leads')
-      .select(CALL_COLS)
-      .is('permit_phone', null)
-      .is('primary_phone', null)
-      .eq('priority', 'hot')
-      .not('status', 'in', '(won,lost,do_not_contact)')
-      .or(NON_CHAIN)
-      .order('score', { ascending: false })
-      .limit(5)
-      .then(res => regionCounties.length ? db.from('leads').select(CALL_COLS).in('outlet_county_code', regionCounties).is('permit_phone',null).is('primary_phone',null).eq('priority','hot').not('status','in','(won,lost,do_not_contact)').or(NON_CHAIN).order('score',{ascending:false}).limit(5).then(r=>r) : res),
-
-    db.from('leads')
-      .select('id,display_name,outlet_city,outlet_state,primary_phone,permit_phone,next_follow_up_at,status,naics_code')
-      .lte('next_follow_up_at', todayEnd.toISOString())
-      .gte('next_follow_up_at', todayStart.toISOString())
-      .order('next_follow_up_at')
-      .limit(6)
-      .then(res => regionCounties.length ? db.from('leads').select('id,display_name,outlet_city,outlet_state,primary_phone,permit_phone,next_follow_up_at,status,naics_code').in('outlet_county_code', regionCounties).lte('next_follow_up_at', todayEnd.toISOString()).gte('next_follow_up_at', todayStart.toISOString()).order('next_follow_up_at').limit(6).then(r=>r) : res),
-
-    db.from('import_runs').select('*').order('started_at', { ascending: false }).limit(1),
+    withCounty(
+      db.from('leads').select('*', { count: 'exact', head: true })
+        .in('status', ['lost', 'do_not_contact'])
+    ),
   ])
 
-  // ── Diagnostics: statewide DB counts + region callable breakdown ────────────
-  const [
-    { count: totalAllLeads },
-    { count: totalWithPhone },
-    { count: totalWithoutPhone },
-    { count: totalWithPermitPhone },
-    { data: callableCountyRows },
-    { data: lastSiftLog },
-  ] = await Promise.all([
-    db.from('leads').select('*', { count: 'exact', head: true }),
-    db.from('leads').select('*', { count: 'exact', head: true })
-      .or('permit_phone.not.is.null,primary_phone.not.is.null'),
-    db.from('leads').select('*', { count: 'exact', head: true })
-      .is('permit_phone', null).is('primary_phone', null),
-    db.from('leads').select('*', { count: 'exact', head: true })
-      .not('permit_phone', 'is', null),
-    db.from('leads')
-      .select('outlet_county_code')
-      .or('permit_phone.not.is.null,primary_phone.not.is.null')
-      .not('outlet_county_code', 'is', null),
-    db.from('sift_import_log')
-      .select('filename, status, records_parsed, leads_matched, phones_added, phones_skipped, imported_at')
-      .order('imported_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  ])
-
-  // Per-region callable counts
-  const callableByCounty = new Map<string, number>()
-  for (const row of (callableCountyRows ?? []) as { outlet_county_code: string }[]) {
-    if (!row.outlet_county_code) continue
-    callableByCounty.set(row.outlet_county_code, (callableByCounty.get(row.outlet_county_code) ?? 0) + 1)
-  }
-  function sumForCodes(codes: string[]): number {
-    return codes.reduce((sum, c) => sum + (callableByCounty.get(c) ?? 0), 0)
-  }
-  const otherTexasCodes = [...callableByCounty.keys()].filter(c => !ALL_METRO_CODES.has(c))
-  const regionCallable = {
-    DFW:           sumForCodes(REGION_DEFINITIONS.DFW),
-    Houston:       sumForCodes(REGION_DEFINITIONS.Houston),
-    Austin:        sumForCodes(REGION_DEFINITIONS.Austin),
-    'San Antonio': sumForCodes(REGION_DEFINITIONS['San Antonio']),
-    'El Paso':     sumForCodes(REGION_DEFINITIONS['El Paso']),
-    'Other Texas': sumForCodes(otherTexasCodes),
+  // Map key → count
+  const counts: Record<string, number> = {
+    new:         cNew         ?? 0,
+    callable:    cCallable    ?? 0,
+    attempted:   cAttempted   ?? 0,
+    connected:   cConnected   ?? 0,
+    follow_up:   cFollowUp    ?? 0,
+    appointment: cAppointment ?? 0,
+    won:         cWon         ?? 0,
+    lost_dnc:    cLostDNC     ?? 0,
   }
 
-  // Merge callable leads with hot-no-phone fallback if fewer than 10 callable leads
-  const callableIds = new Set((callableLeads ?? []).map(l => l.id))
-  const fallback = (hotNoPhone ?? []).filter(l => !callableIds.has(l.id))
-  const topLeads = (callableLeads ?? []).length >= 10
-    ? callableLeads ?? []
-    : [...(callableLeads ?? []), ...fallback].slice(0, 10)
-
-  const firstName = 'Jordan'
-  const lastRun = lastImportArr?.[0] ?? null
-
-  const stats = [
-    { label: 'New Leads', value: totalLeads ?? 0, icon: Users, color: 'text-blue-500', bg: 'bg-blue-50', href: '/leads' },
-    { label: 'Hot Leads', value: hotLeads ?? 0, icon: Flame, color: 'text-orange-500', bg: 'bg-orange-50', href: '/leads?priority=hot' },
-    { label: 'Follow-ups Today', value: followUpsDue ?? 0, icon: CalendarClock, color: 'text-blue-500', bg: 'bg-blue-50', href: '/follow-ups' },
-    { label: 'Appointments', value: appointments ?? 0, icon: Calendar, color: 'text-purple-500', bg: 'bg-purple-50', href: '/pipeline' },
-  ]
-
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="px-4 md:px-8 py-6 max-w-7xl mx-auto space-y-6">
+    <div className="px-4 md:px-8 py-6 max-w-4xl mx-auto space-y-6">
 
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-gray-900">{greeting()}, {firstName}</h1>
-        <div className="flex items-center gap-2">
-          <RefreshButton />
-          <ImportButton territory={activeTerritory} lastRun={lastRun} />
-        </div>
+      {/* ── Header ── */}
+      <div>
+        <h1 className="text-2xl font-semibold text-gray-900">
+          {greeting()}, Jordan
+        </h1>
+        <p className="text-sm text-gray-400 mt-0.5">Sales scoreboard · {region}</p>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map(s => (
-          <Link key={s.label} href={s.href}
-            className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4 hover:border-blue-200 transition-colors">
-            <div className={`${s.bg} p-3 rounded-xl`}>
-              <s.icon size={20} className={s.color} />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">{s.label}</p>
-              <p className="text-2xl font-bold text-gray-900">{s.value}</p>
-            </div>
-          </Link>
-        ))}
+      {/* ── Region tabs ── */}
+      <div className="flex flex-wrap gap-1.5">
+        {REGIONS.map(r => {
+          const active = r === region
+          return (
+            <Link
+              key={r}
+              href={r === 'DFW' ? '/dashboard' : `/dashboard?region=${encodeURIComponent(r)}`}
+              className={`text-sm px-3 py-1.5 rounded-lg border font-medium transition-colors ${
+                active
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-blue-400 hover:text-blue-600'
+              }`}
+            >
+              {r}
+            </Link>
+          )
+        })}
       </div>
 
-      {/* Main grid */}
-      <div className="grid md:grid-cols-5 gap-6">
-
-        {/* Today's Call List — 3/5 width */}
-        <div className="md:col-span-3 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
-            <div>
-              <h2 className="font-semibold text-gray-900">Today&apos;s Call List</h2>
-              {(callableCount ?? 0) > 0 && (
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {(callableCount ?? 0).toLocaleString()} callable lead{callableCount !== 1 ? 's' : ''}
-                </p>
-              )}
-            </div>
-            <Link href="/leads?hasPhone=true" className="text-xs text-blue-600 hover:underline">View all →</Link>
-          </div>
-
-          {topLeads && topLeads.length > 0 ? (
-            <table className="w-full text-sm table-fixed">
-              <colgroup>
-                <col className="w-[52px]" />
-                <col />
-                <col className="w-[80px]" />
-                <col className="w-[72px]" />
-                <col className="w-[110px]" />
-                <col className="w-[80px]" />
-              </colgroup>
-              <thead>
-                <tr className="text-xs text-gray-400 uppercase tracking-wide border-b border-gray-50">
-                  <th className="px-3 py-3 text-left">Score</th>
-                  <th className="px-3 py-3 text-left">Business</th>
-                  <th className="px-3 py-3 text-left">City</th>
-                  <th className="px-3 py-3 text-left">First Sale</th>
-                  <th className="px-3 py-3 text-left">Contact</th>
-                  <th className="px-3 py-3 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {topLeads.map(lead => (
-                  <tr key={lead.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-3 py-3">
-                      <ScoreBadge score={lead.score} priority={lead.priority} />
-                    </td>
-                    <td className="px-3 py-3 min-w-0">
-                      <Link href={`/leads/${lead.id}`} className="hover:text-blue-600 block">
-                        <p className="font-medium text-gray-900 leading-snug line-clamp-2 break-words">
-                          {lead.display_name || lead.outlet_name || '—'}
-                        </p>
-                        <p className="text-xs text-gray-400 mt-0.5 truncate">
-                          {lead.category || (lead.naics_code ? `NAICS ${lead.naics_code}` : '')}
-                        </p>
-                      </Link>
-                    </td>
-                    <td className="px-3 py-3 text-xs text-gray-600 leading-snug">
-                      <span className="line-clamp-2">{lead.outlet_city}</span>
-                    </td>
-                    <td className="px-3 py-3 text-xs text-gray-600 whitespace-nowrap">
-                      {lead.first_sales_date ? (
-                        <span className={new Date(lead.first_sales_date) >= new Date() ? 'text-green-600 font-medium' : ''}>
-                          {fmtDate(lead.first_sales_date)}
-                        </span>
-                      ) : '—'}
-                    </td>
-                    <td className="px-3 py-3">
-                      {(() => {
-                        const phone = lead.permit_phone ?? lead.primary_phone
-                        return phone ? (
-                          <a href={`tel:${phone}`}
-                            className="flex items-center gap-1 text-xs text-blue-600 hover:underline">
-                            <Phone size={11} /> {fmtPhone(phone)}
-                            {lead.permit_phone && !lead.primary_phone && (
-                              <span className="text-[10px] text-gray-400 ml-0.5">permit</span>
-                            )}
-                          </a>
-                        ) : (
-                          <Link href={`/leads/${lead.id}`}
-                            className="text-xs text-gray-400 hover:text-blue-600 flex items-center gap-1">
-                            <Phone size={10} className="opacity-40" />
-                            Find Contact
-                          </Link>
-                        )
-                      })()}
-                    </td>
-                    <td className="px-3 py-3 text-right">
-                      {(() => {
-                        const phone = lead.permit_phone ?? lead.primary_phone
-                        return phone ? (
-                          <a href={`tel:${phone}`}
-                            className="inline-flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors whitespace-nowrap">
-                            <Phone size={11} /> Call
-                          </a>
-                        ) : (
-                          <Link href={`/leads/${lead.id}`}
-                            className="inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors whitespace-nowrap">
-                            Find
-                          </Link>
-                        )
-                      })()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p className="px-5 py-10 text-sm text-gray-400 text-center">No callable leads yet — import a Texas permit-phone file to add phone numbers.</p>
-          )}
-        </div>
-
-        {/* Right column — 2/5 width */}
-        <div className="md:col-span-2 space-y-4">
-
-          {/* Follow Up Today */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
-              <h2 className="font-semibold text-gray-900">Follow Up Today</h2>
-              <Link href="/follow-ups" className="text-xs text-blue-600 hover:underline">View all →</Link>
-            </div>
-
-            {todayFollowUps && todayFollowUps.length > 0 ? (
-              <ul className="divide-y divide-gray-50">
-                {todayFollowUps.map(lead => (
-                  <li key={lead.id}>
-                    <Link href={`/leads/${lead.id}`} className="flex items-start gap-3 px-5 py-3 hover:bg-gray-50 transition-colors">
-                      <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
-                        <span className="text-blue-700 text-xs font-bold">{(lead.display_name || 'L')[0].toUpperCase()}</span>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-gray-900 truncate">{lead.display_name || '(Unnamed)'}</p>
-                        <p className="text-xs text-gray-500">{lead.outlet_city}{lead.outlet_state ? `, ${lead.outlet_state}` : ''}</p>
-                        {(lead.permit_phone ?? lead.primary_phone) && (
-                          <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
-                            <Phone size={10} /> {fmtPhone((lead.permit_phone ?? lead.primary_phone)!)}
-                          </p>
-                        )}
-                      </div>
-                      {lead.next_follow_up_at && (
-                        <span className="text-xs text-gray-400 shrink-0">
-                          {new Date(lead.next_follow_up_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                        </span>
-                      )}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="px-5 py-6 text-sm text-gray-400 text-center">No follow-ups due today.</p>
-            )}
-          </div>
-
-          {/* Latest Texas Import */}
-          {lastRun && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="font-semibold text-gray-900">Latest Texas Import</h2>
-                <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-                  lastRun.status === 'completed' ? 'bg-green-100 text-green-700' :
-                  lastRun.status === 'failed' ? 'bg-red-100 text-red-700' :
-                  'bg-yellow-100 text-yellow-700'
-                }`}>
-                  {lastRun.status.charAt(0).toUpperCase() + lastRun.status.slice(1)}
-                </span>
-              </div>
-              <div className="grid grid-cols-3 gap-3 mb-4">
-                <div className="text-center">
-                  <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-1">
-                    <ArrowDown size={14} className="text-blue-500" />
-                  </div>
-                  <p className="text-lg font-bold text-gray-900">{lastRun.inserted_count ?? 0}</p>
-                  <p className="text-xs text-gray-400">Imported</p>
-                </div>
-                <div className="text-center">
-                  <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-1">
-                    <Pencil size={14} className="text-green-500" />
-                  </div>
-                  <p className="text-lg font-bold text-gray-900">{lastRun.updated_count ?? 0}</p>
-                  <p className="text-xs text-gray-400">Updated</p>
-                </div>
-                <div className="text-center">
-                  <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center mx-auto mb-1">
-                    <ChevronsRight size={14} className="text-gray-400" />
-                  </div>
-                  <p className="text-lg font-bold text-gray-900">{lastRun.skipped_count ?? 0}</p>
-                  <p className="text-xs text-gray-400">Skipped</p>
-                </div>
-              </div>
-              <p className="text-xs text-gray-400">
-                {new Date(lastRun.started_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                {activeTerritory ? ` · ${activeTerritory.name}` : ''}
-              </p>
-            </div>
-          )}
-        </div>
+      {/* ── Status cards ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {STATUS_CARDS.map(card => {
+          const c   = COLOR_MAP[card.color]
+          const val = counts[card.key] ?? 0
+          return (
+            <Link
+              key={card.key}
+              href={card.href}
+              className={`rounded-xl border ${c.border} ${c.bg} p-4 flex flex-col gap-1 hover:shadow-sm transition-shadow`}
+            >
+              <span className={`text-xs font-medium ${c.text}`}>{card.label}</span>
+              <span className={`text-3xl font-bold ${c.num}`}>{val.toLocaleString()}</span>
+            </Link>
+          )
+        })}
       </div>
 
-      {/* ── Texas Database Diagnostics ── */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <Database size={16} className="text-blue-500" />
-          <h2 className="font-semibold text-gray-900">Texas Database</h2>
-        </div>
-
-        {/* Overall counts */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-          {[
-            { label: 'Total businesses', value: (totalAllLeads ?? 0).toLocaleString() },
-            { label: 'With phone', value: (totalWithPhone ?? 0).toLocaleString(), highlight: true },
-            { label: 'No phone', value: (totalWithoutPhone ?? 0).toLocaleString() },
-            { label: 'Permit phone', value: (totalWithPermitPhone ?? 0).toLocaleString() },
-          ].map(s => (
-            <div key={s.label} className="text-center bg-gray-50 rounded-xl p-3">
-              <p className={`text-xl font-bold ${s.highlight ? 'text-blue-600' : 'text-gray-800'}`}>{s.value}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{s.label}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Region callable counts */}
-        <div className="mb-4">
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Callable leads by region</p>
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-            {(Object.entries(regionCallable) as [string, number][]).map(([region, count]) => (
+      {/* ── Pipeline summary ── */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">Pipeline</h2>
+        <div className="space-y-0">
+          {PIPELINE_ROWS.map((row, i) => {
+            const val = counts[row.key] ?? 0
+            const maxVal = Math.max(...PIPELINE_ROWS.map(r => counts[r.key] ?? 0), 1)
+            const pct = Math.round((val / maxVal) * 100)
+            return (
               <Link
-                key={region}
-                href={`/leads?region=${encodeURIComponent(region)}&status=new`}
-                className="text-center bg-blue-50 hover:bg-blue-100 rounded-lg p-2 transition-colors"
+                key={row.key}
+                href={row.href}
+                className={`flex items-center gap-3 py-2.5 ${i < PIPELINE_ROWS.length - 1 ? 'border-b border-gray-50' : ''} hover:bg-gray-50 -mx-2 px-2 rounded transition-colors`}
               >
-                <p className="text-lg font-bold text-blue-700">{count.toLocaleString()}</p>
-                <p className="text-[10px] text-blue-600 leading-tight">{region}</p>
-              </Link>
-            ))}
-          </div>
-        </div>
-
-        {/* Last SIFT import */}
-        {lastSiftLog && (
-          <div className="border-t border-gray-100 pt-4">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Last SIFT phone import</p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {[
-                { label: 'File', value: lastSiftLog.filename?.replace(/^.*\//, '') ?? '—' },
-                { label: 'Rows parsed', value: (lastSiftLog.records_parsed ?? 0).toLocaleString() },
-                { label: 'Leads matched', value: (lastSiftLog.leads_matched ?? 0).toLocaleString() },
-                { label: 'Phones added', value: (lastSiftLog.phones_added ?? 0).toLocaleString(), highlight: true },
-              ].map(s => (
-                <div key={s.label} className="text-center bg-gray-50 rounded-xl p-3">
-                  <p className={`text-base font-bold truncate ${s.highlight ? 'text-green-600' : 'text-gray-800'}`}>{s.value}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{s.label}</p>
+                <span className="w-24 text-sm text-gray-500 shrink-0">{row.label}</span>
+                <div className="flex-1 bg-gray-100 rounded-full h-2 min-w-0">
+                  <div
+                    className="h-2 rounded-full bg-blue-500 transition-all"
+                    style={{ width: `${pct}%` }}
+                  />
                 </div>
-              ))}
-            </div>
-            <p className="text-xs text-gray-400 mt-2">
-              Imported {new Date(lastSiftLog.imported_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
-              {(lastSiftLog.leads_matched ?? 0) < (lastSiftLog.records_parsed ?? 0) && (
-                <span className="ml-2 text-amber-600 font-medium">
-                  ⚠ {((lastSiftLog.records_parsed ?? 0) - (lastSiftLog.leads_matched ?? 0)).toLocaleString()} SIFT rows unmatched — run &quot;Import Texas Leads&quot; to pull statewide permit records, then re-upload the SIFT file.
+                <span className="w-10 text-sm font-semibold text-gray-800 text-right shrink-0">
+                  {val.toLocaleString()}
                 </span>
-              )}
-            </p>
-          </div>
-        )}
+              </Link>
+            )
+          })}
+        </div>
       </div>
+
+      {/* ── Follow-up count (simple, no list) ── */}
+      {(counts.follow_up ?? 0) > 0 && (
+        <Link
+          href="/leads?status=follow_up"
+          className="flex items-center justify-between bg-yellow-50 border border-yellow-200 rounded-xl px-5 py-3.5 hover:bg-yellow-100 transition-colors"
+        >
+          <span className="text-sm font-medium text-yellow-800">
+            Follow-ups pending
+          </span>
+          <span className="text-lg font-bold text-yellow-700">
+            {(counts.follow_up).toLocaleString()} →
+          </span>
+        </Link>
+      )}
+
+      {(counts.appointment ?? 0) > 0 && (
+        <Link
+          href="/leads?status=appointment"
+          className="flex items-center justify-between bg-indigo-50 border border-indigo-200 rounded-xl px-5 py-3.5 hover:bg-indigo-100 transition-colors"
+        >
+          <span className="text-sm font-medium text-indigo-800">
+            Appointments scheduled
+          </span>
+          <span className="text-lg font-bold text-indigo-700">
+            {(counts.appointment).toLocaleString()} →
+          </span>
+        </Link>
+      )}
+
     </div>
   )
 }
-

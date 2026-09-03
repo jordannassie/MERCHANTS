@@ -5,19 +5,22 @@
  * file (stpMM-DDph.zip → the extracted CSV/text inside the ZIP).
  *
  * Accepts multipart/form-data:
- *   file     — extracted CSV file from the ZIP (NOT the ZIP itself)
- *   preview  — "true" to return up to 10 proposed matches without saving
+ *   file     — CSV/text file from inside the ZIP (or the ZIP itself)
+ *   preview  — "true" to return match preview without saving
  *
- * Column layout (verified from stp08-31ph.csv, 22 cols, no header row):
- *   [0]  taxpayer_number
- *   [1]  outlet_number
- *   [15] telephone  ← permit phone
+ * Phone strategy (fallback):
+ *   1. col-15 (telephone / outlet location phone)
+ *   2. col-8  (taxpayer_phone) when col-15 is blank or a stub
  *
- * Match key: taxpayer_number + outlet_number (normalized, never by name).
- * Outlet numbers are normalized to plain integer strings so "00001" = "1".
- * Taxpayer numbers are kept as 11-digit strings — never cast to JS Number.
+ * Outlet-number matching:
+ *   - "00001" → "1", "00000" → "0" (USE TAX — valid lead, NOT skipped)
+ *   - Truly blank outlet rows (~1 row) → counted separately, not discarded silently
  *
- * Safe rule: never overwrites a manually-entered primary_phone.
+ * Expected from stp08-31ph.csv (4,589 total rows):
+ *   Valid taxpayer phones:  ~4,537
+ *   Valid outlet phones:    ~2,573
+ *   Rows with any phone:    ~4,561
+ *   No valid phone at all:  ~28
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -26,8 +29,9 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { normalizePhone } from '@/lib/phone-normalize'
 import { parseSiftFile, normalizeOutletNumber } from '@/lib/sift-parser'
 
-const MAX_FILE_BYTES = 50 * 1024 * 1024 // 50 MB
-const BATCH_SIZE = 100  // taxpayer IDs per DB query chunk
+const MAX_FILE_BYTES = 50 * 1024 * 1024  // 50 MB
+const BATCH_SIZE     = 100               // taxpayer IDs per DB query chunk
+const CONCURRENT     = 20               // parallel DB updates when saving
 
 // ── POST handler ──────────────────────────────────────────────────────────────
 
@@ -49,22 +53,22 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const isPreview = formData.get('preview') === 'true'
 
-  // Support both raw CSV/TSV and ZIP files (stpMM-DDph.zip)
+  // ── Unzip or read raw text ─────────────────────────────────────────────────
   let text: string
+  const fileName = (file as File).name ?? ''
   const isZip =
-    file.name?.toLowerCase().endsWith('.zip') ||
+    fileName.toLowerCase().endsWith('.zip') ||
     file.type === 'application/zip' ||
     file.type === 'application/x-zip-compressed'
 
   if (isZip) {
     try {
-      const bytes = new Uint8Array(await file.arrayBuffer())
+      const bytes    = new Uint8Array(await file.arrayBuffer())
       const unzipped = unzipSync(bytes)
-      const entries = Object.entries(unzipped)
+      const entries  = Object.entries(unzipped)
       if (!entries.length) {
         return NextResponse.json({ error: 'ZIP file is empty' }, { status: 422 })
       }
-      // Skip PDFs, readme, and layout files — take the first data file
       const dataEntry = entries.find(([name]) =>
         !name.toLowerCase().endsWith('.pdf') &&
         !name.toLowerCase().includes('readme') &&
@@ -80,11 +84,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     text = await file.text()
   }
 
+  // ── Parse ──────────────────────────────────────────────────────────────────
   const { rows: allRows, format, phoneColFound, skipReasons } = parseSiftFile(text)
 
   if (!allRows.length) {
     return NextResponse.json({
-      error: 'No parseable rows found. Ensure this is the extracted CSV from stpMM-DDph.zip, not the ZIP itself.',
+      error: 'No parseable rows found. Ensure this is the extracted CSV from stpMM-DDph.zip.',
       format,
       skipReasons,
     }, { status: 422 })
@@ -92,40 +97,82 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   if (!phoneColFound) {
     return NextResponse.json({
-      error: 'Phone column not found. This appears to be the standard file without telephone numbers. Download the stpMM-DDph.zip (ph = phone) variant.',
+      error: 'Phone column not found. Download the stpMM-DDph.zip (ph = phone) variant.',
       format,
       rowsParsed: allRows.length,
       skipReasons,
     }, { status: 422 })
   }
 
-  // ── Separate rows by phone validity ────────────────────────────────────────
-  let missingPhone = 0, invalidPhone = 0
-  interface ValidRow { taxpayerNumber: string; outletNumber: string; normalizedPhone: string; rowNum: number }
+  // ── Phone validation with fallback ─────────────────────────────────────────
+  // For each row: try outlet phone (col 15) first, then taxpayer phone (col 8).
+  // Track granular counts matching the file inspection report.
+
+  let validOutletPhones   = 0   // rows where col-15 alone is valid
+  let validTaxpayerPhones = 0   // rows where col-8 alone is valid (col-15 was not)
+  let noValidPhone        = 0   // rows with no valid phone in either column
+
+  interface ValidRow {
+    taxpayerNumber:  string
+    outletNumber:    string
+    outletNumberRaw: string
+    permitType:      string
+    normalizedPhone: string
+    phoneSource:     'outlet' | 'taxpayer'   // which column the phone came from
+    rowNum:          number
+  }
   const validRows: ValidRow[] = []
 
+  // Separate counts for the summary (independent of each other)
+  let totalValidOutletCol   = 0  // col-15 valid count regardless of col-8
+  let totalValidTaxpayerCol = 0  // col-8 valid count regardless of col-15
+
   for (const row of allRows) {
-    if (!row.phone) { missingPhone++; continue }
-    const normalized = normalizePhone(row.phone)
-    if (!normalized) { invalidPhone++; continue }
-    validRows.push({
-      taxpayerNumber: row.taxpayerNumber,
-      outletNumber:   row.outletNumber,
-      normalizedPhone: normalized,
-      rowNum: row.rowNum,
-    })
+    const outletNorm   = normalizePhone(row.outletPhone)
+    const taxpayerNorm = normalizePhone(row.taxpayerPhone)
+
+    if (outletNorm)   totalValidOutletCol++
+    if (taxpayerNorm) totalValidTaxpayerCol++
+
+    if (outletNorm) {
+      validOutletPhones++
+      validRows.push({
+        taxpayerNumber:  row.taxpayerNumber,
+        outletNumber:    row.outletNumber,
+        outletNumberRaw: row.outletNumberRaw,
+        permitType:      row.permitType,
+        normalizedPhone: outletNorm,
+        phoneSource:     'outlet',
+        rowNum:          row.rowNum,
+      })
+    } else if (taxpayerNorm) {
+      validTaxpayerPhones++
+      validRows.push({
+        taxpayerNumber:  row.taxpayerNumber,
+        outletNumber:    row.outletNumber,
+        outletNumberRaw: row.outletNumberRaw,
+        permitType:      row.permitType,
+        normalizedPhone: taxpayerNorm,
+        phoneSource:     'taxpayer',
+        rowNum:          row.rowNum,
+      })
+    } else {
+      noValidPhone++
+    }
   }
 
-  // ── Batch-query DB leads by taxpayer_number ─────────────────────────────────
+  const anyValidPhone = validOutletPhones + validTaxpayerPhones
+
+  // ── Batch-query DB leads by taxpayer_number ────────────────────────────────
   const db = createServiceClient()
   const uniqueTaxpayers = [...new Set(validRows.map(r => r.taxpayerNumber))]
 
   interface LeadRecord {
-    id: string
+    id:              string
     taxpayer_number: string
-    outlet_number: string | null
-    permit_phone: string | null
-    display_name: string | null
+    outlet_number:   string | null
+    permit_phone:    string | null
+    display_name:    string | null
   }
   const allLeads: LeadRecord[] = []
 
@@ -142,7 +189,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (data) allLeads.push(...(data as LeadRecord[]))
   }
 
-  // ── Build lookup map: taxpayer_number → lead[] ──────────────────────────────
+  // ── Build lookup map: taxpayer_number → lead[] ─────────────────────────────
   const leadsByTaxpayer = new Map<string, LeadRecord[]>()
   for (const lead of allLeads) {
     if (!lead.taxpayer_number) continue
@@ -151,11 +198,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     leadsByTaxpayer.set(lead.taxpayer_number, arr)
   }
 
-  // ── Match each SIFT row against DB leads ────────────────────────────────────
-  let taxpayerNotFound = 0, outletNotFound = 0, alreadySaved = 0
-  interface MatchedRow { lead: LeadRecord; normalizedPhone: string; rowNum: number }
+  // ── Match each valid SIFT row against DB leads ─────────────────────────────
+  let taxpayerNotFound   = 0
+  let outletMismatch     = 0
+  let nonOutletRecord    = 0  // 00000 outlet (USE TAX) with no matching DB lead
+  let alreadySaved       = 0
+
+  interface MatchedRow { lead: LeadRecord; normalizedPhone: string; rowNum: number; phoneSource: 'outlet' | 'taxpayer' }
   const exactMatches: MatchedRow[] = []
-  const taxpayerOnlyCandidates: Array<{ taxpayerNumber: string; outletNumber: string; availableOutlets: string[] }> = []
+
+  // Diagnostics for mismatch inspection
+  const mismatchSamples: Array<{ taxpayerNumber: string; siftOutlet: string; dbOutlets: string[] }> = []
 
   for (const row of validRows) {
     const leads = leadsByTaxpayer.get(row.taxpayerNumber)
@@ -164,90 +217,111 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       continue
     }
 
-    const csvOutletNorm = row.outletNumber  // already normalized by parser
+    const csvOutletNorm = row.outletNumber  // "0"=USE TAX, "1","2",... for SALES TAX
+
+    // Match: normalizeOutletNumber on DB lead must equal csvOutletNorm.
+    // "00000" in DB → normalizeOutletNumber → "0" === csvOutletNorm "0" for USE TAX rows.
     const exact = leads.find(l => normalizeOutletNumber(l.outlet_number) === csvOutletNorm)
 
     if (exact) {
       if (exact.permit_phone === row.normalizedPhone) {
-        alreadySaved++  // idempotent: same phone already stored
+        alreadySaved++   // idempotent: same phone already stored
       } else {
-        exactMatches.push({ lead: exact, normalizedPhone: row.normalizedPhone, rowNum: row.rowNum })
+        exactMatches.push({
+          lead:            exact,
+          normalizedPhone: row.normalizedPhone,
+          rowNum:          row.rowNum,
+          phoneSource:     row.phoneSource,
+        })
       }
     } else {
-      outletNotFound++
-      if (taxpayerOnlyCandidates.length < 20) {
-        taxpayerOnlyCandidates.push({
-          taxpayerNumber: row.taxpayerNumber,
-          outletNumber: row.outletNumber,
-          availableOutlets: leads.map(l => normalizeOutletNumber(l.outlet_number)).filter(Boolean),
-        })
+      // No outlet match
+      if (csvOutletNorm === '0') {
+        // USE TAX / 00000 outlet — no matching DB lead found
+        nonOutletRecord++
+      } else {
+        outletMismatch++
+        if (mismatchSamples.length < 20) {
+          mismatchSamples.push({
+            taxpayerNumber: row.taxpayerNumber,
+            siftOutlet:     row.outletNumberRaw,
+            dbOutlets:      leads.map(l => l.outlet_number ?? '').filter(Boolean).slice(0, 5),
+          })
+        }
       }
     }
   }
 
-  // ── Preview mode: return first 10 proposed matches without saving ───────────
+  // ── Build phone column stats (independent counts) ──────────────────────────
+  const phoneSummary = {
+    totalRows:             allRows.length,
+    validOutletPhones:     totalValidOutletCol,    // col-15 valid
+    validTaxpayerPhones:   totalValidTaxpayerCol,  // col-8 valid (independent)
+    rowsWithAnyPhone:      anyValidPhone,           // used outlet || taxpayer fallback
+    rowsWithNoPhone:       noValidPhone,
+    usedOutletPhone:       validOutletPhones,       // best_phone came from col-15
+    usedTaxpayerFallback:  validTaxpayerPhones,     // best_phone came from col-8
+  }
+
+  // ── Preview mode: return stats + first 10 matches ──────────────────────────
   if (isPreview) {
     const preview = exactMatches.slice(0, 10).map(m => ({
-      leadId: m.lead.id,
-      displayName: m.lead.display_name ?? '(unnamed)',
+      leadId:         m.lead.id,
+      displayName:    m.lead.display_name ?? '(unnamed)',
       taxpayerNumber: m.lead.taxpayer_number,
-      outletNumber: normalizeOutletNumber(m.lead.outlet_number),
-      maskedPhone: maskPhone(m.normalizedPhone),
+      outletNumber:   normalizeOutletNumber(m.lead.outlet_number),
+      maskedPhone:    maskPhone(m.normalizedPhone),
+      phoneSource:    m.phoneSource,
     }))
 
     return NextResponse.json({
       preview,
+      phoneSummary,
       summary: {
         format,
-        rowsParsed: allRows.length,
-        rowsWithPhone: validRows.length + missingPhone + invalidPhone,
-        validPhones: validRows.length,
-        exactMatches: exactMatches.length,
-        taxpayerOnlyCandidates: taxpayerOnlyCandidates.length,
+        rowsParsed:      allRows.length,
+        exactMatches:    exactMatches.length,
         alreadySaved,
         skipReasons: {
           ...skipReasons,
-          missingPhone,
-          invalidPhone,
+          noValidPhone,
           taxpayerNotFound,
-          outletNotFound,
+          outletMismatch,
+          nonOutletRecord,
         },
       },
     })
   }
 
-  // ── Zero-match diagnostic ───────────────────────────────────────────────────
+  // ── Zero-match diagnostic ──────────────────────────────────────────────────
   if (exactMatches.length === 0) {
     return NextResponse.json({
-      error: exactMatchDiagnostic({
-        allRows, missingPhone, invalidPhone,
-        taxpayerNotFound, outletNotFound, taxpayerOnlyCandidates,
+      error: buildZeroMatchDiagnostic({
+        allRows, phoneSummary,
+        taxpayerNotFound, outletMismatch, nonOutletRecord,
+        mismatchSamples,
       }),
+      phoneSummary,
       summary: {
         format,
-        rowsParsed: allRows.length,
-        rowsWithPhone: validRows.length + missingPhone + invalidPhone,
-        validPhones: validRows.length,
+        rowsParsed:   allRows.length,
         exactMatches: 0,
         alreadySaved,
         skipReasons: {
           ...skipReasons,
-          missingPhone,
-          invalidPhone,
+          noValidPhone,
           taxpayerNotFound,
-          outletNotFound,
+          outletMismatch,
+          nonOutletRecord,
         },
       },
-    }, { status: 200 })  // 200 so UI displays summary rather than throwing
+    }, { status: 200 })
   }
 
-  // ── Save permit phones — parallel batches of 20 concurrent updates ──────────
-  // Sequential updates for 400+ leads would risk hitting Netlify's 10s timeout.
-  // Promise.all in chunks of 20 processes ~441 updates in ~1.2 seconds.
+  // ── Save permit phones — parallel batches ──────────────────────────────────
   const importedAt = new Date().toISOString()
-  const source = 'sift_weekly'
-  const CONCURRENT = 20
-  const attempted = exactMatches.length
+  const source     = 'sift_weekly'
+  const attempted  = exactMatches.length
   let updated = 0, failed = 0
   const saveErrors: string[] = []
 
@@ -258,9 +332,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         const { error } = await db
           .from('leads')
           .update({
-            permit_phone: normalizedPhone,
-            permit_phone_source: source,
-            permit_phone_imported_at: importedAt,
+            permit_phone:              normalizedPhone,
+            permit_phone_source:       source,
+            permit_phone_imported_at:  importedAt,
           })
           .eq('id', lead.id)
         return { ok: !error, msg: error ? `Row ${rowNum}: ${error.message}` : null }
@@ -273,24 +347,23 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   return NextResponse.json({
+    phoneSummary,
     summary: {
       format,
       phoneColFound,
-      rowsParsed: allRows.length,
-      rowsWithPhone: validRows.length + missingPhone + invalidPhone,
-      validPhones: validRows.length,
-      exactMatches: exactMatches.length,
+      rowsParsed:    allRows.length,
+      exactMatches:  exactMatches.length,
       attempted,
-      phonesAdded: updated,
+      phonesAdded:   updated,
       alreadySaved,
       failed,
-      errors: saveErrors,
+      errors:        saveErrors,
       skipReasons: {
         ...skipReasons,
-        missingPhone,
-        invalidPhone,
+        noValidPhone,
         taxpayerNotFound,
-        outletNotFound,
+        outletMismatch,
+        nonOutletRecord,
       },
     },
   })
@@ -301,46 +374,52 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 /** Mask a normalized phone for safe display: +12145551234 → •••-•••-1234 */
 function maskPhone(e164: string): string {
   const digits = e164.replace(/\D/g, '')
-  if (digits.length >= 10) {
-    return `•••-•••-${digits.slice(-4)}`
-  }
-  return '•••-••••'
+  return digits.length >= 10 ? `•••-•••-${digits.slice(-4)}` : '•••-••••'
 }
 
 /** Build a human-readable zero-match diagnostic */
-function exactMatchDiagnostic({
-  allRows, missingPhone, invalidPhone,
-  taxpayerNotFound, outletNotFound, taxpayerOnlyCandidates,
+function buildZeroMatchDiagnostic({
+  allRows,
+  phoneSummary,
+  taxpayerNotFound,
+  outletMismatch,
+  nonOutletRecord,
+  mismatchSamples,
 }: {
-  allRows: { length: number }
-  missingPhone: number
-  invalidPhone: number
+  allRows:         { length: number }
+  phoneSummary:    { rowsWithAnyPhone: number; rowsWithNoPhone: number; validOutletPhones: number; validTaxpayerPhones: number }
   taxpayerNotFound: number
-  outletNotFound: number
-  taxpayerOnlyCandidates: Array<{ taxpayerNumber: string; outletNumber: string; availableOutlets: string[] }>
+  outletMismatch:   number
+  nonOutletRecord:  number
+  mismatchSamples: Array<{ taxpayerNumber: string; siftOutlet: string; dbOutlets: string[] }>
 }): string {
   const parts: string[] = [
     `Parsed ${allRows.length} rows — 0 exact matches found.`,
+    `Phone coverage: ${phoneSummary.rowsWithAnyPhone} rows have a valid phone ` +
+    `(${phoneSummary.validOutletPhones} outlet + ${phoneSummary.validTaxpayerPhones} taxpayer fallback); ` +
+    `${phoneSummary.rowsWithNoPhone} have no valid phone.`,
   ]
-
-  if (missingPhone > 0)       parts.push(`${missingPhone} rows had no phone number.`)
-  if (invalidPhone > 0)       parts.push(`${invalidPhone} rows had an invalid phone.`)
-  if (taxpayerNotFound > 0)   parts.push(`${taxpayerNotFound} rows had a taxpayer number not in your leads.`)
-  if (outletNotFound > 0) {
-    parts.push(`${outletNotFound} rows found a matching taxpayer but outlet number did not match.`)
-    if (taxpayerOnlyCandidates.length > 0) {
-      const sample = taxpayerOnlyCandidates[0]
-      parts.push(
-        `Example: taxpayer ${sample.taxpayerNumber}, SIFT outlet "${sample.outletNumber}", ` +
-        `DB has outlets [${sample.availableOutlets.join(', ')}].`
-      )
-    }
-  }
 
   if (taxpayerNotFound > 0) {
     parts.push(
-      `Tip: Run "Import Texas Leads" first to ensure statewide permit records exist in the ` +
-      `database, then re-upload this SIFT file to match phones against the full statewide set.`
+      `${taxpayerNotFound} rows had a taxpayer number not found in your leads database. ` +
+      `Run "Import Texas Leads" to backfill the full statewide permit set, then re-upload this SIFT file.`
+    )
+  }
+  if (outletMismatch > 0) {
+    parts.push(`${outletMismatch} rows found a matching taxpayer but outlet number did not match any DB lead.`)
+    if (mismatchSamples.length > 0) {
+      const s = mismatchSamples[0]
+      parts.push(
+        `Example: taxpayer ${s.taxpayerNumber}, SIFT outlet "${s.siftOutlet}", ` +
+        `DB has [${s.dbOutlets.join(', ')}].`
+      )
+    }
+  }
+  if (nonOutletRecord > 0) {
+    parts.push(
+      `${nonOutletRecord} USE TAX rows (outlet=00000) had no matching DB lead — ` +
+      `these may not have been imported yet (run statewide backfill).`
     )
   }
   return parts.join(' ')
