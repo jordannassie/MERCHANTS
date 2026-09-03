@@ -337,7 +337,7 @@ export function SiftImportCard() {
               </a>
             </li>
             <li>Download the latest <code className="bg-blue-100 px-0.5 rounded">stpMM-DDph.zip</code></li>
-            <li>Unzip and upload the extracted text/CSV file below (not the ZIP)</li>
+            <li>Upload the ZIP directly — or unzip first and upload the extracted CSV/text file</li>
           </ol>
         </div>
 
@@ -356,14 +356,14 @@ export function SiftImportCard() {
             <div className="flex flex-col items-center gap-2 text-gray-400">
               <Upload size={24} />
               <span className="text-sm font-medium text-gray-600">Drop the extracted permit file here</span>
-              <span className="text-xs">or click to browse — CSV, TSV, or fixed-width text</span>
+              <span className="text-xs">or click to browse — ZIP (stpMM-DDph.zip) or extracted CSV/TSV</span>
             </div>
           )}
           <input
             ref={inputRef}
             type="file"
             className="hidden"
-            accept=".txt,.csv,.tsv,.dat"
+            accept=".zip,.txt,.csv,.tsv,.dat"
             onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }}
           />
         </div>

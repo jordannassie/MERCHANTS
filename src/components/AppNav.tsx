@@ -12,7 +12,7 @@ const NAV = [
   { href: '/pipeline',    label: 'Pipeline',    icon: Columns3 },
   { href: '/follow-ups',  label: 'Follow-ups',  icon: CalendarClock },
   { href: '/support',     label: 'Support',     icon: LifeBuoy },
-  { href: '/settings',    label: 'Imports',     icon: Upload },
+  { href: '/imports',     label: 'Imports',     icon: Upload },
   { href: '/settings',    label: 'Settings',    icon: Settings },
 ]
 

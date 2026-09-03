@@ -21,6 +21,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { unzipSync } from 'fflate'
 import { createServiceClient } from '@/lib/supabase/service'
 import { normalizePhone } from '@/lib/phone-normalize'
 import { parseSiftFile, normalizeOutletNumber } from '@/lib/sift-parser'
@@ -48,7 +49,37 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const isPreview = formData.get('preview') === 'true'
 
-  const text = await file.text()
+  // Support both raw CSV/TSV and ZIP files (stpMM-DDph.zip)
+  let text: string
+  const isZip =
+    file.name?.toLowerCase().endsWith('.zip') ||
+    file.type === 'application/zip' ||
+    file.type === 'application/x-zip-compressed'
+
+  if (isZip) {
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      const unzipped = unzipSync(bytes)
+      const entries = Object.entries(unzipped)
+      if (!entries.length) {
+        return NextResponse.json({ error: 'ZIP file is empty' }, { status: 422 })
+      }
+      // Skip PDFs, readme, and layout files — take the first data file
+      const dataEntry = entries.find(([name]) =>
+        !name.toLowerCase().endsWith('.pdf') &&
+        !name.toLowerCase().includes('readme') &&
+        !name.toLowerCase().includes('layout') &&
+        name.trim() !== ''
+      ) ?? entries[0]
+      text = new TextDecoder('utf-8').decode(dataEntry[1])
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      return NextResponse.json({ error: `Failed to unzip file: ${msg}` }, { status: 422 })
+    }
+  } else {
+    text = await file.text()
+  }
+
   const { rows: allRows, format, phoneColFound, skipReasons } = parseSiftFile(text)
 
   if (!allRows.length) {
