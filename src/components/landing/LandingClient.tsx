@@ -6,7 +6,7 @@ import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
 import {
   ChevronRight, Play, Shield, ArrowRight,
-  CheckCircle, Phone, Mail, LogIn, LifeBuoy,
+  CheckCircle, Phone, Mail, LogIn, LifeBuoy, MessageCircle,
 } from 'lucide-react'
 import { PinDialog } from './PinDialog'
 import { ComparisonTable } from './ComparisonTable'
@@ -126,8 +126,7 @@ export default function LandingClient() {
           <button
             onClick={() => scrollTo('#contact')}
             className="md:hidden text-sm font-semibold text-blue-600"
-          >
-            Get started
+          > Get Started
           </button>
         </div>
       </header>
@@ -253,26 +252,12 @@ export default function LandingClient() {
       <div className="md:hidden fixed bottom-0 inset-x-0 z-50">
         <div className="bg-white border-t border-slate-200 shadow-lg safe-area-bottom px-4 py-3">
           <div className="flex gap-3">
-            <a
-              href="tel:+19493316367"
-              className="flex-1 inline-flex items-center justify-center gap-2 h-12 rounded-lg border border-blue-600 bg-white text-blue-600 font-semibold"
-            >
-              {/* Filled phone handset icon (20px) */}
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                <path d="M21.707 16.293l-4-4a1 1 0 0 0-1.414 1.414l1.086 1.086a11.042 11.042 0 0 1-5.3 5.3l-1.086-1.086a1 1 0 0 0-1.414 1.414l4 4A1 1 0 0 0 14 24c6.075 0 11-4.925 11-11a1 1 0 0 0-1.293-.707z" />
-                <path d="M16.657 3.343a8 8 0 0 0-11.314 0L3.05 5.636a2 2 0 0 0-.293 2.293c1.27 2.56 3.84 5.13 6.4 6.4a2 2 0 0 0 2.293-.293l2.293-2.293a8 8 0 0 0 0-11.314z" />
-              </svg>
+            <a href="tel:+19493316367" className="flex-1 inline-flex items-center justify-center gap-2 h-12 rounded-lg border border-blue-600 bg-white text-blue-600 font-semibold">
+              <Phone size={20} className="h-5 w-5" strokeWidth={2.2} />
               Call
             </a>
-            <a
-              href={"sms:+19493316367?body=" + encodeURIComponent("Hi Process.Direct, I'm interested in card processing/POS for my business.")}
-              className="flex-1 inline-flex items-center justify-center gap-2 h-12 rounded-lg bg-blue-600 text-white font-semibold"
-            >
-              {/* Filled message/chat bubble with 3 dots (20px) */}
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                <path d="M20 2H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14l4 4V4a2 2 0 0 0-2-2z" />
-                <path d="M7.5 10.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm4.5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm4.5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z" fill="#fff"/>
-              </svg>
+            <a href={"sms:+19493316367?body=Hi%20Process.Direct%2C%20I%27m%20interested%20in%20card%20processing%2FPOS%20for%20my%20business."} className="flex-1 inline-flex items-center justify-center gap-2 h-12 rounded-lg bg-blue-600 text-white font-semibold">
+              <MessageCircle size={20} className="h-5 w-5" strokeWidth={2.2} />
               Text Us
             </a>
           </div>
