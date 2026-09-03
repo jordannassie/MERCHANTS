@@ -6,7 +6,7 @@ import { Suspense } from 'react'
 import type { Metadata } from 'next'
 import LandingClient from '@/components/landing/LandingClient'
 
-const HERO_IMAGE = 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/Approved.png'
+const HERO_IMAGE = 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/cards.png'
 const SITE_URL   = 'https://process.direct'
 
 export const metadata: Metadata = {
