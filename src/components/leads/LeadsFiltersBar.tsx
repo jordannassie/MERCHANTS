@@ -3,7 +3,7 @@
 import { useRouter, usePathname } from 'next/navigation'
 import { useCallback, useState, useRef } from 'react'
 import type { LeadsFilters } from '@/lib/types'
-import { LEAD_STATUSES, LEAD_PRIORITIES } from '@/lib/constants'
+import { LEAD_STATUSES } from '@/lib/constants'
 import { X, Search } from 'lucide-react'
 
 interface Props {
@@ -11,17 +11,31 @@ interface Props {
   counties: { code: string; name: string }[]
 }
 
+// Pipeline status buttons — order and labels shown in the filter bar
+const STATUS_BUTTONS = [
+  { value: 'new',            label: 'New' },
+  { value: 'attempted',      label: 'Attempted' },
+  { value: 'connected',      label: 'Connected' },
+  { value: 'follow_up',      label: 'Follow-up' },
+  { value: 'appointment',    label: 'Appointment' },
+  { value: 'won',            label: 'Won' },
+  { value: 'lost',           label: 'Lost' },
+  { value: 'do_not_contact', label: 'Do Not Contact' },
+  { value: 'all',            label: 'All' },
+] as const
+
+const REGIONS = ['DFW', 'Houston', 'Austin', 'San Antonio', 'All Texas'] as const
+
 export function LeadsFiltersBar({ filters, counties }: Props) {
-  const router = useRouter()
+  const router  = useRouter()
   const pathname = usePathname()
 
-  // Local search state — keeps the input responsive while debouncing URL updates.
-  const [searchValue, setSearchValue] = useState(filters.search || '')
+  // Local search state keeps the input responsive while URL is debounced
+  const [searchValue, setSearchValue]   = useState(filters.search || '')
+  const [showAdvanced, setShowAdvanced] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
-  // React-recommended pattern: store the previous URL value in state so we can
-  // detect when it changes externally (e.g. "Clear filters") and reset the input.
-  // Calling setState during render is safe when guarded by a changed-prop check.
+  // Sync input with external URL changes (e.g. clear button)
   const [prevUrlSearch, setPrevUrlSearch] = useState(filters.search || '')
   const urlSearch = filters.search || ''
   if (prevUrlSearch !== urlSearch) {
@@ -29,99 +43,92 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
     setSearchValue(urlSearch)
   }
 
+  // The active status from URL — 'new' is the default when param is absent
+  const activeStatus = (filters.status as string) || 'new'
+
+  // ── Build URLSearchParams from current filters + any overrides ────────────
   const buildParams = useCallback(
-    (updates: Partial<LeadsFilters>) => {
+    (updates: Record<string, unknown>) => {
       const next = { ...filters, ...updates, page: 1 }
       const params = new URLSearchParams()
-      if (next.region) params.set('region', next.region)
-      if (next.search) params.set('search', next.search)
-      if (typeof next.status !== 'undefined') params.set('status', next.status as string)
-      if (next.priority) params.set('priority', next.priority)
-      if (next.county) params.set('county', next.county)
-      if (next.city) params.set('city', next.city)
-      if (next.permitDateFrom) params.set('permitDateFrom', next.permitDateFrom)
-      if (next.permitDateTo) params.set('permitDateTo', next.permitDateTo)
-      if (next.firstSalesDateFrom) params.set('firstSalesDateFrom', next.firstSalesDateFrom)
-      if (next.firstSalesDateTo) params.set('firstSalesDateTo', next.firstSalesDateTo)
-      if (next.openingSoon) params.set('openingSoon', 'true')
-      if (next.neverContacted) params.set('neverContacted', 'true')
-      if (next.followUpDue) params.set('followUpDue', 'true')
-      if (next.starred) params.set('starred', 'true')
-      // hasPhone defaults to true — only encode when user explicitly sets it to false
-      if (next.hasPhone === false) params.set('hasPhone', 'false')
-      if (next.missingPhone) params.set('missingPhone', 'true')
-      if (next.hasWebsite) params.set('hasWebsite', 'true')
-      if (next.missingWebsite) params.set('missingWebsite', 'true')
-      if (next.enriched) params.set('enriched', 'true')
-      if (next.needsReview) params.set('needsReview', 'true')
-      // showChains: set only when explicitly showing chains (default is hidden)
-      if (next.hideCorporateChains === false) params.set('showChains', 'true')
-      if (next.sort && next.sort !== 'score') params.set('sort', next.sort)
-      if (next.order && next.order !== 'desc') params.set('order', next.order)
+
+      if (next.region)  params.set('region', next.region as string)
+      if (next.search)  params.set('search', next.search as string)
+
+      // Status: always write it explicitly so the URL is the single source of truth
+      const st = (next.status ?? 'new') as string
+      params.set('status', st)
+
+      if (next.priority)          params.set('priority', next.priority as string)
+      if (next.county)            params.set('county', next.county as string)
+      if (next.city)              params.set('city', next.city as string)
+      if (next.permitDateFrom)    params.set('permitDateFrom', next.permitDateFrom as string)
+      if (next.permitDateTo)      params.set('permitDateTo', next.permitDateTo as string)
+      if (next.firstSalesDateFrom) params.set('firstSalesDateFrom', next.firstSalesDateFrom as string)
+      if (next.firstSalesDateTo)  params.set('firstSalesDateTo', next.firstSalesDateTo as string)
+      if (next.openingSoon)       params.set('openingSoon', 'true')
+      if (next.neverContacted)    params.set('neverContacted', 'true')
+      if (next.followUpDue)       params.set('followUpDue', 'true')
+      if (next.starred)           params.set('starred', 'true')
+      if ((next.hasPhone as boolean) === false) params.set('hasPhone', 'false')
+      if (next.missingPhone)      params.set('missingPhone', 'true')
+      if (next.hasWebsite)        params.set('hasWebsite', 'true')
+      if (next.missingWebsite)    params.set('missingWebsite', 'true')
+      if (next.enriched)          params.set('enriched', 'true')
+      if (next.needsReview)       params.set('needsReview', 'true')
+      if ((next.hideCorporateChains as boolean) === false) params.set('showChains', 'true')
+      if (next.sort && next.sort !== 'score') params.set('sort', next.sort as string)
+      if (next.order && next.order !== 'desc') params.set('order', next.order as string)
+
       return params
     },
     [filters]
   )
 
   const set = useCallback(
-    (updates: Partial<LeadsFilters>) => {
+    (updates: Record<string, unknown>) => {
       router.push(`${pathname}?${buildParams(updates).toString()}`)
     },
     [buildParams, pathname, router]
   )
 
-  // Quick region buttons
-  const REGIONS = ['DFW', 'Houston', 'Austin', 'San Antonio', 'All Texas'] as const
-  const [showAdvanced, setShowAdvanced] = useState(false)
-
-  // Search: update local state immediately (keeps focus), debounce URL update
+  // ── Search handlers ───────────────────────────────────────────────────────
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value
     setSearchValue(value)
     clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
-      // when search is non-empty, prefer showing matches across all statuses
-      set({ search: value, status: (value ? ('all' as any) : filters.status) })
+      // When search is non-empty, show across all statuses so nothing is hidden
+      set({ search: value, status: value ? 'all' : activeStatus })
     }, 350)
   }
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       clearTimeout(debounceRef.current)
-      set({ search: searchValue, status: (searchValue ? ('all' as any) : filters.status) })
+      set({ search: searchValue, status: searchValue ? 'all' : activeStatus })
     }
   }
 
   const clearSearch = () => {
     clearTimeout(debounceRef.current)
     setSearchValue('')
-    // restore default working queue: Saved Region + New + Has Phone
-    set({ search: '', status: 'new', page: 1 })
+    set({ search: '', status: 'new' })
   }
-
-  const active = Boolean(
-    filters.search || filters.status || filters.priority || filters.county ||
-    filters.city || filters.permitDateFrom || filters.permitDateTo ||
-    filters.firstSalesDateFrom || filters.firstSalesDateTo ||
-    filters.openingSoon || filters.neverContacted || filters.followUpDue || filters.starred ||
-    // hasPhone defaults to true — only "active" (shows Clear) when explicitly disabled
-    filters.hasPhone === false ||
-    filters.missingPhone || filters.hasWebsite || filters.missingWebsite ||
-    filters.enriched || filters.needsReview || !filters.hideCorporateChains
-  )
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-3 mb-4 space-y-3">
-      {/* Search — uses local state so typing never loses focus */}
+
+      {/* Search */}
       <div className="relative">
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
         <input
           type="search"
-          placeholder="Search by name, phone, city, ZIP, NAICS…"
+          placeholder="Search by name, phone, city, ZIP…"
           value={searchValue}
           onChange={handleSearchChange}
           onKeyDown={handleSearchKeyDown}
-          className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full pl-9 pr-8 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           aria-label="Search leads"
         />
         {searchValue && (
@@ -131,14 +138,16 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
         )}
       </div>
 
-      {/* Quick region buttons */}
-  <div className="flex gap-2">
+      {/* Region quick-select */}
+      <div className="flex flex-wrap gap-2">
         {REGIONS.map(r => (
           <button
             key={r}
-            onClick={() => set({ region: r as string, county: '' })}
+            onClick={() => set({ region: r, county: '' })}
             className={`text-sm px-3 py-1 rounded-full border transition-colors ${
-              filters.region === r ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
+              filters.region === r
+                ? 'bg-blue-600 text-white border-blue-600'
+                : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
             }`}
           >
             {r}
@@ -146,20 +155,31 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
         ))}
       </div>
 
-      {/* Top filters: status + optional county/city */}
-      <div className="flex flex-wrap gap-2 items-center">
-        <select
-          value={filters.status || ''}
-          onChange={e => set({ status: e.target.value as LeadsFilters['status'] })}
-          className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-          aria-label="Filter by status"
-        >
-          <option value="all">All statuses</option>
-          {LEAD_STATUSES.map(s => (
-            <option key={s.value} value={s.value}>{s.label}</option>
-          ))}
-        </select>
+      {/* ── Pipeline status buttons — one source of truth ── */}
+      <div>
+        <p className="text-xs text-gray-400 mb-1.5 font-medium">Pipeline</p>
+        <div className="flex flex-wrap gap-1.5">
+          {STATUS_BUTTONS.map(({ value, label }) => {
+            const isActive = activeStatus === value
+            return (
+              <button
+                key={value}
+                onClick={() => set({ status: value })}
+                className={`text-sm px-3 py-1.5 rounded-lg border font-medium transition-colors ${
+                  isActive
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-blue-400 hover:text-blue-600'
+                }`}
+              >
+                {label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
 
+      {/* County + City + More Filters */}
+      <div className="flex flex-wrap gap-2 items-center">
         {counties.length > 0 && (
           <select
             value={filters.county || ''}
@@ -183,15 +203,18 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
           aria-label="Filter by city"
         />
 
-        <button onClick={() => setShowAdvanced(s => !s)} className="text-sm ml-1 text-gray-600 px-3 py-1 rounded border border-gray-200">
+        <button
+          onClick={() => setShowAdvanced(s => !s)}
+          className="text-sm text-gray-600 px-3 py-1 rounded border border-gray-200 hover:bg-gray-50"
+        >
           {showAdvanced ? 'Hide filters' : 'More Filters'}
         </button>
       </div>
 
-      {/* Advanced filters hidden by default */}
+      {/* Advanced filters */}
       {showAdvanced && (
         <>
-          <div className="flex flex-wrap gap-2 items-center mt-2">
+          <div className="flex flex-wrap gap-2 items-center">
             <span className="text-xs text-gray-500">Permit date:</span>
             <input type="date" value={filters.permitDateFrom || ''} onChange={e => set({ permitDateFrom: e.target.value })} className="text-sm border border-gray-200 rounded-lg px-2 py-1" />
             <span className="text-xs text-gray-400">to</span>
@@ -202,26 +225,38 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
             <input type="date" value={filters.firstSalesDateTo || ''} onChange={e => set({ firstSalesDateTo: e.target.value })} className="text-sm border border-gray-200 rounded-lg px-2 py-1" />
           </div>
 
-          <div className="flex flex-wrap gap-2 mt-2">
+          <div className="flex flex-wrap gap-2">
             {[
-              { key: 'openingSoon' as const, label: 'Opening soon' },
+              { key: 'openingSoon'   as const, label: 'Opening soon' },
               { key: 'neverContacted' as const, label: 'Never contacted' },
-              { key: 'followUpDue' as const, label: 'Follow-up due' },
-              { key: 'starred' as const, label: '⭐ Starred' },
-              { key: 'hasPhone' as const, label: '📞 Has phone' },
-              { key: 'missingPhone' as const, label: 'Missing phone' },
-              { key: 'hasWebsite' as const, label: '🌐 Has website' },
+              { key: 'followUpDue'   as const, label: 'Follow-up due' },
+              { key: 'starred'       as const, label: '⭐ Starred' },
+              { key: 'hasPhone'      as const, label: '📞 Has phone' },
+              { key: 'missingPhone'  as const, label: 'Missing phone' },
+              { key: 'hasWebsite'    as const, label: '🌐 Has website' },
               { key: 'missingWebsite' as const, label: 'Missing website' },
-              { key: 'enriched' as const, label: '✓ Contact found' },
-              { key: 'needsReview' as const, label: '⚑ Needs review' },
+              { key: 'enriched'      as const, label: '✓ Contact found' },
+              { key: 'needsReview'   as const, label: '⚑ Needs review' },
             ].map(({ key, label }) => (
-              <button key={key} onClick={() => set({ [key]: !filters[key] })} className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${filters[key] ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'}`}>{label}</button>
+              <button
+                key={key}
+                onClick={() => set({ [key]: !filters[key] })}
+                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                  filters[key] ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
+                }`}
+              >
+                {label}
+              </button>
             ))}
-            <button onClick={() => set({ hideCorporateChains: !filters.hideCorporateChains })} className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${filters.hideCorporateChains === false ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-gray-600 border-gray-300 hover:border-amber-400'}`} title="Corporate chains"> {filters.hideCorporateChains === false ? '🏢 Chains visible' : '🏢 Show chains'}</button>
           </div>
 
-          <div className="mt-2">
-            <button onClick={() => { clearTimeout(debounceRef.current); router.push(pathname) }} className="text-xs px-2.5 py-1 rounded-full border border-gray-300 text-gray-500 hover:bg-gray-100 flex items-center gap-1"><X size={10}/> Clear filters</button>
+          <div>
+            <button
+              onClick={() => { clearTimeout(debounceRef.current); router.push(pathname) }}
+              className="text-xs px-2.5 py-1 rounded-full border border-gray-300 text-gray-500 hover:bg-gray-100 flex items-center gap-1"
+            >
+              <X size={10} /> Clear all filters
+            </button>
           </div>
         </>
       )}
