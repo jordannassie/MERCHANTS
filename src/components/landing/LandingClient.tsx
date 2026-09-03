@@ -253,11 +253,18 @@ export default function LandingClient() {
         <div className="bg-white border-t border-slate-200 shadow-lg safe-area-bottom px-4 py-3">
           <div className="flex gap-3">
             <a href="tel:+19493316367" className="flex-1 inline-flex items-center justify-center gap-2 h-12 rounded-lg border border-blue-600 bg-white text-blue-600 font-semibold">
-              <Phone size={20} className="h-5 w-5" strokeWidth={2.2} />
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className="h-5 w-5">
+                <path d="M6.62 10.79a15.053 15.053 0 006.59 6.59l2.2-2.2a1 1 0 011.05-.24c1.12.37 2.33.57 3.55.57a1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 5a1 1 0 011-1h3.5a1 1 0 011 1c0 1.22.2 2.43.57 3.55a1 1 0 01-.24 1.05l-2.2 2.2z" />
+              </svg>
               Call
             </a>
             <a href={"sms:+19493316367?body=Hi%20Process.Direct%2C%20I%27m%20interested%20in%20card%20processing%2FPOS%20for%20my%20business."} className="flex-1 inline-flex items-center justify-center gap-2 h-12 rounded-lg bg-blue-600 text-white font-semibold">
-              <MessageCircle size={20} className="h-5 w-5" strokeWidth={2.2} />
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className="h-5 w-5">
+                <path d="M21 6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v11.5A1.5 1.5 0 0 0 4.5 19L8 16h11a2 2 0 0 0 2-2V6z" />
+                <circle cx="8.5" cy="11.5" r="1.1" fill="#fff" />
+                <circle cx="12" cy="11.5" r="1.1" fill="#fff" />
+                <circle cx="15.5" cy="11.5" r="1.1" fill="#fff" />
+              </svg>
               Text Us
             </a>
           </div>
