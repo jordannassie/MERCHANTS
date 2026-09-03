@@ -118,7 +118,7 @@ export default function LandingClient() {
               onClick={() => scrollTo('#contact')}
               className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
             >
-              Request a Free Review <ChevronRight size={14} />
+              Get Started <ChevronRight size={14} />
             </button>
           </div>
 
@@ -253,12 +253,26 @@ export default function LandingClient() {
       <div className="md:hidden fixed bottom-0 inset-x-0 z-50">
         <div className="bg-white border-t border-slate-200 shadow-lg safe-area-bottom px-4 py-3">
           <div className="flex gap-3">
-            <a href="tel:+19493316367" className="flex-1 inline-flex items-center justify-center gap-2 h-12 rounded-lg border border-blue-600 bg-white text-blue-600 font-semibold">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5h2l.4 2M7 7h10l1 9H6L7 7z"/></svg>
+            <a
+              href="tel:+19493316367"
+              className="flex-1 inline-flex items-center justify-center gap-2 h-12 rounded-lg border border-blue-600 bg-white text-blue-600 font-semibold"
+            >
+              {/* Filled phone handset icon (20px) */}
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <path d="M21.707 16.293l-4-4a1 1 0 0 0-1.414 1.414l1.086 1.086a11.042 11.042 0 0 1-5.3 5.3l-1.086-1.086a1 1 0 0 0-1.414 1.414l4 4A1 1 0 0 0 14 24c6.075 0 11-4.925 11-11a1 1 0 0 0-1.293-.707z" />
+                <path d="M16.657 3.343a8 8 0 0 0-11.314 0L3.05 5.636a2 2 0 0 0-.293 2.293c1.27 2.56 3.84 5.13 6.4 6.4a2 2 0 0 0 2.293-.293l2.293-2.293a8 8 0 0 0 0-11.314z" />
+              </svg>
               Call
             </a>
-            <a href="sms:+19493316367" className="flex-1 inline-flex items-center justify-center gap-2 h-12 rounded-lg bg-blue-600 text-white font-semibold">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 3.866-3.582 7-8 7-1.356 0-2.64-.236-3.8-.66L3 19l1.66-5.2C3.9 12.54 3 10.346 3 8c0-3.866 3.582-7 8-7s8 3.134 8 7z"/></svg>
+            <a
+              href={"sms:+19493316367?body=" + encodeURIComponent("Hi Process.Direct, I'm interested in card processing/POS for my business.")}
+              className="flex-1 inline-flex items-center justify-center gap-2 h-12 rounded-lg bg-blue-600 text-white font-semibold"
+            >
+              {/* Filled message/chat bubble with 3 dots (20px) */}
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <path d="M20 2H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14l4 4V4a2 2 0 0 0-2-2z" />
+                <path d="M7.5 10.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm4.5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm4.5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z" fill="#fff"/>
+              </svg>
               Text Us
             </a>
           </div>
