@@ -10,26 +10,26 @@ import {
   CheckSquare, Square, FlaskConical, AlertCircle, X,
 } from 'lucide-react'
 import { LEAD_STATUSES } from '@/lib/constants'
+import { COUNTY_NAMES } from '@/lib/constants'
 import type { LeadStatus } from '@/lib/types'
 // Enrichment UI removed from default simplified outreach view
+ 
 
 interface Props { leads: Lead[] }
 
-type ColKey = 'score' | 'business' | 'city' | 'category' | 'permitDate' | 'firstSales' | 'phone' | 'status' | 'action'
+type ColKey = 'business' | 'location' | 'phone' | 'permitDate' | 'firstSales' | 'sms' | 'status'
 
 const ALL_COLUMNS: { key: ColKey; label: string; always?: boolean }[] = [
-  { key: 'score',      label: 'Score',       always: true },
   { key: 'business',   label: 'Business',    always: true },
-  { key: 'city',       label: 'City' },
-  { key: 'category',   label: 'Category' },
+  { key: 'location',   label: 'Location' },
+  { key: 'phone',      label: 'Phone' },
   { key: 'permitDate', label: 'Permit Date' },
   { key: 'firstSales', label: 'First Sales' },
-  { key: 'phone',      label: 'Phone' },
-  { key: 'status',     label: 'Status' },
-  { key: 'action',     label: 'Action',      always: true },
+  { key: 'sms',        label: 'SMS' },
+  { key: 'status',     label: 'Pipeline' , always: true},
 ]
 
-const DEFAULT_COLS: ColKey[] = ['business', 'phone', 'city', 'permitDate', 'firstSales', 'status', 'action']
+const DEFAULT_COLS: ColKey[] = ['business','location','phone','permitDate','firstSales','sms','status']
 const MAX_SELECTION = 25
 
 interface BulkResult {
@@ -43,6 +43,39 @@ export function LeadsTable({ leads }: Props) {
   const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(new Set(DEFAULT_COLS))
   const [colMenuOpen, setColMenuOpen] = useState(false)
   const [leadsList, setLeadsList] = useState<Lead[]>(leads)
+  // per-row copy state
+  const [phoneCopied, setPhoneCopied] = useState<Record<string, boolean>>({})
+  const [smsCopied, setSmsCopied] = useState<Record<string, boolean>>({})
+  const [toasts, setToasts] = useState<Array<{ id: string; text: string; kind: 'phone' | 'sms' | 'error' }>>([])
+
+  function addToast(id: string, text: string, kind: 'phone' | 'sms' | 'error') {
+    const t = { id: `${Date.now()}-${id}`, text, kind }
+    setToasts(prev => [...prev, t])
+    setTimeout(() => setToasts(prev => prev.filter(x => x.id !== t.id)), 1600)
+  }
+
+  async function copyToClipboard(text: string): Promise<boolean> {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text)
+        return true
+      }
+    } catch (e) { /* fallthrough to execCommand */ }
+    // fallback
+    try {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.style.position = 'fixed'
+      ta.style.left = '-9999px'
+      document.body.appendChild(ta)
+      ta.select()
+      const ok = document.execCommand('copy')
+      document.body.removeChild(ta)
+      return ok
+    } catch {
+      return false
+    }
+  }
 
   // Row selection
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -202,23 +235,22 @@ export function LeadsTable({ leads }: Props) {
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm table-fixed">
-            <colgroup>
-              <col className="w-[36px]" /> {/* checkbox */}
-              {cols.map(col => (
-                <col key={col.key} className={
-                  col.key === 'score'      ? 'w-[60px]'  :
-                  col.key === 'city'       ? 'w-[90px]'  :
-                  col.key === 'category'   ? 'w-[110px]' :
-                  col.key === 'permitDate' ? 'w-[80px]'  :
-                  col.key === 'firstSales' ? 'w-[80px]'  :
-                  col.key === 'phone'      ? 'w-[120px]' :
-                  col.key === 'status'     ? 'w-[100px]' :
-                  col.key === 'action'     ? 'w-[80px]'  :
-                  ''
-                } />
-              ))}
-            </colgroup>
+          <div className="overflow-x-auto" style={{ minWidth: 1100 }}>
+            <table className="w-full text-sm table-fixed min-w-full">
+              <colgroup>
+                <col className="w-[36px]" /> {/* checkbox */}
+                {cols.map(col => (
+                  <col key={col.key} className={
+                    col.key === 'business'   ? 'min-w-[260px]' :
+                    col.key === 'location'   ? 'min-w-[160px]' :
+                    col.key === 'phone'      ? 'min-w-[180px]' :
+                    col.key === 'permitDate' ? 'w-[120px]' :
+                    col.key === 'firstSales' ? 'w-[120px]' :
+                    col.key === 'sms'        ? 'min-w-[420px]' :
+                    col.key === 'status'     ? 'w-[140px]' :
+                    ''
+                } />))}
+              </colgroup>
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50">
                 <th className="px-2 py-3">
@@ -287,79 +319,107 @@ export function LeadsTable({ leads }: Props) {
                             {lead.first_sales_date ? fmtDate(lead.first_sales_date) : '—'}
                           </span>
                         )}
-                    {col.key === 'phone' && (() => {
+                        {col.key === 'phone' && (() => {
                           const phone = lead.permit_phone ?? lead.primary_phone
                           if (!phone) return <span className="text-gray-300 text-xs">—</span>
                           const normalized = phone.replace(/\D/g, '')
                           return (
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={async () => {
-                              try {
-                                await navigator.clipboard.writeText(normalized)
-                                const el = document.createElement('span')
-                                el.textContent = 'Copied ✓'
-                                el.className = 'ml-2 text-xs text-green-600'
-                                const parent = document.getElementById(`phone-copy-${lead.id}`)
-                                if (parent) {
-                                  parent.appendChild(el)
-                                  setTimeout(() => el.remove(), 1200)
-                                }
-                              } catch {}
-                            }}
-                            id={`phone-copy-${lead.id}`}
-                            className="text-blue-600 font-medium text-sm px-2 py-1 rounded-md border border-gray-200"
-                            title="Copy phone"
-                          >
-                            {fmtPhone(phone)}
-                          </button>
-                          <a href={`tel:${phone}`} className="text-xs text-gray-500 px-2">Call</a>
-                          <button
-                            onClick={async () => {
-                              const business = lead.display_name || lead.outlet_name || ''
-                              const sms = business
-                                ? `Hi, this is Jordan with Process.Direct. I saw that ${business} is getting set up in Texas. Have you already gotten your card processing/POS set up?`
-                                : `Hi, this is Jordan with Process.Direct. I saw that your business is getting set up in Texas. Have you already gotten your card processing/POS set up?`
-                              try {
-                                await navigator.clipboard.writeText(sms)
-                                const el = document.createElement('span')
-                                el.textContent = 'Copied ✓'
-                                el.className = 'ml-2 text-xs text-green-600'
-                                const parent = document.getElementById(`copy-sms-${lead.id}`)
-                                if (parent) {
-                                  parent.appendChild(el)
-                                  setTimeout(() => el.remove(), 1200)
-                                }
-                              } catch {}
-                            }}
-                            id={`copy-sms-${lead.id}`}
-                            className="text-xs bg-gray-100 px-2 py-1 rounded-md"
-                          >
-                            Copy SMS
-                          </button>
-                        </div>
+                            <div className="flex items-center gap-3">
+                              <button
+                                onClick={async () => {
+                                  const ok = await copyToClipboard(normalized)
+                                  if (ok) {
+                                    setPhoneCopied(s => ({ ...s, [lead.id]: true }))
+                                    addToast(lead.id, 'Phone copied', 'phone')
+                                    setTimeout(() => setPhoneCopied(s => ({ ...s, [lead.id]: false })), 1600)
+                                  } else {
+                                    addToast(lead.id, 'Could not copy — try again', 'error')
+                                  }
+                                }}
+                                id={`phone-copy-${lead.id}`}
+                                className={`text-sm font-medium px-3 py-1 border border-gray-200 rounded whitespace-nowrap ${phoneCopied[lead.id] ? 'bg-green-50 text-green-700 border-green-200 scale-105 animate-pulse' : ''}`}
+                                title="Copy phone"
+                              >
+                                {phoneCopied[lead.id] ? (<span className="inline-flex items-center gap-1"><Check size={12} /> Phone Copied!</span>) : fmtPhone(phone)}
+                              </button>
+                              <a href={`tel:${phone}`} className="text-xs text-gray-500 px-2 py-1 border border-transparent rounded whitespace-nowrap">Call</a>
+                            </div>
+                          )
+                        })()}
+                        {col.key === 'sms' && (() => {
+                          const business = lead.display_name || lead.outlet_name || ''
+                          const sms = business
+                            ? `Hi, this is Jordan with Process.Direct. I saw that ${business} is getting set up in Texas. Have you already gotten your card processing/POS set up?`
+                            : `Hi, this is Jordan with Process.Direct. I saw that your business is getting set up in Texas. Have you already gotten your card processing/POS set up?`
+                          return (
+                            <div className="flex flex-col gap-2">
+                              <div className="text-sm leading-relaxed bg-gray-50 px-3 py-2 rounded text-slate-800">
+                                {sms}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={async () => {
+                                    const ok = await copyToClipboard(sms)
+                                    if (ok) {
+                                      setSmsCopied(s => ({ ...s, [lead.id]: true }))
+                                      addToast(lead.id, 'SMS message copied', 'sms')
+                                      setTimeout(() => setSmsCopied(s => ({ ...s, [lead.id]: false })), 1600)
+                                    } else {
+                                      addToast(lead.id, 'Could not copy — try again', 'error')
+                                    }
+                                  }}
+                                  id={`copy-sms-${lead.id}`}
+                                  className={`text-sm px-3 py-1 rounded-md border ${smsCopied[lead.id] ? 'bg-green-50 text-green-700 border-green-200 scale-105 animate-pulse' : 'bg-white'}`}
+                                >
+                                  {smsCopied[lead.id] ? <span className="inline-flex items-center gap-1"><Check size={12} /> Copied!</span> : 'Copy SMS'}
+                                </button>
+                              </div>
+                            </div>
                           )
                         })()}
                         {col.key === 'status' && (
-                          <StatusDropdown lead={lead} onStatusChange={async (newStatus) => {
-                            // call API
-                            const res = await fetch(`/api/leads/${lead.id}/status`, {
-                              method: 'PATCH',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ status: newStatus }),
-                            })
-                            if (res.ok) {
-                              // remove from current list if it no longer matches current status filter
-                              const currentStatus = (typeof window !== 'undefined') ? new URLSearchParams(window.location.search).get('status') || 'new' : 'new'
-                              if (newStatus !== currentStatus) {
-                                setLeadsList(prev => prev.filter(p => p.id !== lead.id))
+                          <div style={{ minWidth: 120 }}>
+                            <StatusDropdown lead={lead} onStatusChange={async (newStatus) => {
+                              // call API
+                              const res = await fetch(`/api/leads/${lead.id}/status`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ status: newStatus }),
+                              })
+                              if (res.ok) {
+                                const currentStatus = (typeof window !== 'undefined') ? new URLSearchParams(window.location.search).get('status') || 'new' : 'new'
+                                if (newStatus !== currentStatus) {
+                                  // Auto-advance: remove the row and keep scroll position, then highlight next row
+                                  setLeadsList(prev => {
+                                    const idx = prev.findIndex(p => p.id === lead.id)
+                                    const next = prev.filter(p => p.id !== lead.id)
+                                    setTimeout(() => {
+                                      try {
+                                        const table = document.querySelector('table')
+                                        if (table) {
+                                          const tbody = table.querySelector('tbody')
+                                          if (tbody) {
+                                            const rows = Array.from(tbody.querySelectorAll('tr'))
+                                            const target = rows[idx] || rows[idx - 1] || rows[0]
+                                            if (target) {
+                                              target.classList.add('ring-2', 'ring-blue-300')
+                                              setTimeout(() => target.classList.remove('ring-2', 'ring-blue-300'), 900)
+                                              target.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+                                            }
+                                          }
+                                        }
+                                      } catch (e) { /* noop */ }
+                                    }, 100)
+                                    return next
+                                  })
+                                } else {
+                                  setLeadsList(prev => prev.map(p => p.id === lead.id ? { ...p, status: newStatus as LeadStatus } : p))
+                                }
                               } else {
-                                setLeadsList(prev => prev.map(p => p.id === lead.id ? { ...p, status: newStatus } : p))
+                                console.error('Failed to update status')
                               }
-                            } else {
-                              console.error('Failed to update status')
-                            }
-                          }} />
+                            }} />
+                          </div>
                         )}
                         {col.key === 'action' && <ActionCell lead={lead} />}
                       </td>
@@ -448,21 +508,54 @@ export function LeadsTable({ leads }: Props) {
                     const phone = (lead.permit_phone ?? lead.primary_phone)!
                     const normalized = phone.replace(/\D/g, '')
                     return (
-                      <button onClick={async () => {
-                        try {
-                          await navigator.clipboard.writeText(normalized)
-                          const el = document.createElement('span')
-                          el.textContent = 'Copied ✓'
-                          el.className = 'ml-2 text-xs text-green-600'
-                          const parent = document.getElementById(`mobile-phone-copy-${lead.id}`)
-                          if (parent) {
-                            parent.appendChild(el)
-                            setTimeout(() => el.remove(), 1200)
-                          }
-                        } catch {}
-                      }} id={`mobile-phone-copy-${lead.id}`} className="text-xs text-blue-600 flex items-center gap-1">
-                        <Phone size={10} />{fmtPhone(phone)}
-                      </button>
+                      <div className="flex flex-col gap-2">
+                        <button
+                          onClick={async () => {
+                            const ok = await copyToClipboard(normalized)
+                            if (ok) {
+                              setPhoneCopied(s => ({ ...s, [lead.id]: true }))
+                              addToast(lead.id, 'Phone copied', 'phone')
+                              setTimeout(() => setPhoneCopied(s => ({ ...s, [lead.id]: false })), 1600)
+                            } else {
+                              addToast(lead.id, 'Could not copy — try again', 'error')
+                            }
+                          }}
+                          id={`mobile-phone-copy-${lead.id}`}
+                          className={`text-sm font-medium text-blue-600 flex items-center gap-2 ${phoneCopied[lead.id] ? 'bg-green-50 text-green-700 border-green-200 rounded px-2 py-1' : ''}`}
+                        >
+                          <Phone size={12} /> {phoneCopied[lead.id] ? '✓ Phone Copied!' : fmtPhone(phone)}
+                        </button>
+                        <div className="text-sm leading-relaxed bg-gray-50 px-3 py-2 rounded text-slate-800">
+                          {(() => {
+                            const business = lead.display_name || lead.outlet_name || ''
+                            return business
+                              ? `Hi, this is Jordan with Process.Direct. I saw that ${business} is getting set up in Texas. Have you already gotten your card processing/POS set up?`
+                              : `Hi, this is Jordan with Process.Direct. I saw that your business is getting set up in Texas. Have you already gotten your card processing/POS set up?`
+                          })()}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={async () => {
+                              const business = lead.display_name || lead.outlet_name || ''
+                              const sms = business
+                                ? `Hi, this is Jordan with Process.Direct. I saw that ${business} is getting set up in Texas. Have you already gotten your card processing/POS set up?`
+                                : `Hi, this is Jordan with Process.Direct. I saw that your business is getting set up in Texas. Have you already gotten your card processing/POS set up?`
+                              const ok = await copyToClipboard(sms)
+                              if (ok) {
+                                setSmsCopied(s => ({ ...s, [lead.id]: true }))
+                                addToast(lead.id, 'SMS message copied', 'sms')
+                                setTimeout(() => setSmsCopied(s => ({ ...s, [lead.id]: false })), 1600)
+                              } else {
+                                addToast(lead.id, 'Could not copy — try again', 'error')
+                              }
+                            }}
+                            className={`text-sm px-3 py-1 rounded-md border ${smsCopied[lead.id] ? 'bg-green-50 text-green-700 border-green-200 scale-105 animate-pulse' : 'bg-white'}`}
+                          >
+                            {smsCopied[lead.id] ? <span className="inline-flex items-center gap-1"><Check size={12} /> Copied!</span> : 'Copy SMS'}
+                          </button>
+                          <a href={`tel:${normalized}`} className="text-sm text-blue-600 px-3 py-1 rounded border border-transparent">Call</a>
+                        </div>
+                      </div>
                     )
                   })()}
                   {!(lead.permit_phone ?? lead.primary_phone) && lead.website && (
@@ -476,6 +569,13 @@ export function LeadsTable({ leads }: Props) {
             </div>
           )
         })}
+      </div>
+      <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-2 pointer-events-none">
+        {toasts.map(t => (
+          <div key={t.id} className={`pointer-events-auto px-3 py-2 rounded-lg text-sm ${t.kind === 'error' ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>
+            <span className="inline-flex items-center gap-2">{t.kind !== 'error' ? '✓' : '⚠'} {t.text}</span>
+          </div>
+        ))}
       </div>
     </>
   )
@@ -555,7 +655,8 @@ function StatusDropdown({ lead, onStatusChange }: { lead: Lead; onStatusChange: 
         await onStatusChange(v)
         setLoading(false)
       }}
-      className="text-xs rounded px-2 py-1 border border-gray-200"
+      className="text-xs rounded px-2 py-1 border border-gray-200 w-[140px]"
+      style={{ minWidth: 120 }}
     >
       <option value="new">New</option>
       {LEAD_STATUSES.map(s => (
