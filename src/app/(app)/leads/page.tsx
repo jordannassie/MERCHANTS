@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import type { LeadsFilters, Lead } from '@/lib/types'
 import { LEADS_PER_PAGE } from '@/lib/types'
 import { DFW_COUNTIES } from '@/lib/constants'
+import { getRegionCounties } from '@/lib/regions'
 import { LeadsFiltersBar } from '@/components/leads/LeadsFiltersBar'
 import { LeadsTable } from '@/components/leads/LeadsTable'
 import { BulkEnrichBar } from '@/components/leads/BulkEnrichBar'
@@ -48,6 +49,7 @@ export default async function LeadsPage({ searchParams }: PageProps) {
     starred: sp.starred === 'true',
     hasPhone,
     missingPhone: sp.missingPhone === 'true',
+    region: sp.region || '',
     hasWebsite: sp.hasWebsite === 'true',
     missingWebsite: sp.missingWebsite === 'true',
     enriched: sp.enriched === 'true',
@@ -57,10 +59,20 @@ export default async function LeadsPage({ searchParams }: PageProps) {
     order: (sp.order as 'asc' | 'desc') || 'desc',
     page,
   }
+  // Fetch active territory to obtain saved region default (if user hasn't provided region via URL)
+  const { data: territories } = await supabase.from('territories').select('*').eq('is_active', true).limit(1)
+  const activeTerritory = territories?.[0] ?? null
+  const regionParam = filters.region || (activeTerritory?.region ?? 'DFW')
+  const regionCounties = getRegionCounties(regionParam)
 
   let query = supabase
     .from('leads')
     .select('*', { count: 'exact' })
+
+  // Apply region pre-filter when no explicit county filter is set and the region defines counties
+  if (!filters.county && regionCounties && regionCounties.length > 0) {
+    query = query.in('outlet_county_code', regionCounties)
+  }
 
   if (filters.search) {
     const s = `%${filters.search}%`

@@ -24,7 +24,18 @@ export default async function SettingsPage() {
     <div className="px-4 md:px-8 py-6 max-w-2xl mx-auto space-y-6">
       <h1 className="text-xl font-semibold text-gray-900">Settings</h1>
 
-      {/* Territory */}
+      {/* Data Coverage (informational, locked) */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <h2 className="font-medium text-gray-900 mb-2">Data Coverage</h2>
+        <p className="text-sm text-gray-600 mb-2">Texas Statewide — informational only (locked)</p>
+        <p className="text-xs text-gray-400">All available Texas permit records will be imported into the database regardless of your selected working region. This setting is informational and cannot be changed from this UI.</p>
+        <div className="mt-3">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Import Window</label>
+          <div className="text-sm text-gray-600">7 / 14 / 30 days (adjust default below per Saved View)</div>
+        </div>
+      </div>
+
+      {/* Saved View */}
       {primary && <TerritoryForm territory={primary} />}
 
       {/* Manual import */}

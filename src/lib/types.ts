@@ -216,6 +216,7 @@ export interface LeadsFilters {
   priority?: LeadPriority | ''
   county?: string
   city?: string
+  region?: string
   permitDateFrom?: string
   permitDateTo?: string
   firstSalesDateFrom?: string

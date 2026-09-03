@@ -33,6 +33,7 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
     (updates: Partial<LeadsFilters>) => {
       const next = { ...filters, ...updates, page: 1 }
       const params = new URLSearchParams()
+      if (next.region) params.set('region', next.region)
       if (next.search) params.set('search', next.search)
       if (next.status) params.set('status', next.status)
       if (next.priority) params.set('priority', next.priority)
@@ -68,6 +69,9 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
     },
     [buildParams, pathname, router]
   )
+
+  // Quick region buttons
+  const REGIONS = ['DFW', 'Houston', 'Austin', 'San Antonio', 'All Texas'] as const
 
   // Search: update local state immediately (keeps focus), debounce URL update
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -111,6 +115,21 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
           className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           aria-label="Search leads"
         />
+      </div>
+
+      {/* Quick region buttons */}
+      <div className="flex gap-2">
+        {REGIONS.map(r => (
+          <button
+            key={r}
+            onClick={() => set({ region: r as string })}
+            className={`text-sm px-3 py-1 rounded-full border transition-colors ${
+              filters.region === r ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
+            }`}
+          >
+            {r}
+          </button>
+        ))}
       </div>
 
       {/* Filters row */}

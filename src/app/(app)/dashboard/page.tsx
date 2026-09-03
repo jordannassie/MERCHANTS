@@ -47,6 +47,14 @@ export default async function DashboardPage() {
   // Shared column list for call-list leads
   const CALL_COLS = 'id,display_name,outlet_name,outlet_city,outlet_state,priority,status,score,primary_phone,permit_phone,permit_issue_date,first_sales_date,naics_code,category'
 
+  // Load active territory first to determine saved region for default view filtering
+  const { data: territories } = await db.from('territories').select('*').eq('is_active', true).limit(1)
+  const activeTerritory = territories?.[0] ?? null
+  // region-based county list
+  import('@/lib/regions').then(() => {})
+  const { getRegionCounties } = await import('@/lib/regions')
+  const regionCounties = getRegionCounties(activeTerritory?.region ?? 'DFW')
+
   const [
     { count: totalLeads },
     { count: hotLeads },
@@ -57,20 +65,22 @@ export default async function DashboardPage() {
     { data: hotNoPhone },
     { data: todayFollowUps },
     { data: lastImportArr },
-    { data: territory },
   ] = await Promise.all([
-    db.from('leads').select('*', { count: 'exact', head: true }),
+    db.from('leads').select('*', { count: 'exact', head: true }).then(res => regionCounties.length ? db.from('leads').select('*', { count: 'exact', head: true }).in('outlet_county_code', regionCounties).then(r=>r) : res),
 
     db.from('leads').select('*', { count: 'exact', head: true })
       .eq('priority', 'hot')
       .not('status', 'in', '(won,lost,do_not_contact)')
-      .or(NON_CHAIN),
+      .or(NON_CHAIN)
+      .then(res => regionCounties.length ? db.from('leads').select('*', { count: 'exact', head: true }).in('outlet_county_code', regionCounties).eq('priority','hot').not('status','in','(won,lost,do_not_contact)').or(NON_CHAIN).then(r=>r) : res),
 
     db.from('leads').select('*', { count: 'exact', head: true })
       .lte('next_follow_up_at', todayEnd.toISOString())
-      .not('status', 'in', '(won,lost,do_not_contact)'),
+      .not('status', 'in', '(won,lost,do_not_contact)')
+      .then(res => regionCounties.length ? db.from('leads').select('*', { count: 'exact', head: true }).in('outlet_county_code', regionCounties).lte('next_follow_up_at', todayEnd.toISOString()).not('status','in','(won,lost,do_not_contact)').then(r=>r) : res),
 
-    db.from('leads').select('*', { count: 'exact', head: true }).eq('status', 'appointment'),
+    db.from('leads').select('*', { count: 'exact', head: true }).eq('status', 'appointment')
+      .then(res => regionCounties.length ? db.from('leads').select('*', { count: 'exact', head: true }).in('outlet_county_code', regionCounties).eq('status','appointment').then(r=>r) : res),
 
     // Primary call list: leads with any callable phone, ordered by score then soonest opening
     db.from('leads')
@@ -80,13 +90,15 @@ export default async function DashboardPage() {
       .or(NON_CHAIN)
       .order('score', { ascending: false })
       .order('first_sales_date', { ascending: true, nullsFirst: false })
-      .limit(10),
+      .limit(10)
+      .then(res => regionCounties.length ? db.from('leads').select(CALL_COLS).in('outlet_county_code', regionCounties).or('permit_phone.not.is.null,primary_phone.not.is.null').not('status','in','(won,lost,do_not_contact)').or(NON_CHAIN).order('score',{ascending:false}).order('first_sales_date',{ascending:true,nullsFirst:false}).limit(10).then(r=>r) : res),
 
     // Total callable leads count (for section header)
     db.from('leads').select('*', { count: 'exact', head: true })
       .or('permit_phone.not.is.null,primary_phone.not.is.null')
       .not('status', 'in', '(won,lost,do_not_contact)')
-      .or(NON_CHAIN),
+      .or(NON_CHAIN)
+      .then(res => regionCounties.length ? db.from('leads').select('*',{count:'exact',head:true}).in('outlet_county_code', regionCounties).or('permit_phone.not.is.null,primary_phone.not.is.null').not('status','in','(won,lost,do_not_contact)').or(NON_CHAIN).then(r=>r) : res),
 
     // Fallback: hot leads without any phone (shown only if callable list has < 10)
     db.from('leads')
@@ -97,17 +109,18 @@ export default async function DashboardPage() {
       .not('status', 'in', '(won,lost,do_not_contact)')
       .or(NON_CHAIN)
       .order('score', { ascending: false })
-      .limit(5),
+      .limit(5)
+      .then(res => regionCounties.length ? db.from('leads').select(CALL_COLS).in('outlet_county_code', regionCounties).is('permit_phone',null).is('primary_phone',null).eq('priority','hot').not('status','in','(won,lost,do_not_contact)').or(NON_CHAIN).order('score',{ascending:false}).limit(5).then(r=>r) : res),
 
     db.from('leads')
       .select('id,display_name,outlet_city,outlet_state,primary_phone,permit_phone,next_follow_up_at,status,naics_code')
       .lte('next_follow_up_at', todayEnd.toISOString())
       .gte('next_follow_up_at', todayStart.toISOString())
       .order('next_follow_up_at')
-      .limit(6),
+      .limit(6)
+      .then(res => regionCounties.length ? db.from('leads').select('id,display_name,outlet_city,outlet_state,primary_phone,permit_phone,next_follow_up_at,status,naics_code').in('outlet_county_code', regionCounties).lte('next_follow_up_at', todayEnd.toISOString()).gte('next_follow_up_at', todayStart.toISOString()).order('next_follow_up_at').limit(6).then(r=>r) : res),
 
     db.from('import_runs').select('*').order('started_at', { ascending: false }).limit(1),
-    db.from('territories').select('*').eq('is_active', true).limit(1),
   ])
 
   // Merge callable leads with hot-no-phone fallback if fewer than 10 callable leads
@@ -119,7 +132,6 @@ export default async function DashboardPage() {
 
   const firstName = 'Jordan'
   const lastRun = lastImportArr?.[0] ?? null
-  const activeTerritory = territory?.[0] ?? null
 
   const stats = [
     { label: 'New Leads', value: totalLeads ?? 0, icon: Users, color: 'text-blue-500', bg: 'bg-blue-50', href: '/leads' },
