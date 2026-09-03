@@ -104,9 +104,10 @@ export function LeadsTable({ leads }: Props) {
           const county = COUNTY_NAMES[String(lead.outlet_county_code ?? '')] || lead.outlet_county_code || ''
           const phone = lead.permit_phone ?? lead.primary_phone
           const normalized = phone ? phone.replace(/\D/g, '') : ''
-          const sms = (lead.display_name || lead.outlet_name)
-            ? `Hi, this is Jordan with Process.Direct. I saw that ${lead.display_name || lead.outlet_name} is getting set up in Texas. Have you already gotten your card processing/POS set up?`
-            : `Hi, this is Jordan with Process.Direct. I saw that your business is getting set up in Texas. Have you already gotten your card processing/POS set up?`
+          const businessName = lead.display_name || lead.outlet_name
+          const sms = businessName
+            ? `Hi, this is Jordan with Process.Direct. I saw that ${businessName} is getting set up in Texas. Have you already gotten your card processing/POS set up?\n\nhttps://process.direct`
+            : `Hi, this is Jordan with Process.Direct. I saw that your business is getting set up in Texas. Have you already gotten your card processing/POS set up?\n\nhttps://process.direct`
 
           return (
             <div
@@ -184,7 +185,7 @@ export function LeadsTable({ leads }: Props) {
               {/* SMS message — always visible */}
               <div>
                 <div className="text-xs text-gray-400 mb-1">Message</div>
-                <div className="bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-sm leading-relaxed text-slate-800">
+                <div className="bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-sm leading-relaxed text-slate-800 whitespace-pre-line">
                   {sms}
                 </div>
                 <div className="mt-2 flex items-center gap-3 flex-wrap">
