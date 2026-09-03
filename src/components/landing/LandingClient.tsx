@@ -274,22 +274,6 @@ export default function LandingClient() {
       {/* spacer so page content isn't hidden behind mobile sticky bar */}
       <div className="h-16 md:h-0" />
 
-      {/* ─── VIDEO SECTION ──────────────────────────────────────────────────── */}
-      <section id="video" className="bg-white py-20 md:py-28">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-10">
-            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">
-              See How We Help You Save
-            </h2>
-            <p className="text-lg text-slate-500 max-w-2xl mx-auto">
-              A quick look at how better payment processing can reduce unnecessary fees
-              and simplify the way your business gets paid.
-            </p>
-          </div>
-          <VideoPlaceholder />
-        </div>
-      </section>
-
       {/* ─── COMPARISON TABLE ───────────────────────────────────────────────── */}
       <ComparisonTable onScrollToContact={() => scrollTo('#contact')} />
 
