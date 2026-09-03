@@ -9,6 +9,8 @@ import {
   Star, Phone, Globe, Search, Settings2, Check, Loader2,
   CheckSquare, Square, FlaskConical, AlertCircle, X,
 } from 'lucide-react'
+import { LEAD_STATUSES } from '@/lib/constants'
+import type { LeadStatus } from '@/lib/types'
 import { EnrichmentBadge } from './EnrichmentBadge'
 
 interface Props { leads: Lead[] }
@@ -36,8 +38,11 @@ interface BulkResult {
 
 export function LeadsTable({ leads }: Props) {
   const router = useRouter()
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
+  const currentStatusParam = searchParams?.get('status') || 'new'
   const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(new Set(DEFAULT_COLS))
   const [colMenuOpen, setColMenuOpen] = useState(false)
+  const [leadsList, setLeadsList] = useState<Lead[]>(leads)
 
   // Row selection
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -103,7 +108,7 @@ export function LeadsTable({ leads }: Props) {
       {/* ── Selection + Bulk controls ── */}
       {(hasSelection || bulkResult || bulkError) && (
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          {hasSelection && (
+              {hasSelection && (
             <>
               <span className="text-xs text-gray-600 font-medium">
                 {selected.size} of {MAX_SELECTION} selected
@@ -166,7 +171,7 @@ export function LeadsTable({ leads }: Props) {
       )}
 
       {/* ── Desktop table ── */}
-      <div className="hidden md:block">
+        <div className="hidden md:block">
         <div className="flex justify-end mb-2 relative">
           <button
             onClick={() => setColMenuOpen(o => !o)}
@@ -229,7 +234,7 @@ export function LeadsTable({ leads }: Props) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {leads.map(lead => {
+              {leadsList.map(lead => {
                 const name = lead.display_name || lead.outlet_name || lead.taxpayer_name || '(Unnamed)'
                 const isSelected = selected.has(lead.id)
                 return (
@@ -289,21 +294,56 @@ export function LeadsTable({ leads }: Props) {
                         )}
                         {col.key === 'phone' && (() => {
                           const phone = lead.permit_phone ?? lead.primary_phone
-                          return phone
-                            ? (
-                              <a href={`tel:${phone}`} className="text-blue-600 hover:underline flex items-center gap-1 text-xs whitespace-nowrap">
+                          if (!phone) return <span className="text-gray-300 text-xs">—</span>
+                          const normalized = phone.replace(/\D/g, '')
+                          return (
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    await navigator.clipboard.writeText(normalized)
+                                    const el = document.createElement('span')
+                                    el.textContent = 'Copied ✓'
+                                    el.className = 'ml-2 text-xs text-green-600'
+                                    const parent = document.getElementById(`phone-copy-${lead.id}`)
+                                    if (parent) {
+                                      parent.appendChild(el)
+                                      setTimeout(() => el.remove(), 1200)
+                                    }
+                                  } catch {}
+                                }}
+                                id={`phone-copy-${lead.id}`}
+                                className="text-blue-600 hover:underline flex items-center gap-1 text-xs whitespace-nowrap"
+                                title="Copy phone"
+                              >
                                 <Phone size={11} />{fmtPhone(phone)}
                                 {lead.permit_phone && !lead.primary_phone && (
                                   <span className="text-[10px] text-gray-400">permit</span>
                                 )}
-                              </a>
-                            )
-                            : <span className="text-gray-300 text-xs">—</span>
+                              </button>
+                            </div>
+                          )
                         })()}
                         {col.key === 'status' && (
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[lead.status]}`}>
-                            {lead.status.replace('_', ' ')}
-                          </span>
+                          <StatusDropdown lead={lead} onStatusChange={async (newStatus) => {
+                            // call API
+                            const res = await fetch(`/api/leads/${lead.id}/status`, {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ status: newStatus }),
+                            })
+                            if (res.ok) {
+                              // remove from current list if it no longer matches current status filter
+                              const currentStatus = (typeof window !== 'undefined') ? new URLSearchParams(window.location.search).get('status') || 'new' : 'new'
+                              if (newStatus !== currentStatus) {
+                                setLeadsList(prev => prev.filter(p => p.id !== lead.id))
+                              } else {
+                                setLeadsList(prev => prev.map(p => p.id === lead.id ? { ...p, status: newStatus } : p))
+                              }
+                            } else {
+                              console.error('Failed to update status')
+                            }
+                          }} />
                         )}
                         {col.key === 'action' && <ActionCell lead={lead} />}
                       </td>
@@ -356,14 +396,43 @@ export function LeadsTable({ leads }: Props) {
               </div>
               <div className="flex items-center justify-between mt-3 pt-2 border-t border-gray-50 gap-2">
                 <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[lead.status]}`}>
-                    {lead.status.replace('_', ' ')}
-                  </span>
-                  {(lead.permit_phone ?? lead.primary_phone) && (
-                    <a href={`tel:${(lead.permit_phone ?? lead.primary_phone)!}`} className="text-xs text-blue-600 flex items-center gap-1 hover:underline">
-                      <Phone size={10} />{fmtPhone((lead.permit_phone ?? lead.primary_phone)!)}
-                    </a>
-                  )}
+                          <StatusDropdown lead={lead} onStatusChange={async (newStatus: LeadStatus) => {
+                    // call API and remove row if needed
+                    const res = await fetch(`/api/leads/${lead.id}/status`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ status: newStatus }),
+                    })
+                    if (res.ok) {
+                      const currentStatus = (typeof window !== 'undefined') ? new URLSearchParams(window.location.search).get('status') || 'new' : 'new'
+                              if (newStatus !== currentStatus) {
+                        setLeadsList(prev => prev.filter(p => p.id !== lead.id))
+                      } else {
+                                setLeadsList(prev => prev.map(p => p.id === lead.id ? { ...p, status: newStatus as LeadStatus } : p))
+                      }
+                    }
+                  }} />
+                  {(lead.permit_phone ?? lead.primary_phone) && (() => {
+                    const phone = (lead.permit_phone ?? lead.primary_phone)!
+                    const normalized = phone.replace(/\D/g, '')
+                    return (
+                      <button onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(normalized)
+                          const el = document.createElement('span')
+                          el.textContent = 'Copied ✓'
+                          el.className = 'ml-2 text-xs text-green-600'
+                          const parent = document.getElementById(`mobile-phone-copy-${lead.id}`)
+                          if (parent) {
+                            parent.appendChild(el)
+                            setTimeout(() => el.remove(), 1200)
+                          }
+                        } catch {}
+                      }} id={`mobile-phone-copy-${lead.id}`} className="text-xs text-blue-600 flex items-center gap-1">
+                        <Phone size={10} />{fmtPhone(phone)}
+                      </button>
+                    )
+                  })()}
                   {!(lead.permit_phone ?? lead.primary_phone) && lead.website && (
                     <a href={lead.website} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 flex items-center gap-1">
                       <Globe size={10} />Website
@@ -397,11 +466,40 @@ function ScoreCell({ score, priority, size = 'default' }: { score: number; prior
 function ActionCell({ lead }: { lead: Lead }) {
   const phone = lead.permit_phone ?? lead.primary_phone
   if (phone) {
+    const normalized = phone.replace(/\D/g, '')
+    const business = lead.display_name || lead.outlet_name || ''
+    const smsMessage = business
+      ? `Hi, this is Jordan with Process.Direct. I saw that ${business} is getting set up in Texas. Have you already gotten your card processing/POS set up?`
+      : `Hi, this is Jordan with Process.Direct. I saw that your business is getting set up in Texas. Have you already gotten your card processing/POS set up?`
     return (
-      <a href={`tel:${phone}`}
-        className="inline-flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors whitespace-nowrap">
-        <Phone size={10} /> Call
-      </a>
+      <div className="flex items-center gap-2">
+        <a href={`tel:${phone}`}
+          className="inline-flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors whitespace-nowrap">
+          <Phone size={10} /> Call
+        </a>
+        <button
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(normalized)
+              // show transient feedback
+              const el = document.createElement('span')
+              el.textContent = 'Copied ✓'
+              el.className = 'ml-2 text-xs text-green-600'
+              // insert near button
+              const btn = document.getElementById(`copy-sms-${lead.id}`)
+              if (btn?.parentElement) {
+                btn.parentElement.appendChild(el)
+                setTimeout(() => el.remove(), 1200)
+              }
+            } catch {}
+          }}
+          id={`copy-sms-${lead.id}`}
+          className="inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-medium px-2 py-1.5 rounded-lg transition-colors"
+          title="Copy SMS message"
+        >
+          Copy SMS
+        </button>
+      </div>
     )
   }
   return (
@@ -409,5 +507,28 @@ function ActionCell({ lead }: { lead: Lead }) {
       className="inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors whitespace-nowrap">
       <Search size={10} /> Find
     </Link>
+  )
+}
+
+function StatusDropdown({ lead, onStatusChange }: { lead: Lead; onStatusChange: (s: LeadStatus) => Promise<void> }) {
+  const [value, setValue] = useState<LeadStatus>(lead.status)
+  const [loading, setLoading] = useState(false)
+  return (
+    <select
+      value={value}
+      onChange={async (e) => {
+        const v = e.target.value as LeadStatus
+        setValue(v)
+        setLoading(true)
+        await onStatusChange(v)
+        setLoading(false)
+      }}
+      className="text-xs rounded px-2 py-1 border border-gray-200"
+    >
+      <option value="new">New</option>
+      {LEAD_STATUSES.map(s => (
+        <option key={s.value} value={s.value}>{s.label}</option>
+      ))}
+    </select>
   )
 }

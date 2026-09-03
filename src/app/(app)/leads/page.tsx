@@ -35,7 +35,7 @@ export default async function LeadsPage({ searchParams }: PageProps) {
 
   const filters: LeadsFilters = {
     search: sp.search || '',
-    status: (sp.status as LeadsFilters['status']) || '',
+    status: (sp.status as LeadsFilters['status']) || 'new',
     priority: (sp.priority as LeadsFilters['priority']) || '',
     county: sp.county || '',
     city: sp.city || '',
