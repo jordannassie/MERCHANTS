@@ -9,7 +9,7 @@ import {
   Star, Phone, Globe, Search, Settings2, Check, Loader2,
   CheckSquare, Square, FlaskConical, AlertCircle, X,
 } from 'lucide-react'
-import { LEAD_STATUSES } from '@/lib/constants'
+import { LEAD_STATUSES, COUNTY_NAMES } from '@/lib/constants'
 import type { LeadStatus } from '@/lib/types'
 // Enrichment UI removed from default simplified outreach view
 
@@ -43,6 +43,39 @@ export function LeadsTable({ leads }: Props) {
   const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(new Set(DEFAULT_COLS))
   const [colMenuOpen, setColMenuOpen] = useState(false)
   const [leadsList, setLeadsList] = useState<Lead[]>(leads)
+
+  // per-row copy state and toasts
+  const [phoneCopied, setPhoneCopied] = useState<Record<string, boolean>>({})
+  const [smsCopied, setSmsCopied] = useState<Record<string, boolean>>({})
+  const [toasts, setToasts] = useState<Array<{ id: string; text: string; kind: 'phone' | 'sms' | 'error' }>>([])
+
+  function addToast(id: string, text: string, kind: 'phone' | 'sms' | 'error') {
+    const t = { id: `${Date.now()}-${id}`, text, kind }
+    setToasts(prev => [...prev, t])
+    setTimeout(() => setToasts(prev => prev.filter(x => x.id !== t.id)), 1600)
+  }
+
+  async function copyToClipboard(text: string): Promise<boolean> {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text)
+        return true
+      }
+    } catch (e) { /* fallthrough */ }
+    try {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.style.position = 'fixed'
+      ta.style.left = '-9999px'
+      document.body.appendChild(ta)
+      ta.select()
+      const ok = document.execCommand('copy')
+      document.body.removeChild(ta)
+      return ok
+    } catch {
+      return false
+    }
+  }
 
   // Row selection
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -171,204 +204,132 @@ export function LeadsTable({ leads }: Props) {
       )}
 
       {/* ── Desktop table ── */}
-        <div className="hidden md:block">
-        <div className="flex justify-end mb-2 relative">
-          <button
-            onClick={() => setColMenuOpen(o => !o)}
-            className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-900 px-2.5 py-1.5 rounded-lg border border-gray-200 hover:border-gray-300 bg-white transition-colors"
-          >
-            <Settings2 size={12} /> Columns
-          </button>
-          {colMenuOpen && (
-            <div className="absolute top-9 right-0 z-10 bg-white rounded-xl border border-gray-200 shadow-lg p-3 w-48 space-y-1">
-              {ALL_COLUMNS.map(col => (
-                <button
-                  key={col.key}
-                  disabled={col.always}
-                  onClick={() => toggleCol(col.key)}
-                  className="w-full flex items-center gap-2 text-sm px-2 py-1.5 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-default text-left"
-                >
-                  <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${visibleCols.has(col.key) ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-300'}`}>
-                    {visibleCols.has(col.key) && <Check size={10} />}
-                  </span>
-                  {col.label}
-                </button>
-              ))}
-              <button onClick={() => setColMenuOpen(false)} className="w-full text-xs text-gray-400 hover:text-gray-600 text-center pt-1">
-                Close
-              </button>
-            </div>
-          )}
-        </div>
+      <div className="hidden md:block">
+        <div className="grid grid-cols-1 gap-3">
+          {leadsList.map(lead => {
+            const name = lead.display_name || lead.outlet_name || lead.taxpayer_name || '(Unnamed)'
+            const city = lead.outlet_city || ''
+            const county = COUNTY_NAMES[String(lead.outlet_county_code || '')] || lead.outlet_county_code || ''
+            const phone = lead.permit_phone ?? lead.primary_phone
+            const normalized = phone ? phone.replace(/\D/g, '') : ''
+            const sms = (lead.display_name || lead.outlet_name)
+              ? `Hi, this is Jordan with Process.Direct. I saw that ${lead.display_name || lead.outlet_name} is getting set up in Texas. Have you already gotten your card processing/POS set up?`
+              : `Hi, this is Jordan with Process.Direct. I saw that your business is getting set up in Texas. Have you already gotten your card processing/POS set up?`
+            return (
+              <div key={lead.id} className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col md:flex-row md:items-start md:gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <Link href={`/leads/${lead.id}`} className="font-medium text-gray-900 text-lg leading-tight hover:text-blue-600 line-clamp-2">
+                        {name}
+                      </Link>
+                      <div className="text-sm text-gray-600 mt-1">
+                        {city}{city && county ? ', ' : ''}{county}
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <div>
+                        <div className="text-xs text-gray-500">Permit</div>
+                        <div className="text-sm text-gray-700 whitespace-nowrap">{fmtDate(lead.permit_issue_date) || '—'}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500">First Sales</div>
+                        <div className="text-sm text-gray-700 whitespace-nowrap">{lead.first_sales_date ? fmtDate(lead.first_sales_date) : '—'}</div>
+                      </div>
+                    </div>
+                  </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm table-fixed">
-            <colgroup>
-              <col className="w-[36px]" /> {/* checkbox */}
-              {cols.map(col => (
-                <col key={col.key} className={
-                  col.key === 'score'      ? 'w-[60px]'  :
-                  col.key === 'city'       ? 'w-[90px]'  :
-                  col.key === 'category'   ? 'w-[110px]' :
-                  col.key === 'permitDate' ? 'w-[80px]'  :
-                  col.key === 'firstSales' ? 'w-[80px]'  :
-                  col.key === 'phone'      ? 'w-[120px]' :
-                  col.key === 'status'     ? 'w-[100px]' :
-                  col.key === 'action'     ? 'w-[80px]'  :
-                  ''
-                } />
-              ))}
-            </colgroup>
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="px-2 py-3">
-                  <button onClick={toggleAll} className="flex items-center justify-center text-gray-400 hover:text-gray-700" title="Select all visible (max 25)">
-                    {selected.size > 0 ? <CheckSquare size={14} className="text-blue-600" /> : <Square size={14} />}
-                  </button>
-                </th>
-                {cols.map(col => (
-                  <th key={col.key} className="px-3 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">
-                    {col.label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {leadsList.map(lead => {
-                const name = lead.display_name || lead.outlet_name || lead.taxpayer_name || '(Unnamed)'
-                const isSelected = selected.has(lead.id)
-                return (
-                  <tr key={lead.id} className={`hover:bg-gray-50 transition-colors ${isSelected ? 'bg-blue-50/40' : ''}`}>
-                    <td className="px-2 py-3">
-                      <button
-                        onClick={() => toggleSelect(lead.id)}
-                        disabled={!isSelected && selected.size >= MAX_SELECTION}
-                        className="flex items-center justify-center text-gray-400 hover:text-blue-600 disabled:opacity-30"
-                      >
-                        {isSelected ? <CheckSquare size={14} className="text-blue-600" /> : <Square size={14} />}
-                      </button>
-                    </td>
-                    {cols.map(col => (
-                      <td key={col.key} className="px-3 py-3 align-middle">
-                        {col.key === 'score' && <ScoreCell score={lead.score} priority={lead.priority} />}
-                        {col.key === 'business' && (
-                          <div>
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <Link
-                                href={`/leads/${lead.id}`}
-                                className="font-medium text-gray-900 hover:text-blue-600 leading-snug line-clamp-2 break-words"
-                                title={name}
-                              >
-                                {name}
-                              </Link>
-                            </div>
-                            {/* simplified outreach view: enrichment badge hidden */}
-                          </div>
-                        )}
-                        {col.key === 'city' && (
-                          <span className="text-gray-600 text-xs leading-snug line-clamp-2 break-words">{lead.outlet_city}</span>
-                        )}
-                        {col.key === 'category' && (
-                          lead.category === 'corporate_chain' ? (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200 whitespace-nowrap">
-                              🏢 Corporate Chain
-                            </span>
-                          ) : (
-                            <span className="text-gray-500 text-xs leading-snug line-clamp-2">
-                              {lead.category || (lead.naics_code ? `NAICS ${lead.naics_code}` : '—')}
-                            </span>
-                          )
-                        )}
-                        {col.key === 'permitDate' && (
-                          <span className="text-gray-600 text-xs whitespace-nowrap">{fmtDate(lead.permit_issue_date) || '—'}</span>
-                        )}
-                        {col.key === 'firstSales' && (
-                          <span className={`text-xs whitespace-nowrap ${lead.first_sales_date && new Date(lead.first_sales_date) >= new Date() ? 'text-green-600 font-medium' : 'text-gray-600'}`}>
-                            {lead.first_sales_date ? fmtDate(lead.first_sales_date) : '—'}
-                          </span>
-                        )}
-                    {col.key === 'phone' && (() => {
-                          const phone = lead.permit_phone ?? lead.primary_phone
-                          if (!phone) return <span className="text-gray-300 text-xs">—</span>
-                          const normalized = phone.replace(/\D/g, '')
-                          return (
-                        <div className="flex items-center gap-2">
+                  <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+                    <div className="md:col-span-1">
+                      <div className="text-xs text-gray-500">Phone</div>
+                      {phone ? (
+                        <div className="flex items-center gap-2 mt-1">
                           <button
                             onClick={async () => {
-                              try {
-                                await navigator.clipboard.writeText(normalized)
-                                const el = document.createElement('span')
-                                el.textContent = 'Copied ✓'
-                                el.className = 'ml-2 text-xs text-green-600'
-                                const parent = document.getElementById(`phone-copy-${lead.id}`)
-                                if (parent) {
-                                  parent.appendChild(el)
-                                  setTimeout(() => el.remove(), 1200)
-                                }
-                              } catch {}
+                              const ok = await copyToClipboard(normalized)
+                              if (ok) {
+                                setPhoneCopied(s => ({ ...s, [lead.id]: true }))
+                                addToast(lead.id, 'Phone copied', 'phone')
+                                setTimeout(() => setPhoneCopied(s => ({ ...s, [lead.id]: false })), 1800)
+                              } else {
+                                addToast(lead.id, 'Could not copy — try again', 'error')
+                              }
                             }}
-                            id={`phone-copy-${lead.id}`}
-                            className="text-blue-600 font-medium text-sm px-2 py-1 rounded-md border border-gray-200"
-                            title="Copy phone"
+                            className={`text-sm font-medium px-3 py-1 border rounded ${phoneCopied[lead.id] ? 'bg-green-50 text-green-700 border-green-200' : 'bg-white text-blue-600 border-gray-200'}`}
                           >
-                            {fmtPhone(phone)}
+                            {phoneCopied[lead.id] ? '✓ Copied!' : fmtPhone(phone)}
                           </button>
-                          <a href={`tel:${phone}`} className="text-xs text-gray-500 px-2">Call</a>
-                          <button
-                            onClick={async () => {
-                              const business = lead.display_name || lead.outlet_name || ''
-                              const sms = business
-                                ? `Hi, this is Jordan with Process.Direct. I saw that ${business} is getting set up in Texas. Have you already gotten your card processing/POS set up?`
-                                : `Hi, this is Jordan with Process.Direct. I saw that your business is getting set up in Texas. Have you already gotten your card processing/POS set up?`
-                              try {
-                                await navigator.clipboard.writeText(sms)
-                                const el = document.createElement('span')
-                                el.textContent = 'Copied ✓'
-                                el.className = 'ml-2 text-xs text-green-600'
-                                const parent = document.getElementById(`copy-sms-${lead.id}`)
-                                if (parent) {
-                                  parent.appendChild(el)
-                                  setTimeout(() => el.remove(), 1200)
-                                }
-                              } catch {}
-                            }}
-                            id={`copy-sms-${lead.id}`}
-                            className="text-xs bg-gray-100 px-2 py-1 rounded-md"
-                          >
-                            Copy SMS
-                          </button>
+                          <a href={`tel:${phone}`} className="inline-flex items-center px-3 py-1 bg-blue-600 text-white text-sm rounded">Call</a>
                         </div>
-                          )
-                        })()}
-                        {col.key === 'status' && (
+                      ) : <div className="text-sm text-gray-400">—</div>}
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <div className="text-xs text-gray-500">Message</div>
+                      <div className="mt-1 bg-gray-50 px-3 py-2 rounded text-sm leading-relaxed text-slate-800">
+                        {sms}
+                      </div>
+                      <div className="mt-2 flex items-center gap-3">
+                        <button
+                          onClick={async () => {
+                            const ok = await copyToClipboard(sms)
+                            if (ok) {
+                              setSmsCopied(s => ({ ...s, [lead.id]: true }))
+                              addToast(lead.id, 'SMS message copied', 'sms')
+                              setTimeout(() => setSmsCopied(s => ({ ...s, [lead.id]: false })), 1800)
+                            } else {
+                              addToast(lead.id, 'Could not copy — try again', 'error')
+                            }
+                          }}
+                          className={`text-sm px-3 py-1 rounded border ${smsCopied[lead.id] ? 'bg-green-50 text-green-700 border-green-200' : 'bg-white border-gray-200'}`}
+                        >
+                          {smsCopied[lead.id] ? '✓ Copied!' : 'Copy Message'}
+                        </button>
+
+                        <div className="ml-auto md:ml-0">
                           <StatusDropdown lead={lead} onStatusChange={async (newStatus) => {
-                            // call API
                             const res = await fetch(`/api/leads/${lead.id}/status`, {
                               method: 'PATCH',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ status: newStatus }),
                             })
                             if (res.ok) {
-                              // remove from current list if it no longer matches current status filter
                               const currentStatus = (typeof window !== 'undefined') ? new URLSearchParams(window.location.search).get('status') || 'new' : 'new'
                               if (newStatus !== currentStatus) {
-                                setLeadsList(prev => prev.filter(p => p.id !== lead.id))
+                                setLeadsList(prev => {
+                                  const idxLocal = prev.findIndex(p => p.id === lead.id)
+                                  const next = prev.filter(p => p.id !== lead.id)
+                                  setTimeout(() => {
+                                    try {
+                                      const container = document.querySelector('div.grid.grid-cols-1')
+                                      if (container) {
+                                        const cards = Array.from(container.querySelectorAll('div.bg-white.border'))
+                                        const target = cards[idxLocal] || cards[idxLocal - 1] || cards[0]
+                                        if (target) {
+                                          target.classList.add('ring-2', 'ring-blue-300')
+                                          setTimeout(() => target.classList.remove('ring-2', 'ring-blue-300'), 900)
+                                          target.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+                                        }
+                                      }
+                                    } catch (e) { /* noop */ }
+                                  }, 120)
+                                  return next
+                                })
                               } else {
-                                setLeadsList(prev => prev.map(p => p.id === lead.id ? { ...p, status: newStatus } : p))
+                                setLeadsList(prev => prev.map(p => p.id === lead.id ? { ...p, status: newStatus as LeadStatus } : p))
                               }
                             } else {
-                              console.error('Failed to update status')
+                              addToast(lead.id, 'Failed to update status', 'error')
                             }
                           }} />
-                        )}
-                        {col.key === 'action' && <ActionCell lead={lead} />}
-                      </td>
-                    ))}
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
         </div>
       </div>
 
@@ -476,6 +437,13 @@ export function LeadsTable({ leads }: Props) {
             </div>
           )
         })}
+      </div>
+      <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-2 pointer-events-none">
+        {toasts.map(t => (
+          <div key={t.id} className={`pointer-events-auto px-3 py-2 rounded-lg text-sm ${t.kind === 'error' ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>
+            <span className="inline-flex items-center gap-2">{t.kind !== 'error' ? '✓' : '⚠'} {t.text}</span>
+          </div>
+        ))}
       </div>
     </>
   )
