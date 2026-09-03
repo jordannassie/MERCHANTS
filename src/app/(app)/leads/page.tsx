@@ -2,7 +2,7 @@ import { Metadata } from 'next'
 import { createServiceClient } from '@/lib/supabase/service'
 import type { LeadsFilters, Lead } from '@/lib/types'
 import { LEADS_PER_PAGE } from '@/lib/types'
-import { DFW_COUNTIES } from '@/lib/constants'
+import { DFW_COUNTIES, COUNTY_NAMES } from '@/lib/constants'
 import { getRegionCounties } from '@/lib/regions'
 import { LeadsFiltersBar } from '@/components/leads/LeadsFiltersBar'
 import { LeadsTable } from '@/components/leads/LeadsTable'
@@ -35,7 +35,7 @@ export default async function LeadsPage({ searchParams }: PageProps) {
 
   const filters: LeadsFilters = {
     search: sp.search || '',
-    status: (sp.status as LeadsFilters['status']) || 'new',
+    status: (sp.status as LeadsFilters['status']) ?? 'new',
     priority: (sp.priority as LeadsFilters['priority']) || '',
     county: sp.county || '',
     city: sp.city || '',
@@ -97,11 +97,35 @@ export default async function LeadsPage({ searchParams }: PageProps) {
 
   if (filters.search) {
     const s = `%${filters.search}%`
-    query = query.or(
-      `display_name.ilike.${s},outlet_name.ilike.${s},taxpayer_name.ilike.${s},primary_phone.ilike.${s},outlet_city.ilike.${s},outlet_zip.ilike.${s},naics_code.ilike.${s}`
-    )
+    // If the search looks like a phone number (digits only or contains many digits),
+    // we'll handle phone normalization on the server by fetching a broader set and
+    // filtering client-side. Also when searching, prefer showing matches across all statuses.
+    const digitOnly = (filters.search || '').replace(/\D/g, '')
+    const isPhoneLike = digitOnly.length >= 7
+
+    if (isPhoneLike) {
+      // Broad OR across text fields (keeps region filter) but avoid status restriction below
+      query = query.or(
+        `display_name.ilike.${s},outlet_name.ilike.${s},taxpayer_name.ilike.${s},outlet_city.ilike.${s},outlet_zip.ilike.${s},naics_code.ilike.${s}`
+      )
+      // mark phoneSearch to post-filter results client-side
+      ;(query as any)._phoneSearch = digitOnly
+    } else {
+      query = query.or(
+        `display_name.ilike.${s},outlet_name.ilike.${s},taxpayer_name.ilike.${s},primary_phone.ilike.${s},outlet_city.ilike.${s},outlet_zip.ilike.${s},naics_code.ilike.${s}`
+      )
+    }
   }
-  if (filters.status) query = query.eq('status', filters.status)
+  const statusParamPresent = Object.prototype.hasOwnProperty.call(sp, 'status')
+  if (statusParamPresent) {
+    if (sp.status !== 'all' && sp.status !== '') {
+      query = query.eq('status', sp.status)
+    }
+    // if 'all' or '' -> no status filter
+  } else {
+    // no explicit status param -> default to new
+    query = query.eq('status', 'new')
+  }
   if (filters.priority) query = query.eq('priority', filters.priority)
   if (filters.county) query = query.eq('outlet_county_code', filters.county)
   if (filters.city) query = query.ilike('outlet_city', `%${filters.city}%`)
@@ -138,11 +162,37 @@ export default async function LeadsPage({ searchParams }: PageProps) {
     query = query.order('first_sales_date', { ascending: true, nullsFirst: false })
   }
 
-  const { data: leads, count } = await query.range(from, to)
-  const totalPages = Math.ceil((count ?? 0) / LEADS_PER_PAGE)
+  // If we marked this query for phoneSearch, fetch a larger result set and post-filter client-side.
+  let leadsData: any[] = []
+  let totalCount = 0
+  const phoneSearchDigits = (query as any)?._phoneSearch
+  if (phoneSearchDigits) {
+    // fetch a broad set (limit to 5000) to safely match normalized phone numbers client-side
+    const { data: allLeads } = await query.range(0, 4999)
+    leadsData = allLeads ?? []
+    // client-side normalize and filter by phone digits (match end or exact)
+    const norm = (s: string | null | undefined) => (s || '').toString().replace(/\D/g, '')
+    const filtered = leadsData.filter(l => {
+      const phones = [l.permit_phone, l.primary_phone]
+      return phones.some(p => {
+        const pnorm = norm(p)
+        if (!pnorm) return false
+        const pnormNo1 = pnorm.replace(/^1/, '')
+        const searchNo1 = phoneSearchDigits.replace(/^1/, '')
+        return pnorm === phoneSearchDigits || pnormNo1 === phoneSearchDigits || pnorm.endsWith(phoneSearchDigits) || pnormNo1.endsWith(searchNo1)
+      })
+    })
+    totalCount = filtered.length
+    leadsData = filtered.slice(from, to + 1)
+  } else {
+    const { data: leads, count } = await query.range(from, to)
+    leadsData = leads ?? []
+    totalCount = count ?? 0
+  }
+  const totalPages = Math.ceil((totalCount ?? 0) / LEADS_PER_PAGE)
 
   // Check whether any leads exist at all (for empty-state messaging)
-  const hasAnyLeads = (count ?? 0) > 0 || Object.values({
+  const hasAnyLeads = (totalCount ?? 0) > 0 || Object.values({
     search: filters.search,
     status: filters.status,
     priority: filters.priority,
@@ -158,7 +208,7 @@ export default async function LeadsPage({ searchParams }: PageProps) {
   const counties = [
     ...new Set((countyRows ?? []).map(r => r.outlet_county_code).filter(Boolean)),
   ]
-    .map(code => ({ code: code!, name: DFW_COUNTIES[code!] ?? code! }))
+    .map(code => ({ code: code!, name: COUNTY_NAMES[code!] ?? code! }))
     .sort((a, b) => a.name.localeCompare(b.name))
 
   // Total count without filters (to detect zero-import state)
@@ -171,10 +221,10 @@ export default async function LeadsPage({ searchParams }: PageProps) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Leads</h1>
-          {count != null && hasAnyLeads && (
+          {totalCount != null && hasAnyLeads && (
             <p className="text-sm text-gray-500 mt-0.5">
-              {count.toLocaleString()}{' '}
-              {filters.hasPhone ? 'callable lead' : 'lead'}{count !== 1 ? 's' : ''}
+              {totalCount.toLocaleString()}{' '}
+              {filters.hasPhone ? 'callable lead' : 'lead'}{totalCount !== 1 ? 's' : ''}
             </p>
           )}
         </div>
@@ -193,9 +243,9 @@ export default async function LeadsPage({ searchParams }: PageProps) {
 
       {/* Bulk enrichment hidden in simplified outreach mode */}
 
-      {leads && leads.length > 0 ? (
+      {leadsData && leadsData.length > 0 ? (
         <>
-          <LeadsTable leads={leads as Lead[]} />
+          <LeadsTable leads={leadsData as Lead[]} />
           {totalPages > 1 && (
             <div className="mt-4">
               <Pagination currentPage={page} totalPages={totalPages} filters={sp} />

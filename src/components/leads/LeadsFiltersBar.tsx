@@ -35,7 +35,7 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
       const params = new URLSearchParams()
       if (next.region) params.set('region', next.region)
       if (next.search) params.set('search', next.search)
-      if (next.status) params.set('status', next.status)
+      if (typeof next.status !== 'undefined') params.set('status', next.status as string)
       if (next.priority) params.set('priority', next.priority)
       if (next.county) params.set('county', next.county)
       if (next.city) params.set('city', next.city)
@@ -80,15 +80,23 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
     setSearchValue(value)
     clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
-      set({ search: value })
+      // when search is non-empty, prefer showing matches across all statuses
+      set({ search: value, status: (value ? ('all' as any) : filters.status) })
     }, 350)
   }
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       clearTimeout(debounceRef.current)
-      set({ search: searchValue })
+      set({ search: searchValue, status: (searchValue ? ('all' as any) : filters.status) })
     }
+  }
+
+  const clearSearch = () => {
+    clearTimeout(debounceRef.current)
+    setSearchValue('')
+    // restore default working queue: Saved Region + New + Has Phone
+    set({ search: '', status: 'new', page: 1 })
   }
 
   const active = Boolean(
@@ -116,14 +124,19 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
           className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           aria-label="Search leads"
         />
+        {searchValue && (
+          <button onClick={clearSearch} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+            <X size={14} />
+          </button>
+        )}
       </div>
 
       {/* Quick region buttons */}
-      <div className="flex gap-2">
+  <div className="flex gap-2">
         {REGIONS.map(r => (
           <button
             key={r}
-            onClick={() => set({ region: r as string })}
+            onClick={() => set({ region: r as string, county: '' })}
             className={`text-sm px-3 py-1 rounded-full border transition-colors ${
               filters.region === r ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
             }`}
@@ -141,7 +154,7 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
           className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           aria-label="Filter by status"
         >
-          <option value="">All statuses</option>
+          <option value="all">All statuses</option>
           {LEAD_STATUSES.map(s => (
             <option key={s.value} value={s.value}>{s.label}</option>
           ))}

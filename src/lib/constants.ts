@@ -42,6 +42,50 @@ export const LEAD_PRIORITIES = [
   { value: 'skip', label: 'Skip' },
 ] as const
 
+// Human-readable county names for metro regions + DFW (extend as needed)
+export const COUNTY_NAMES: Record<string, string> = {
+  // DFW (subset already in DFW_COUNTIES)
+  '043': 'Collin',
+  '057': 'Dallas',
+  '061': 'Denton',
+  '070': 'Ellis',
+  '111': 'Hood',
+  '116': 'Hunt',
+  '126': 'Johnson',
+  '129': 'Kaufman',
+  '184': 'Parker',
+  '199': 'Rockwall',
+  '213': 'Somervell',
+  '220': 'Tarrant',
+  '249': 'Wise',
+  // Austin
+  '011': 'Bastrop',
+  '028': 'Caldwell',
+  '105': 'Hays',
+  '227': 'Travis',
+  '246': 'Williamson',
+  // Houston
+  '020': 'Brazoria',
+  '036': 'Chambers',
+  '079': 'Fort Bend',
+  '084': 'Galveston',
+  '101': 'Harris',
+  '146': 'Liberty',
+  '170': 'Montgomery',
+  '237': 'Waller',
+  // San Antonio
+  '007': 'Atascosa',
+  '010': 'Bandera',
+  '015': 'Bexar',
+  '046': 'Comal',
+  '094': 'Guadalupe',
+  '130': 'Kendall',
+  '163': 'Medina',
+  '247': 'Wilson',
+  // El Paso
+  '071': 'El Paso',
+}
+
 export const CALL_OUTCOMES = [
   { value: 'no_answer', label: 'No Answer' },
   { value: 'voicemail', label: 'Left Voicemail' },
