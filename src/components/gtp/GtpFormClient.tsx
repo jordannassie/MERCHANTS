@@ -40,7 +40,7 @@ export default function GtpFormClient() {
         <h1 className="text-2xl font-bold mb-4">You’re All Set!</h1>
         <p className="mb-6">We received your information. Jordan will review your business and contact you shortly.</p>
         <div className="flex gap-3">
-          <a href="tel:+19493316367" className="px-4 py-2 bg-white border border-slate-200 rounded">Call Jordan</a>
+          <a href="tel:+19497361560" className="px-4 py-2 bg-white border border-slate-200 rounded">Call Jordan</a>
           <Link href="/" className="px-4 py-2 bg-blue-600 text-white rounded">Return to Process.Direct</Link>
         </div>
       </div>

@@ -252,11 +252,11 @@ export default function LandingClient() {
       <div className="md:hidden fixed bottom-0 inset-x-0 z-50">
         <div className="bg-white border-t border-slate-200 shadow-lg safe-area-bottom px-4 py-3">
           <div className="flex gap-3">
-            <a href="tel:+19493316367" className="flex-1 inline-flex items-center justify-center gap-2 h-12 rounded-lg border border-blue-600 bg-white text-blue-600 font-semibold">
+            <a href="tel:+19497361560" className="flex-1 inline-flex items-center justify-center gap-2 h-12 rounded-lg border border-blue-600 bg-white text-blue-600 font-semibold">
               <Phone size={20} className="h-5 w-5" strokeWidth={2.2} />
               Call
             </a>
-            <a href={"sms:+19493316367?body=Hi%20Process.Direct%2C%20I%27m%20interested%20in%20card%20processing%2FPOS%20for%20my%20business."} className="flex-1 inline-flex items-center justify-center gap-2 h-12 rounded-lg bg-blue-600 text-white font-semibold">
+            <a href={"sms:+19497361560?body=Hi%20Process.Direct%2C%20I%27m%20interested%20in%20card%20processing%2FPOS%20for%20my%20business."} className="flex-1 inline-flex items-center justify-center gap-2 h-12 rounded-lg bg-blue-600 text-white font-semibold">
               <MessageCircle size={20} className="h-5 w-5" strokeWidth={2.2} />
               Text Us
             </a>
@@ -365,10 +365,10 @@ export default function LandingClient() {
 
               <div className="flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
                 <a
-                  href="tel:9493316367"
+                  href="tel:+19497361560"
                   className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm px-5 py-3 rounded-xl transition-colors shadow-md shadow-blue-200"
                 >
-                  <Phone size={15} /> (949) 331-6367
+                  <Phone size={15} /> (949) 736-1560
                 </a>
                 <a
                   href="mailto:jordannassie@gmail.com"
@@ -403,7 +403,7 @@ export default function LandingClient() {
                   <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center shrink-0">
                     <Phone size={14} className="text-blue-600" />
                   </div>
-                  <a href="tel:9493316367" className="hover:text-blue-600 transition-colors font-medium">(949) 331-6367</a>
+                  <a href="tel:+19497361560" className="hover:text-blue-600 transition-colors font-medium">(949) 736-1560</a>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center shrink-0">
@@ -424,7 +424,7 @@ export default function LandingClient() {
                   <h3 className="text-xl font-bold text-slate-900 mb-2">We got your request!</h3>
                   <p className="text-slate-500 text-sm leading-relaxed">
                     Thanks! Jordan will be in touch soon. For urgent help call{' '}
-                    <a href="tel:9493316367" className="text-blue-600 font-semibold">(949) 331-6367</a>.
+                    <a href="tel:+19497361560" className="text-blue-600 font-semibold">(949) 736-1560</a>.
                   </p>
                   <button
                     onClick={() => setSubmitted(false)}

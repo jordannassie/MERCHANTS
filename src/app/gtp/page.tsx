@@ -18,7 +18,7 @@ export default function GtpPage() {
     <main className="min-h-screen bg-white text-slate-900">
       <header className="flex items-center justify-between max-w-6xl mx-auto p-6">
         <Image src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Blacklogo.png" alt="Process.Direct" width={160} height={48} />
-        <a href="tel:+19493316367" className="text-sm text-blue-600">Call Jordan</a>
+        <a href="tel:+19497361560" className="text-sm text-blue-600">Call Jordan</a>
       </header>
 
       <section className="max-w-6xl mx-auto grid md:grid-cols-2 gap-8 p-6 items-start">
