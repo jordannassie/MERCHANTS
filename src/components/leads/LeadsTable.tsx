@@ -123,24 +123,31 @@ export function LeadsTable({ leads }: Props) {
                   >
                     {name}
                   </Link>
-                  {(city || county) && (
-                    <div className="text-sm text-gray-500 mt-0.5">
-                      {city}{city && county ? ', ' : ''}{county}
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    {/* Source badge — visible at a glance before opening the lead */}
+                    {lead.lead_source_label && (
+                      <span className={`inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full border tracking-wide ${
+                        lead.lead_source_label === 'both'
+                          ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                          : lead.lead_source_label === 'google'
+                            ? 'bg-blue-50 border-blue-200 text-blue-700'
+                            : 'bg-slate-50 border-slate-200 text-slate-600'
+                      }`}>
+                        {lead.lead_source_label === 'both'
+                          ? '🏛📍 STATE + MAPS'
+                          : lead.lead_source_label === 'google'
+                            ? '📍 MAPS'
+                            : '🏛 STATE'}
+                      </span>
+                    )}
+                    {(city || county) && (
+                      <span className="text-sm text-gray-500">
+                        {city}{city && county ? ', ' : ''}{county}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-start gap-4 shrink-0 text-sm flex-wrap justify-end">
-                  {/* Source badge */}
-                  {lead.lead_source_label && (
-                    <span className={`self-start text-[10px] font-bold px-1.5 py-0.5 rounded-full tracking-wide uppercase ${
-                      lead.lead_source_label === 'both'   ? 'bg-indigo-100 text-indigo-700' :
-                      lead.lead_source_label === 'google' ? 'bg-blue-100 text-blue-700' :
-                                                            'bg-gray-100 text-gray-600'
-                    }`}>
-                      {lead.lead_source_label === 'both' ? 'STATE + GOOGLE' :
-                       lead.lead_source_label === 'google' ? 'GOOGLE' : 'STATE'}
-                    </span>
-                  )}
                   {lead.permit_issue_date && (
                     <div>
                       <div className="text-xs text-gray-400">Permit</div>
@@ -158,10 +165,10 @@ export function LeadsTable({ leads }: Props) {
                       href={lead.google_maps_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="self-start text-[10px] text-blue-500 hover:text-blue-700 flex items-center gap-0.5 mt-0.5"
+                      className="self-start text-[10px] text-blue-500 hover:text-blue-700 flex items-center gap-0.5"
                       title="View on Google Maps"
                     >
-                      📍 Maps
+                      View Maps ↗
                     </a>
                   )}
                 </div>
