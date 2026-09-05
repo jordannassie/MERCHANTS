@@ -1,3 +1,55 @@
+// ─── Source tracking ─────────────────────────────────────────────────────────
+export type LeadSourceType  = 'texas_sales_tax_permits' | 'google_places'
+export type LeadSourceLabel = 'state' | 'google' | 'both'
+
+export interface LeadSource {
+  id: string
+  lead_id: string
+  source_type: LeadSourceType
+  external_id: string | null
+  source_url: string | null
+  first_seen_at: string
+  last_seen_at: string
+  search_run_id: string | null
+  metadata: Record<string, unknown> | null
+}
+
+export interface GoogleSearchRun {
+  id: string
+  state: string
+  location: string | null
+  query: string
+  zip: string | null
+  results_found: number
+  new_leads: number
+  enriched_leads: number
+  started_at: string
+  completed_at: string | null
+  error_message: string | null
+}
+
+/** A single result returned from the Places API preview step (before import). */
+export interface GooglePlacePreview {
+  place_id: string
+  name: string
+  formatted_address: string
+  phone: string | null
+  website: string | null
+  google_maps_url: string
+  types: string[]
+  // Parsed address components
+  street_address: string | null
+  city: string | null
+  state: string | null
+  zip: string | null
+  county: string | null
+  // Dedup result (populated server-side)
+  matched_lead_id: string | null
+  match_type: 'phone' | 'place_id' | 'name_address' | null
+  matched_business_name: string | null
+}
+
+// ─── Lead statuses ────────────────────────────────────────────────────────────
 export type LeadStatus =
   | 'new'
   | 'attempted'
@@ -97,6 +149,8 @@ export interface Lead {
   // Persistent main notepad (migration 011)
   main_note: string | null
   main_note_updated_at: string | null
+  // Source tracking (migration 017)
+  lead_source_label: LeadSourceLabel | null
   created_at: string
   updated_at: string
 }
@@ -217,6 +271,8 @@ export interface LeadsFilters {
   county?: string
   city?: string
   region?: string
+  /** Filter by lead source: 'state' | 'google' | 'both' | '' (all) */
+  leadSource?: LeadSourceLabel | ''
   permitDateFrom?: string
   permitDateTo?: string
   firstSalesDateFrom?: string

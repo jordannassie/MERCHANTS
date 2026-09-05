@@ -5,6 +5,7 @@ import { SiftImportCard } from '@/components/settings/SiftImportCard'
 import { ImportHistory } from '@/components/settings/ImportHistory'
 import { DiagnosticsPanel } from '@/components/imports/DiagnosticsPanel'
 import { SiftRematchPanel } from '@/components/imports/SiftRematchPanel'
+import { GoogleMapsSearchPanel } from '@/components/imports/GoogleMapsSearchPanel'
 import type { Territory, ImportRun } from '@/lib/types'
 
 export const metadata: Metadata = { title: 'Imports — Merchant Radar' }
@@ -75,6 +76,11 @@ export default async function ImportsPage() {
 
       {/* SIFT phone import (manual upload fallback) */}
       <SiftImportCard />
+
+      {/* ── Google Maps Business Search ─────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <GoogleMapsSearchPanel />
+      </div>
 
       {/* Import history */}
       <ImportHistory runs={(importRuns ?? []) as (ImportRun & { territory?: { name: string } | null })[]} />

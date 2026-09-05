@@ -304,3 +304,162 @@ export async function findPlacesContact(
     return { status: 'not_found', best: null, candidates }
   }
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// ── Text Search (Places API New) — for Google Maps Business Search import ──
+// ════════════════════════════════════════════════════════════════════════════
+
+import type { GooglePlacePreview } from '@/lib/types'
+
+// Fields needed for business-search import (more than enrichment needs)
+const TEXT_SEARCH_FIELD_MASK = [
+  'places.id',
+  'places.displayName',
+  'places.formattedAddress',
+  'places.nationalPhoneNumber',
+  'places.internationalPhoneNumber',
+  'places.websiteUri',
+  'places.googleMapsUri',
+  'places.types',
+  'places.addressComponents',
+  'places.businessStatus',
+  'nextPageToken',
+].join(',')
+
+export interface RawPlaceResult {
+  id: string
+  displayName?: { text?: string }
+  formattedAddress?: string
+  nationalPhoneNumber?: string
+  internationalPhoneNumber?: string
+  websiteUri?: string
+  googleMapsUri?: string
+  types?: string[]
+  businessStatus?: string
+  addressComponents?: Array<{
+    longText: string
+    shortText: string
+    types: string[]
+  }>
+}
+
+export interface PlacesSearchResponse {
+  places?: RawPlaceResult[]
+  nextPageToken?: string
+}
+
+export type PlacesApiError =
+  | { type: 'not_configured' }
+  | { type: 'api_disabled'; message: string }
+  | { type: 'quota_exceeded'; message: string }
+  | { type: 'request_denied'; message: string }
+  | { type: 'unknown'; message: string; status?: number }
+
+export interface PlacesTextSearchResult {
+  places: RawPlaceResult[]
+  nextPageToken: string | null
+  error: PlacesApiError | null
+}
+
+/** Parse address components into discrete fields. */
+function parseAddressComponents(
+  components: RawPlaceResult['addressComponents'],
+  formattedAddress: string | undefined
+): { street_address: string | null; city: string | null; state: string | null; zip: string | null; county: string | null } {
+  if (!components || components.length === 0) {
+    const parts = (formattedAddress ?? '').split(',').map(s => s.trim())
+    return { street_address: parts[0] ?? null, city: parts[1] ?? null, state: null, zip: null, county: null }
+  }
+  let street_number = '', route = ''
+  let city: string | null = null, state: string | null = null, zip: string | null = null, county: string | null = null
+  for (const c of components) {
+    if (c.types.includes('street_number'))               street_number = c.longText
+    if (c.types.includes('route'))                       route         = c.longText
+    if (c.types.includes('locality'))                    city          = c.longText
+    if (c.types.includes('administrative_area_level_1')) state         = c.shortText
+    if (c.types.includes('postal_code'))                 zip           = c.longText
+    if (c.types.includes('administrative_area_level_2')) county        = c.longText.replace(/ County$/i, '')
+    if (!city && c.types.includes('sublocality_level_1')) city = c.longText
+    if (!city && c.types.includes('postal_town'))         city = c.longText
+  }
+  const street_address = [street_number, route].filter(Boolean).join(' ') || null
+  return { street_address, city, state, zip, county }
+}
+
+/** Convert a raw Places API result into our GooglePlacePreview shape (without dedup fields). */
+export function rawToPreview(raw: RawPlaceResult): Omit<GooglePlacePreview, 'matched_lead_id' | 'match_type' | 'matched_business_name'> {
+  const addr = parseAddressComponents(raw.addressComponents, raw.formattedAddress)
+  return {
+    place_id:          raw.id,
+    name:              raw.displayName?.text ?? '',
+    formatted_address: raw.formattedAddress ?? '',
+    phone:             raw.nationalPhoneNumber ?? raw.internationalPhoneNumber ?? null,
+    website:           raw.websiteUri ?? null,
+    google_maps_url:   raw.googleMapsUri ?? `https://maps.google.com/?q=${encodeURIComponent(raw.displayName?.text ?? '')}`,
+    types:             raw.types ?? [],
+    ...addr,
+  }
+}
+
+/**
+ * Text Search (Places API New) — for the Google Maps Business Search import panel.
+ * Different from findPlacesContact (which enriches a single known lead).
+ * This fetches up to maxPages * 20 results for a broad query.
+ */
+export async function textSearchPlaces(
+  textQuery: string,
+  maxPages = 3,
+  pageToken?: string
+): Promise<PlacesTextSearchResult> {
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY
+  if (!apiKey) return { places: [], nextPageToken: null, error: { type: 'not_configured' } }
+
+  const allPlaces: RawPlaceResult[] = []
+  let currentToken: string | undefined = pageToken
+  let pagesLeft = maxPages
+  let lastError: PlacesApiError | null = null
+
+  while (pagesLeft > 0) {
+    const body: Record<string, unknown> = { textQuery, maxResultCount: 20 }
+    if (currentToken) body.pageToken = currentToken
+
+    let resp: Response
+    try {
+      resp = await fetch(`${PLACES_BASE}/places:searchText`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': TEXT_SEARCH_FIELD_MASK,
+        },
+        body: JSON.stringify(body),
+      })
+    } catch (err) {
+      lastError = { type: 'unknown', message: String(err) }
+      break
+    }
+
+    if (!resp.ok) {
+      let message = `HTTP ${resp.status}`
+      try {
+        const errBody = await resp.json() as { error?: { message?: string; status?: string } }
+        message = errBody?.error?.message ?? message
+        const status = errBody?.error?.status
+        if (status === 'PERMISSION_DENIED')       lastError = { type: 'request_denied', message }
+        else if (status === 'RESOURCE_EXHAUSTED') lastError = { type: 'quota_exceeded', message }
+        else if (resp.status === 403)             lastError = { type: 'api_disabled',   message }
+        else                                      lastError = { type: 'unknown', message, status: resp.status }
+      } catch { lastError = { type: 'unknown', message, status: resp.status } }
+      break
+    }
+
+    const data = await resp.json() as PlacesSearchResponse
+    allPlaces.push(...(data.places ?? []))
+    currentToken = data.nextPageToken
+    pagesLeft--
+    if (!currentToken) break
+    if (pagesLeft > 0) await new Promise(r => setTimeout(r, 100))
+  }
+
+  return { places: allPlaces, nextPageToken: currentToken ?? null, error: allPlaces.length === 0 ? lastError : null }
+}

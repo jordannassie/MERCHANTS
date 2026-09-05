@@ -181,7 +181,7 @@ export async function POST(req: NextRequest) {
 
       const uniqueTaxpayers = [...new Set(taxpayerOutletPairs.map(p => p.taxpayerNum!))]
 
-      interface ExistingLead { id: string; taxpayer_number: string; outlet_number: string | null; status: string; score: number; priority: string }
+      interface ExistingLead { id: string; taxpayer_number: string; outlet_number: string | null; status: string; score: number; priority: string; lead_source_label: string | null }
       const existingLeads: ExistingLead[] = []
 
       const LOOKUP_CHUNK = 200
@@ -189,7 +189,7 @@ export async function POST(req: NextRequest) {
         const chunk = uniqueTaxpayers.slice(i, i + LOOKUP_CHUNK)
         const { data } = await db
           .from('leads')
-          .select('id, taxpayer_number, outlet_number, status, score, priority')
+          .select('id, taxpayer_number, outlet_number, status, score, priority, lead_source_label')
           .eq('source', 'texas_sales_tax_permits')
           .in('taxpayer_number', chunk)
         if (data) existingLeads.push(...(data as ExistingLead[]))
@@ -273,22 +273,25 @@ export async function POST(req: NextRequest) {
           // Update existing lead — preserve CRM fields by omitting them
           // from the payload. Score/priority preserved for advanced leads.
           toUpdate.push({
-            source:        'texas_sales_tax_permits',
+            source:             'texas_sales_tax_permits',
             ...sourceFields,
-            display_name:  displayName,
-            score:         ADVANCED_STATUSES.has(existing.status) ? existing.score    : scored.score,
-            priority:      ADVANCED_STATUSES.has(existing.status) ? existing.priority : scored.priority,
-            score_reasons: scored.reasons,
-            category:      scored.category ?? undefined,
+            display_name:       displayName,
+            score:              ADVANCED_STATUSES.has(existing.status) ? existing.score    : scored.score,
+            priority:           ADVANCED_STATUSES.has(existing.status) ? existing.priority : scored.priority,
+            score_reasons:      scored.reasons,
+            category:           scored.category ?? undefined,
+            // Only tag as 'state' if not already 'both' (preserve google enrichment)
+            lead_source_label:  existing.lead_source_label === 'both' ? 'both' : 'state',
           })
         } else {
           // Brand-new record
           toInsert.push({
-            territory_id:  territory.id,
-            source:        'texas_sales_tax_permits',
+            territory_id:       territory.id,
+            source:             'texas_sales_tax_permits',
             ...sourceFields,
-            display_name:  displayName,
-            score:         scored.score,
+            display_name:       displayName,
+            lead_source_label:  'state',
+            score:              scored.score,
             priority:      scored.priority,
             score_reasons: scored.reasons,
             category:      scored.category ?? undefined,

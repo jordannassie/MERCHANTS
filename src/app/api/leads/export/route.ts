@@ -16,7 +16,8 @@ export async function GET(request: NextRequest) {
       'display_name,outlet_city,outlet_county_code,outlet_address,outlet_zip,' +
       'naics_code,category,primary_phone,permit_phone,primary_email,website,owner_name,' +
       'status,priority,score,permit_issue_date,first_sales_date,' +
-      'last_contacted_at,next_follow_up_at,taxpayer_number,outlet_number'
+      'last_contacted_at,next_follow_up_at,taxpayer_number,outlet_number,' +
+      'lead_source_label,google_place_id,google_maps_url,first_imported_at'
     )
 
   if (!showChains) query = query.or(NON_CHAIN)

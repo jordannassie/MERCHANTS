@@ -52,8 +52,9 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
       const next = { ...filters, ...updates, page: 1 }
       const params = new URLSearchParams()
 
-      if (next.region)  params.set('region', next.region as string)
-      if (next.search)  params.set('search', next.search as string)
+      if (next.region)     params.set('region', next.region as string)
+      if (next.leadSource) params.set('leadSource', next.leadSource as string)
+      if (next.search)     params.set('search', next.search as string)
 
       // Status: always write it explicitly so the URL is the single source of truth
       const st = (next.status ?? 'new') as string
@@ -153,6 +154,29 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
             }`}
           >
             {r}
+          </button>
+        ))}
+      </div>
+
+      {/* Lead Source filter */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-gray-400 font-medium">Source:</span>
+        {([
+          { value: '',       label: 'All Sources' },
+          { value: 'state',  label: '🏛 State' },
+          { value: 'google', label: '📍 Google' },
+          { value: 'both',   label: '🔗 Both' },
+        ] as const).map(({ value, label }) => (
+          <button
+            key={value}
+            onClick={() => set({ leadSource: value })}
+            className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+              (filters.leadSource ?? '') === value
+                ? 'bg-indigo-600 text-white border-indigo-600'
+                : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400'
+            }`}
+          >
+            {label}
           </button>
         ))}
       </div>

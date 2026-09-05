@@ -56,6 +56,7 @@ export default async function LeadsPage({ searchParams }: PageProps) {
     hasPhone,
     missingPhone:      sp.missingPhone === 'true',
     region:            sp.region || 'All Texas',
+    leadSource:        (sp.leadSource as LeadsFilters['leadSource']) || '',
     hasWebsite:        sp.hasWebsite === 'true',
     missingWebsite:    sp.missingWebsite === 'true',
     enriched:          sp.enriched === 'true',
@@ -130,6 +131,8 @@ export default async function LeadsPage({ searchParams }: PageProps) {
   if (filters.starred)         query = query.eq('starred', true)
   if (filters.hasPhone)        query = query.or('primary_phone.not.is.null,permit_phone.not.is.null')
   if (filters.missingPhone)    query = query.is('primary_phone', null).is('permit_phone', null)
+  // Lead source filter (state / google / both)
+  if (filters.leadSource)      query = query.eq('lead_source_label', filters.leadSource)
   if (filters.hasWebsite)      query = query.not('website', 'is', null)
   if (filters.missingWebsite)  query = query.is('website', null)
   if (filters.enriched)        query = query.eq('enrichment_status', 'completed')

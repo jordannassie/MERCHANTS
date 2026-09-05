@@ -129,7 +129,18 @@ export function LeadsTable({ leads }: Props) {
                     </div>
                   )}
                 </div>
-                <div className="flex items-start gap-4 shrink-0 text-sm">
+                <div className="flex items-start gap-4 shrink-0 text-sm flex-wrap justify-end">
+                  {/* Source badge */}
+                  {lead.lead_source_label && (
+                    <span className={`self-start text-[10px] font-bold px-1.5 py-0.5 rounded-full tracking-wide uppercase ${
+                      lead.lead_source_label === 'both'   ? 'bg-indigo-100 text-indigo-700' :
+                      lead.lead_source_label === 'google' ? 'bg-blue-100 text-blue-700' :
+                                                            'bg-gray-100 text-gray-600'
+                    }`}>
+                      {lead.lead_source_label === 'both' ? 'STATE + GOOGLE' :
+                       lead.lead_source_label === 'google' ? 'GOOGLE' : 'STATE'}
+                    </span>
+                  )}
                   {lead.permit_issue_date && (
                     <div>
                       <div className="text-xs text-gray-400">Permit</div>
@@ -141,6 +152,17 @@ export function LeadsTable({ leads }: Props) {
                       <div className="text-xs text-gray-400">First Sales</div>
                       <div className="text-gray-700 whitespace-nowrap">{fmtDate(lead.first_sales_date)}</div>
                     </div>
+                  )}
+                  {lead.google_maps_url && (
+                    <a
+                      href={lead.google_maps_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="self-start text-[10px] text-blue-500 hover:text-blue-700 flex items-center gap-0.5 mt-0.5"
+                      title="View on Google Maps"
+                    >
+                      📍 Maps
+                    </a>
                   )}
                 </div>
               </div>
