@@ -154,6 +154,34 @@ async function main() {
   } else {
     console.log('[migrate] ✓ 012 support_requests present')
   }
+
+  // ── 017: Google Maps source tracking ────────────────────────────────────
+  // Check for google_search_runs table (key 017 artifact)
+  const tbl017 = await columnExists('google_search_runs', 'id')
+  if (!tbl017) {
+    const sql017 = readMigration('017_google_maps_source.sql')
+    if (sql017) await applyMigration('017_google_maps_source.sql', sql017)
+  } else {
+    console.log('[migrate] ✓ 017 google_search_runs present')
+  }
+
+  // ── 018: google_sweeps server-side sweep tracking ───────────────────────
+  const tbl018 = await columnExists('google_sweeps', 'id')
+  if (!tbl018) {
+    const sql018 = readMigration('018_google_sweeps.sql')
+    if (sql018) await applyMigration('018_google_sweeps.sql', sql018)
+  } else {
+    console.log('[migrate] ✓ 018 google_sweeps present')
+  }
+
+  // ── 019: QUO SMS integration ─────────────────────────────────────────────
+  const tbl019 = await columnExists('sms_messages', 'id')
+  if (!tbl019) {
+    const sql019 = readMigration('019_sms_integration.sql')
+    if (sql019) await applyMigration('019_sms_integration.sql', sql019)
+  } else {
+    console.log('[migrate] ✓ 019 sms_messages present')
+  }
 }
 
 async function applyMigration(filename, sql) {
