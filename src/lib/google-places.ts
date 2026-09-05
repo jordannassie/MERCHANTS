@@ -386,6 +386,30 @@ function parseAddressComponents(
   return { street_address, city, state, zip, county }
 }
 
+/**
+ * Fetch just the phone number for a single Place ID.
+ * Called only when the Text Search response didn't include a phone.
+ * Costs an extra Place Details API call (~$0.02).
+ */
+export async function fetchPlacePhone(placeId: string): Promise<string | null> {
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY
+  if (!apiKey) return null
+  try {
+    const resp = await fetch(`${PLACES_BASE}/places/${placeId}`, {
+      headers: {
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': 'nationalPhoneNumber,internationalPhoneNumber',
+      },
+      signal: AbortSignal.timeout(8_000),
+    })
+    if (!resp.ok) return null
+    const d = await resp.json() as { nationalPhoneNumber?: string; internationalPhoneNumber?: string }
+    return d.nationalPhoneNumber ?? d.internationalPhoneNumber ?? null
+  } catch {
+    return null
+  }
+}
+
 /** Convert a raw Places API result into our GooglePlacePreview shape (without dedup fields). */
 export function rawToPreview(raw: RawPlaceResult): Omit<GooglePlacePreview, 'matched_lead_id' | 'match_type' | 'matched_business_name'> {
   const addr = parseAddressComponents(raw.addressComponents, raw.formattedAddress)

@@ -1,560 +1,509 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Search, ExternalLink, CheckCircle2, Plus, Loader2, AlertCircle, RefreshCw, MapPin, ChevronDown, ChevronUp } from 'lucide-react'
+/**
+ * GoogleMapsSearchPanel
+ *
+ * Simple two-mode UI for finding callable Google Maps leads.
+ * User-facing interface is intentionally minimal:
+ *   • All Texas Sweep — one button, runs all metros + all internal categories
+ *   • Single City     — enter a city, runs all internal categories for it
+ *
+ * Categories/phrases are never exposed to the user.
+ * A business is only imported as a lead when it has: name + valid US phone + TX location.
+ */
+
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { ExternalLink, Loader2, AlertCircle, ChevronDown, ChevronUp, MapPin, CheckCircle2 } from 'lucide-react'
+import { generateSweepTasks, getAllPhrases, TX_SWEEP_METROS, type SweepTask } from '@/lib/google-categories'
 import type { GooglePlacePreview } from '@/lib/types'
 
-// ── Texas metros for sweep mode ───────────────────────────────────────────────
-const TX_METROS = [
-  { id: 'dfw',        label: 'Dallas–Fort Worth' },
-  { id: 'houston',    label: 'Houston' },
-  { id: 'austin',     label: 'Austin' },
-  { id: 'san_antonio',label: 'San Antonio' },
-  { id: 'el_paso',    label: 'El Paso' },
-  { id: 'mcallen',    label: 'McAllen' },
-  { id: 'corpus',     label: 'Corpus Christi' },
-  { id: 'lubbock',    label: 'Lubbock' },
-  { id: 'waco',       label: 'Waco' },
-  { id: 'tyler',      label: 'Tyler' },
-  { id: 'amarillo',   label: 'Amarillo' },
-  { id: 'abilene',    label: 'Abilene' },
-  { id: 'midland',    label: 'Midland–Odessa' },
-  { id: 'beaumont',   label: 'Beaumont' },
-  { id: 'college',    label: 'College Station' },
-] as const
+// ── localStorage persistence ─────────────────────────────────────────────────
+const SWEEP_KEY = 'merchant_radar_sweep_v2'
 
-// ── Persistence key ───────────────────────────────────────────────────────────
-const SWEEP_KEY = 'merchant_radar_sweep_state'
-
-interface SweepState {
-  sweepId: string
-  query: string
-  state: string
-  selectedMetros: string[]
-  completedMetros: string[]   // metro ids that finished
-  totalNew: number
-  totalEnriched: number
+interface SweepSession {
+  id: string
+  mode: 'sweep' | 'city'
+  city?: string
+  tasks: SweepTask[]       // full ordered list (city mode: one city × all phrases)
+  taskIndex: number        // next task to run
+  // Metrics
+  checked: number          // raw Google results seen
+  callable: number         // with valid phone
+  newLeads: number
+  enriched: number
+  dupSkipped: number
+  noPhone: number
   startedAt: string
+  status: 'running' | 'paused' | 'done'
 }
 
-function loadSweepState(): SweepState | null {
-  try {
-    const raw = localStorage.getItem(SWEEP_KEY)
-    return raw ? JSON.parse(raw) : null
-  } catch { return null }
+function loadSession(): SweepSession | null {
+  try { return JSON.parse(localStorage.getItem(SWEEP_KEY) ?? 'null') } catch { return null }
 }
-function saveSweepState(s: SweepState) {
+function saveSession(s: SweepSession) {
   try { localStorage.setItem(SWEEP_KEY, JSON.stringify(s)) } catch { /* ignore */ }
 }
-function clearSweepState() {
+function clearSession() {
   try { localStorage.removeItem(SWEEP_KEY) } catch { /* ignore */ }
 }
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-interface RunLog {
-  id: string
-  query: string
-  location: string | null
-  state: string
-  results_found: number
-  new_leads: number
-  enriched_leads: number
-  started_at: string
+// ── Types ────────────────────────────────────────────────────────────────────
+type Mode = 'sweep' | 'city'
+
+interface Metrics {
+  checked:   number
+  callable:  number
+  newLeads:  number
+  enriched:  number
+  dupSkipped: number
+  noPhone:   number
 }
 
-type SearchMode = 'single' | 'sweep'
-type Phase = 'idle' | 'searching' | 'preview' | 'importing' | 'sweeping' | 'done' | 'error'
+const EMPTY_METRICS: Metrics = { checked: 0, callable: 0, newLeads: 0, enriched: 0, dupSkipped: 0, noPhone: 0 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function sourceBadge(src: string | null) {
-  if (!src) return null
-  if (src === 'both')   return <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700">🏛📍 STATE + MAPS</span>
-  if (src === 'google') return <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-700">📍 MAPS</span>
-  return <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-slate-50 border border-slate-200 text-slate-600">🏛 STATE</span>
-}
-
+// ── Panel ────────────────────────────────────────────────────────────────────
 export function GoogleMapsSearchPanel() {
-  // ── Mode ─────────────────────────────────────────────────────────────────
-  const [searchMode, setSearchMode] = useState<SearchMode>('single')
+  const [mode, setMode] = useState<Mode>('sweep')
 
-  // ── Single-city form state ────────────────────────────────────────────────
-  const [stateVal,  setStateVal]  = useState('TX')
-  const [location,  setLocation]  = useState('')
-  const [queryVal,  setQueryVal]  = useState('')
-  const [zip,       setZip]       = useState('')
+  // City mode
+  const [city, setCity] = useState('')
 
-  // ── Sweep state ───────────────────────────────────────────────────────────
-  const [sweepMetros,   setSweepMetros]   = useState<string[]>(TX_METROS.map(m => m.id))
-  const [activeSweep,   setActiveSweep]   = useState<SweepState | null>(null)
-  const [sweepLog,      setSweepLog]      = useState<string[]>([])      // per-city status lines
-  const [sweepError,    setSweepError]    = useState<string | null>(null)
+  // Advanced: manual phrase override
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [advancedPhrase, setAdvancedPhrase] = useState('')
 
-  // ── Single-city result state ──────────────────────────────────────────────
-  const [phase,        setPhase]        = useState<Phase>('idle')
-  const [error,        setError]        = useState<string | null>(null)
-  const [results,      setResults]      = useState<GooglePlacePreview[]>([])
-  const [nextToken,    setNextToken]    = useState<string | null>(null)
-  const [textQuery,    setTextQuery]    = useState('')
-  const [importResult, setImportResult] = useState<{ new_leads: number; enriched_leads: number; skipped: number } | null>(null)
-  const [runLog,       setRunLog]       = useState<RunLog[]>([])
+  // Sweep state
+  const [session, setSession]   = useState<SweepSession | null>(null)
+  const [metrics, setMetrics]   = useState<Metrics>(EMPTY_METRICS)
+  const [running, setRunning]   = useState(false)
+  const [error, setError]       = useState<string | null>(null)
+  const [lastLog, setLastLog]   = useState<string[]>([])   // last 6 status lines
+  const [completed, setCompleted] = useState(false)
+  const [completedReport, setCompletedReport] = useState<Metrics>(EMPTY_METRICS)
 
-  // ── Restore in-progress sweep from localStorage ───────────────────────────
+  const stopRef = useRef(false)   // signal to break mid-loop
+
+  // Rehydrate from localStorage on mount
   useEffect(() => {
-    const saved = loadSweepState()
-    if (saved && saved.completedMetros.length < saved.selectedMetros.length) {
-      setActiveSweep(saved)
-      setQueryVal(saved.query)
-      setSearchMode('sweep')
-      setSweepMetros(saved.selectedMetros)
+    const saved = loadSession()
+    if (saved && saved.status !== 'done') {
+      setSession(saved)
+      setMetrics({
+        checked:   saved.checked,
+        callable:  saved.callable,
+        newLeads:  saved.newLeads,
+        enriched:  saved.enriched,
+        dupSkipped: saved.dupSkipped,
+        noPhone:   saved.noPhone,
+      })
+      if (saved.mode === 'city') { setMode('city'); setCity(saved.city ?? '') }
     }
   }, [])
 
-  // ── Single-city search ────────────────────────────────────────────────────
-  async function handleSearch(e: React.FormEvent) {
-    e.preventDefault()
-    if (!queryVal.trim()) return
-    setPhase('searching')
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function pushLog(line: string) {
+    setLastLog(prev => [...prev.slice(-5), line])
+  }
+
+  /** Call /api/import/google-search then /api/import/google-import for one task. */
+  async function runTask(task: SweepTask): Promise<{
+    checked: number; callable: number; newLeads: number; enriched: number; dupSkipped: number; noPhone: number
+  }> {
+    const searchRes = await fetch('/api/import/google-search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ state: 'TX', location: task.metro, query: task.phrase }),
+    }).then(r => r.json())
+
+    if (searchRes.error) throw new Error(searchRes.error)
+
+    const results: GooglePlacePreview[] = searchRes.results ?? []
+    const checked:  number = searchRes.checked_count ?? results.length
+    const callable: number = searchRes.callable_count ?? results.length
+    const noPhone:  number = searchRes.no_phone_count ?? 0
+
+    if (results.length === 0) return { checked, callable: 0, newLeads: 0, enriched: 0, dupSkipped: 0, noPhone }
+
+    const importRes = await fetch('/api/import/google-import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ results, state: 'TX', location: task.metro, query: task.phrase }),
+    }).then(r => r.json())
+
+    if (importRes.error) throw new Error(importRes.error)
+
+    return {
+      checked,
+      callable,
+      newLeads:  importRes.new_leads      ?? 0,
+      enriched:  importRes.enriched_leads ?? 0,
+      dupSkipped: importRes.skipped_dup   ?? 0,
+      noPhone,
+    }
+  }
+
+  /** Run the sweep loop starting from `startIndex`. Resumes if paused. */
+  const runSweep = useCallback(async (tasks: SweepTask[], startIndex: number, initial: Metrics, sessionId: string, sessionMode: Mode, sessionCity?: string) => {
+    setRunning(true)
     setError(null)
-    setResults([])
-    setNextToken(null)
-    setImportResult(null)
+    stopRef.current = false
 
-    const res = await fetch('/api/import/google-search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ state: stateVal, location, query: queryVal, zip }),
-    })
-    const data = await res.json() as { results?: GooglePlacePreview[]; nextPageToken?: string; text_query?: string; error?: string }
-    if (!res.ok || data.error) { setError(data.error ?? 'Search failed'); setPhase('error'); return }
-    setResults(data.results ?? [])
-    setNextToken(data.nextPageToken ?? null)
-    setTextQuery(data.text_query ?? '')
-    setPhase('preview')
-  }
+    let m = { ...initial }
+    let idx = startIndex
 
-  async function handleLoadMore() {
-    if (!nextToken) return
-    setPhase('searching')
-    const res = await fetch('/api/import/google-search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ state: stateVal, location, query: queryVal, zip, pageToken: nextToken }),
-    })
-    const data = await res.json() as { results?: GooglePlacePreview[]; nextPageToken?: string; error?: string }
-    if (!res.ok || data.error) { setError(data.error ?? 'Load more failed'); setPhase('error'); return }
-    setResults(prev => [...prev, ...(data.results ?? [])])
-    setNextToken(data.nextPageToken ?? null)
-    setPhase('preview')
-  }
-
-  async function handleImport() {
-    setPhase('importing')
-    setError(null)
-    const res = await fetch('/api/import/google-import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ results, state: stateVal, location, query: queryVal, zip }),
-    })
-    const data = await res.json() as { run_id?: string; new_leads?: number; enriched_leads?: number; skipped?: number; error?: string }
-    if (!res.ok || data.error) { setError(data.error ?? 'Import failed'); setPhase('error'); return }
-    setImportResult({ new_leads: data.new_leads ?? 0, enriched_leads: data.enriched_leads ?? 0, skipped: data.skipped ?? 0 })
-    setRunLog(prev => [{
-      id: data.run_id ?? '',
-      query: queryVal, location: location || null, state: stateVal,
-      results_found: results.length,
-      new_leads: data.new_leads ?? 0,
-      enriched_leads: data.enriched_leads ?? 0,
-      started_at: new Date().toISOString(),
-    }, ...prev])
-    setPhase('done')
-  }
-
-  // ── Sweep: single city helper ─────────────────────────────────────────────
-  async function searchAndImportCity(city: string, query: string): Promise<{ new_leads: number; enriched_leads: number; error?: string }> {
-    // Search
-    const sRes = await fetch('/api/import/google-search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ state: 'TX', location: city, query }),
-    })
-    const sData = await sRes.json() as { results?: GooglePlacePreview[]; error?: string }
-    if (!sRes.ok || sData.error) return { new_leads: 0, enriched_leads: 0, error: sData.error ?? 'Search failed' }
-    const cityResults = sData.results ?? []
-    if (cityResults.length === 0) return { new_leads: 0, enriched_leads: 0 }
-
-    // Import
-    const iRes = await fetch('/api/import/google-import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ results: cityResults, state: 'TX', location: city, query }),
-    })
-    const iData = await iRes.json() as { new_leads?: number; enriched_leads?: number; error?: string }
-    if (!iRes.ok || iData.error) return { new_leads: 0, enriched_leads: 0, error: iData.error ?? 'Import failed' }
-    return { new_leads: iData.new_leads ?? 0, enriched_leads: iData.enriched_leads ?? 0 }
-  }
-
-  // ── Sweep: start or resume ────────────────────────────────────────────────
-  async function handleStartSweep() {
-    if (!queryVal.trim()) return
-
-    const sweepId = `sweep_${Date.now()}`
-    const initialState: SweepState = {
-      sweepId,
-      query: queryVal,
-      state: 'TX',
-      selectedMetros: sweepMetros,
-      completedMetros: [],
-      totalNew: 0,
-      totalEnriched: 0,
+    const newSession: SweepSession = {
+      id:       sessionId,
+      mode:     sessionMode,
+      city:     sessionCity,
+      tasks,
+      taskIndex: idx,
+      ...m,
       startedAt: new Date().toISOString(),
+      status:   'running',
     }
-    saveSweepState(initialState)
-    setActiveSweep(initialState)
-    setSweepLog([])
-    setSweepError(null)
-    setPhase('sweeping')
+    setSession(newSession)
 
-    await runSweep(initialState)
-  }
+    try {
+      while (idx < tasks.length) {
+        if (stopRef.current) break
 
-  async function handleResumeSweep() {
-    if (!activeSweep) return
-    setSweepError(null)
-    setPhase('sweeping')
-    await runSweep(activeSweep)
-  }
+        const task = tasks[idx]
+        pushLog(`🔍 Searching "${task.phrase}" in ${task.metro}…`)
 
-  async function runSweep(sweep: SweepState) {
-    const remaining = sweep.selectedMetros.filter(id => !sweep.completedMetros.includes(id))
-    let current = { ...sweep }
+        try {
+          const result = await runTask(task)
+          m = {
+            checked:   m.checked   + result.checked,
+            callable:  m.callable  + result.callable,
+            newLeads:  m.newLeads  + result.newLeads,
+            enriched:  m.enriched  + result.enriched,
+            dupSkipped: m.dupSkipped + result.dupSkipped,
+            noPhone:   m.noPhone   + result.noPhone,
+          }
+          setMetrics({ ...m })
+          pushLog(`✅ ${task.metro} / ${task.phrase}: ${result.newLeads} new, ${result.enriched} enriched, ${result.noPhone} no phone`)
+        } catch (taskErr) {
+          pushLog(`⚠️ ${task.metro} / ${task.phrase}: ${String(taskErr).slice(0, 60)}`)
+        }
 
-    for (const metroId of remaining) {
-      const metro = TX_METROS.find(m => m.id === metroId)
-      if (!metro) continue
+        idx++
 
-      setSweepLog(prev => [...prev, `🔍 Searching ${metro.label}…`])
+        // Save progress after every task
+        const updatedSession: SweepSession = { ...newSession, taskIndex: idx, ...m, status: stopRef.current ? 'paused' : 'running' }
+        saveSession(updatedSession)
+        setSession(updatedSession)
 
-      const { new_leads, enriched_leads, error: cityErr } = await searchAndImportCity(metro.label, current.query)
-
-      if (cityErr) {
-        setSweepLog(prev => [...prev, `⚠️ ${metro.label}: ${cityErr}`])
-        // Don't abort — continue to next city
-      } else {
-        setSweepLog(prev => [...prev, `✅ ${metro.label}: +${new_leads} new, ~${enriched_leads} enriched`])
+        // Small delay between tasks to respect rate limits
+        if (idx < tasks.length && !stopRef.current) {
+          await new Promise(r => setTimeout(r, 600))
+        }
       }
 
-      // Mark this metro complete and persist progress
-      current = {
-        ...current,
-        completedMetros: [...current.completedMetros, metroId],
-        totalNew:       current.totalNew + new_leads,
-        totalEnriched:  current.totalEnriched + enriched_leads,
+      if (!stopRef.current) {
+        // All done
+        const doneSession: SweepSession = { ...newSession, taskIndex: idx, ...m, status: 'done' }
+        saveSession(doneSession)
+        setSession(doneSession)
+        setCompleted(true)
+        setCompletedReport({ ...m })
+        pushLog(`🎉 Done! ${m.newLeads} new leads, ${m.enriched} enriched.`)
       }
-      setActiveSweep(current)
-      saveSweepState(current)
-
-      // Brief pause between cities to be polite to the Places API
-      await new Promise(r => setTimeout(r, 300))
+    } catch (err) {
+      setError(String(err))
+    } finally {
+      setRunning(false)
     }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-    // All done
-    clearSweepState()
-    setSweepLog(prev => [...prev, `🏁 Sweep complete — ${current.totalNew} new leads, ${current.totalEnriched} enriched`])
-    setPhase('done')
+  // ── Start All Texas Sweep ─────────────────────────────────────────────────
+  function startSweep() {
+    const tasks = generateSweepTasks()
+    const id = Date.now().toString()
+    setCompleted(false)
+    setLastLog([])
+    setMetrics(EMPTY_METRICS)
+    runSweep(tasks, 0, EMPTY_METRICS, id, 'sweep')
   }
 
-  function handleCancelSweep() {
-    clearSweepState()
-    setActiveSweep(null)
-    setSweepLog([])
-    setPhase('idle')
+  // ── Start Single City search ──────────────────────────────────────────────
+  function startCity() {
+    const trimmedCity = city.trim()
+    if (!trimmedCity) return
+    const phrases = advancedPhrase.trim() ? [advancedPhrase.trim()] : getAllPhrases()
+    const tasks: SweepTask[] = phrases.map(phrase => ({
+      metro: trimmedCity,
+      phrase,
+      state: 'TX',
+      textQuery: `${phrase} ${trimmedCity} TX`,
+    }))
+    const id = Date.now().toString()
+    setCompleted(false)
+    setLastLog([])
+    setMetrics(EMPTY_METRICS)
+    runSweep(tasks, 0, EMPTY_METRICS, id, 'city', trimmedCity)
   }
 
-  // ── Sweep metro toggles ───────────────────────────────────────────────────
-  function toggleMetro(id: string) {
-    setSweepMetros(prev => prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id])
+  // ── Resume paused session ─────────────────────────────────────────────────
+  function resumeSession() {
+    if (!session) return
+    setCompleted(false)
+    runSweep(session.tasks, session.taskIndex, metrics, session.id, session.mode, session.city)
   }
-  function selectAllMetros() { setSweepMetros(TX_METROS.map(m => m.id)) }
-  function clearAllMetros()  { setSweepMetros([]) }
 
-  // ── Derived counts ────────────────────────────────────────────────────────
-  const matched   = results.filter(r => r.matched_lead_id)
-  const unmatched = results.filter(r => !r.matched_lead_id)
-  const sweepDone = activeSweep?.completedMetros.length ?? 0
-  const sweepTotal = activeSweep?.selectedMetros.length ?? sweepMetros.length
+  // ── Pause / stop ──────────────────────────────────────────────────────────
+  function pauseSweep() {
+    stopRef.current = true
+  }
 
+  // ── Start fresh (clear saved session) ────────────────────────────────────
+  function startFresh() {
+    clearSession()
+    setSession(null)
+    setMetrics(EMPTY_METRICS)
+    setLastLog([])
+    setCompleted(false)
+    setError(null)
+  }
+
+  // ── Computed progress ─────────────────────────────────────────────────────
+  const tasksTotal     = session?.tasks.length ?? 0
+  const tasksDone      = session ? Math.min(session.taskIndex, tasksTotal) : 0
+  const progressPct    = tasksTotal > 0 ? Math.round((tasksDone / tasksTotal) * 100) : 0
+  const isPaused       = session?.status === 'paused'
+  const hasSavedSession = !!session && session.status !== 'done'
+
+  // Which metro are we currently on?
+  const currentTask = session ? session.tasks[session.taskIndex] : null
+  const uniqueMetrosDone = session ? new Set(session.tasks.slice(0, tasksDone).map(t => t.metro)).size : 0
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-5">
-      <div>
-        <h2 className="text-sm font-semibold text-gray-800">Google Maps Business Search</h2>
-        <p className="text-xs text-gray-500 mt-0.5">
-          Search Google Places, preview results, and import new leads or enrich existing ones.
-        </p>
-      </div>
+    <div className="space-y-4">
 
-      {/* ── Mode toggle ── */}
-      <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1 w-fit">
-        {([
-          { val: 'single', label: '📍 Single City' },
-          { val: 'sweep',  label: '🗺️ All Texas Sweep' },
-        ] as const).map(({ val, label }) => (
+      {/* ── Mode Tabs ─────────────────────────────────────────────────────── */}
+      {!running && !hasSavedSession && !completed && (
+        <div className="flex gap-2 bg-gray-100 p-1 rounded-lg w-fit">
           <button
-            key={val}
-            onClick={() => { setSearchMode(val); setPhase('idle'); setError(null); setResults([]) }}
-            disabled={phase === 'sweeping'}
-            className={`text-xs font-medium px-3 py-1.5 rounded-md transition-all ${
-              searchMode === val
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
+            onClick={() => setMode('sweep')}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              mode === 'sweep' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            {label}
+            🗺️ All Texas Sweep
           </button>
-        ))}
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* SINGLE CITY MODE */}
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {searchMode === 'single' && (
-        <>
-          <form onSubmit={handleSearch} className="space-y-3">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">State</label>
-                <input value={stateVal} onChange={e => setStateVal(e.target.value.toUpperCase())} maxLength={2} placeholder="TX"
-                  className="w-full text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Metro / City</label>
-                <input value={location} onChange={e => setLocation(e.target.value)} placeholder="Houston"
-                  className="w-full text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div className="col-span-2 sm:col-span-1">
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Category / Search phrase <span className="text-red-500">*</span>
-                </label>
-                <input value={queryVal} onChange={e => setQueryVal(e.target.value)} placeholder="restaurants, nail salon, auto repair…" required
-                  className="w-full text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">ZIP (optional)</label>
-                <input value={zip} onChange={e => setZip(e.target.value)} placeholder="77001" maxLength={5}
-                  className="w-full text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-            </div>
-            <button type="submit" disabled={phase === 'searching' || phase === 'importing'}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
-              {phase === 'searching' ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-              {phase === 'searching' ? 'Searching…' : 'Search Google Maps'}
-            </button>
-          </form>
-
-          {phase === 'error' && error && (
-            <div className="flex items-start gap-2.5 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-              <AlertCircle size={16} className="shrink-0 mt-0.5" /><span>{error}</span>
-            </div>
-          )}
-
-          {(phase === 'preview' || phase === 'done') && results.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="text-sm text-gray-700">
-                  <span className="font-semibold">{results.length}</span> results for{' '}
-                  <span className="font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded">{textQuery}</span>
-                  {' — '}
-                  <span className="text-green-700 font-medium">{matched.length} match existing</span>
-                  {' · '}
-                  <span className="text-blue-700 font-medium">{unmatched.length} new</span>
-                </div>
-                {phase === 'preview' && (
-                  <button onClick={handleImport}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
-                    <Plus size={14} />
-                    Import {unmatched.length} new · enrich {matched.length}
-                  </button>
-                )}
-              </div>
-
-              {phase === 'done' && importResult && (
-                <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">
-                  <p className="font-semibold mb-1">Import complete</p>
-                  <ul className="space-y-0.5 text-green-700">
-                    <li>✅ {importResult.new_leads} new Google leads added</li>
-                    <li>🔗 {importResult.enriched_leads} existing leads enriched with Google data</li>
-                    {importResult.skipped > 0 && <li>⚠️ {importResult.skipped} skipped</li>}
-                  </ul>
-                </div>
-              )}
-
-              <ResultsTable results={results} />
-
-              {nextToken && phase === 'preview' && (
-                <button onClick={handleLoadMore} className="flex items-center gap-2 text-sm text-blue-600 hover:underline">
-                  <RefreshCw size={13} />Load next 20 results
-                </button>
-              )}
-            </div>
-          )}
-
-          {phase === 'preview' && results.length === 0 && (
-            <p className="text-sm text-gray-500">No results found. Try a different search term or location.</p>
-          )}
-          {phase === 'importing' && (
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <Loader2 size={14} className="animate-spin" />Saving results to database…
-            </div>
-          )}
-        </>
+          <button
+            onClick={() => setMode('city')}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              mode === 'city' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            📍 Single City
+          </button>
+        </div>
       )}
 
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* ALL TEXAS SWEEP MODE */}
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {searchMode === 'sweep' && (
-        <div className="space-y-4">
-          {/* Explanation */}
-          <div className="rounded-xl bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800 space-y-1">
-            <p className="font-semibold flex items-center gap-1.5"><MapPin size={14} />All Texas Sweep</p>
-            <p className="text-blue-700 text-xs">
-              Searches Texas city-by-city and category-by-category. Results are deduplicated against your existing queue using phone number → Google Place ID → name + address priority. Progress is saved after each city — a timeout or refresh will not restart the sweep.
+      {/* ── Resume Banner ─────────────────────────────────────────────────── */}
+      {hasSavedSession && !running && !completed && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-amber-800">
+              {session!.mode === 'city'
+                ? `📍 Paused city search: ${session!.city}`
+                : '🗺️ All Texas Sweep paused'}
             </p>
-            <p className="text-blue-600 text-xs italic">
-              Note: This finds Google Places results across selected Texas metros, not every business in Texas.
+            <p className="text-xs text-amber-600 mt-0.5">
+              {tasksDone} of {tasksTotal} combinations done · {metrics.newLeads} new leads · {metrics.enriched} enriched
             </p>
           </div>
-
-          {/* Query input */}
-          <div className="max-w-md">
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              Category / Search phrase <span className="text-red-500">*</span>
-            </label>
-            <input
-              value={queryVal}
-              onChange={e => setQueryVal(e.target.value)}
-              placeholder="restaurants, nail salons, auto repair…"
-              disabled={phase === 'sweeping'}
-              className="w-full text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
-            />
+          <div className="flex gap-2 shrink-0">
+            <button
+              onClick={resumeSession}
+              className="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700"
+            >
+              Resume
+            </button>
+            <button
+              onClick={startFresh}
+              className="px-3 py-1.5 bg-white border border-amber-300 text-amber-700 rounded-lg text-sm font-medium hover:bg-amber-50"
+            >
+              Start Over
+            </button>
           </div>
+        </div>
+      )}
 
-          {/* Metro selector */}
+      {/* ── All Texas Sweep Form ───────────────────────────────────────────── */}
+      {mode === 'sweep' && !running && !hasSavedSession && !completed && (
+        <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-medium text-gray-600">Select Texas metros ({sweepMetros.length} of {TX_METROS.length} selected)</label>
-              <div className="flex gap-2">
-                <button onClick={selectAllMetros} className="text-[10px] text-blue-600 hover:underline">All</button>
-                <button onClick={clearAllMetros}  className="text-[10px] text-gray-400 hover:underline">None</button>
-              </div>
+            <p className="text-sm font-medium text-gray-700">State</p>
+            <p className="text-sm text-gray-500 mt-0.5">Texas (TX) — searches {TX_SWEEP_METROS.length} cities across all merchant categories</p>
+          </div>
+          <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-blue-700 space-y-1">
+            <p>🔍 Automatically searches {TX_SWEEP_METROS.length} Texas metros × all merchant categories</p>
+            <p>📞 Only adds businesses with a valid phone number to your leads queue</p>
+            <p>♻️ Safe to rerun weekly — skips existing leads, never resets pipeline</p>
+          </div>
+          <button
+            onClick={startSweep}
+            className="w-full py-3 bg-indigo-600 text-white rounded-xl font-semibold text-sm hover:bg-indigo-700 transition-colors"
+          >
+            🗺️ Find All Texas Businesses
+          </button>
+        </div>
+      )}
+
+      {/* ── Single City Form ──────────────────────────────────────────────── */}
+      {mode === 'city' && !running && !hasSavedSession && !completed && (
+        <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+          <div>
+            <label className="text-sm font-medium text-gray-700 block mb-1">City</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={city}
+                onChange={e => setCity(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && city.trim()) startCity() }}
+                placeholder="e.g. Houston"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <button
+                onClick={startCity}
+                disabled={!city.trim()}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              >
+                📍 Find All Businesses in This City
+              </button>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-              {TX_METROS.map(metro => {
-                const isDone = activeSweep?.completedMetros.includes(metro.id) ?? false
-                const isSelected = sweepMetros.includes(metro.id)
-                return (
-                  <label key={metro.id}
-                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs cursor-pointer transition-colors ${
-                      isDone         ? 'bg-green-50 border-green-200 text-green-700' :
-                      isSelected     ? 'bg-blue-50 border-blue-300 text-blue-800' :
-                                       'bg-white border-gray-200 text-gray-500'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => toggleMetro(metro.id)}
-                      disabled={phase === 'sweeping' || isDone}
-                      className="accent-blue-600"
-                    />
-                    {isDone ? '✅ ' : ''}{metro.label}
-                  </label>
-                )
-              })}
-            </div>
+            <p className="text-xs text-gray-400 mt-1">All merchant categories searched automatically · Phone required</p>
           </div>
 
-          {/* Sweep controls */}
-          {phase !== 'sweeping' && (
-            <div className="flex items-center gap-3 flex-wrap">
-              {activeSweep && activeSweep.completedMetros.length > 0 && activeSweep.completedMetros.length < activeSweep.selectedMetros.length ? (
-                <>
-                  <button onClick={handleResumeSweep} disabled={!queryVal.trim() || sweepMetros.length === 0}
-                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50 transition-colors">
-                    <RefreshCw size={14} />
-                    Resume sweep ({sweepDone}/{sweepTotal} done)
-                  </button>
-                  <button onClick={handleCancelSweep}
-                    className="text-sm text-gray-400 hover:text-red-500 transition-colors">
-                    Start over
-                  </button>
-                </>
-              ) : (
-                <button onClick={handleStartSweep} disabled={!queryVal.trim() || sweepMetros.length === 0}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
-                  <MapPin size={14} />
-                  Start Texas Sweep ({sweepMetros.length} metros)
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Sweep progress bar */}
-          {phase === 'sweeping' && activeSweep && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium text-gray-700 flex items-center gap-2">
-                  <Loader2 size={14} className="animate-spin text-blue-500" />
-                  {sweepDone} of {sweepTotal} Texas metros complete
-                </span>
-                <span className="text-gray-500 text-xs">
-                  +{activeSweep.totalNew} new · ~{activeSweep.totalEnriched} enriched
-                </span>
-              </div>
-              <div className="w-full bg-gray-100 rounded-full h-2">
-                <div
-                  className="bg-blue-500 h-2 rounded-full transition-all duration-500"
-                  style={{ width: `${sweepTotal > 0 ? (sweepDone / sweepTotal) * 100 : 0}%` }}
+          {/* ── Advanced collapsed ──────────────────────────────────────── */}
+          <div className="border-t pt-3">
+            <button
+              onClick={() => setShowAdvanced(v => !v)}
+              className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600"
+            >
+              {showAdvanced ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              Advanced Search
+            </button>
+            {showAdvanced && (
+              <div className="mt-3 space-y-2">
+                <label className="text-xs font-medium text-gray-600 block">Override search phrase (optional)</label>
+                <input
+                  type="text"
+                  value={advancedPhrase}
+                  onChange={e => setAdvancedPhrase(e.target.value)}
+                  placeholder="e.g. taco trucks — leave blank to run all categories"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
+                <p className="text-xs text-gray-400">When blank, all internal merchant categories run automatically.</p>
               </div>
-            </div>
-          )}
+            )}
+          </div>
+        </div>
+      )}
 
-          {/* Sweep done summary */}
-          {phase === 'done' && activeSweep === null && sweepLog.length > 0 && (
-            <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">
-              <p className="font-semibold">Texas Sweep complete</p>
-              <p className="text-green-700 text-xs mt-0.5">Progress saved and cleared — ready for next sweep.</p>
+      {/* ── Active Sweep Progress ─────────────────────────────────────────── */}
+      {(running || (hasSavedSession && running)) && (
+        <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+              <span className="text-sm font-semibold text-gray-800">
+                {session?.mode === 'city' ? `Searching ${session?.city}…` : 'All Texas Sweep running…'}
+              </span>
             </div>
-          )}
+            <button
+              onClick={pauseSweep}
+              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50"
+            >
+              Pause
+            </button>
+          </div>
 
-          {/* Sweep log */}
-          {sweepLog.length > 0 && (
-            <div className="bg-gray-50 rounded-xl border border-gray-100 px-3 py-2 max-h-52 overflow-y-auto space-y-0.5">
-              {sweepLog.map((line, i) => (
-                <p key={i} className="text-xs font-mono text-gray-600">{line}</p>
+          {/* Progress bar */}
+          <div>
+            <div className="flex justify-between text-xs text-gray-500 mb-1">
+              <span>{tasksDone} of {tasksTotal} searches</span>
+              <span>{progressPct}%</span>
+            </div>
+            <div className="w-full bg-gray-100 rounded-full h-2">
+              <div
+                className="bg-indigo-600 h-2 rounded-full transition-all"
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+            {session?.mode === 'sweep' && currentTask && (
+              <p className="text-xs text-gray-400 mt-1">
+                Now: {currentTask.metro} — {uniqueMetrosDone} of {TX_SWEEP_METROS.length} cities started
+              </p>
+            )}
+          </div>
+
+          {/* Live metrics */}
+          <MetricsGrid m={metrics} />
+
+          {/* Last N log lines */}
+          {lastLog.length > 0 && (
+            <div className="bg-gray-50 rounded-lg p-3 space-y-0.5">
+              {lastLog.map((line, i) => (
+                <p key={i} className="text-xs text-gray-500 font-mono">{line}</p>
               ))}
-            </div>
-          )}
-
-          {sweepError && (
-            <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-              <AlertCircle size={14} className="shrink-0 mt-0.5" />{sweepError}
             </div>
           )}
         </div>
       )}
 
-      {/* ── Session run log (single city) ── */}
-      {runLog.length > 0 && searchMode === 'single' && (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">This session&apos;s runs</p>
-          <div className="space-y-1.5">
-            {runLog.map(run => (
-              <div key={run.id} className="flex items-center justify-between text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
-                <span className="font-medium">&quot;{run.query}&quot; in {run.location ?? run.state}</span>
-                <span className="text-gray-400 font-mono">{run.results_found} found · +{run.new_leads} new · ~{run.enriched_leads} enriched</span>
-              </div>
-            ))}
+      {/* ── Paused State (mid-sweep) ─────────────────────────────────────── */}
+      {isPaused && !running && (
+        <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+          <p className="text-sm font-semibold text-gray-700">Sweep paused at {tasksDone}/{tasksTotal}</p>
+          <MetricsGrid m={metrics} />
+          {lastLog.length > 0 && (
+            <div className="bg-gray-50 rounded-lg p-3 space-y-0.5">
+              {lastLog.map((line, i) => (
+                <p key={i} className="text-xs text-gray-500 font-mono">{line}</p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Error ─────────────────────────────────────────────────────────── */}
+      {error && (
+        <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-red-700">Search error</p>
+            <p className="text-xs text-red-600 mt-0.5">{error}</p>
+            <button onClick={startFresh} className="text-xs text-red-600 underline mt-1 hover:text-red-800">
+              Start over
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Completion Report ─────────────────────────────────────────────── */}
+      {completed && !running && (
+        <div className="bg-white border border-green-200 rounded-xl p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-5 h-5 text-green-600" />
+            <p className="text-sm font-semibold text-green-800">
+              {session?.mode === 'city'
+                ? `${session?.city} search complete!`
+                : 'All Texas Sweep complete!'}
+            </p>
+          </div>
+          <MetricsGrid m={completedReport} highlight />
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={startFresh}
+              className="flex-1 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700"
+            >
+              {mode === 'sweep' ? '🗺️ Run Again' : '📍 New Search'}
+            </button>
           </div>
         </div>
       )}
@@ -562,62 +511,22 @@ export function GoogleMapsSearchPanel() {
   )
 }
 
-// ── Results preview table ─────────────────────────────────────────────────────
-function ResultsTable({ results }: { results: GooglePlacePreview[] }) {
-  const [open, setOpen] = useState(true)
+// ── Metrics Grid ─────────────────────────────────────────────────────────────
+function MetricsGrid({ m, highlight }: { m: Metrics; highlight?: boolean }) {
+  const card = (label: string, value: number, color?: string) => (
+    <div className={`rounded-lg p-3 text-center ${highlight ? 'bg-green-50' : 'bg-gray-50'}`}>
+      <p className={`text-xl font-bold ${color ?? 'text-gray-900'}`}>{value.toLocaleString()}</p>
+      <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+    </div>
+  )
   return (
-    <div className="rounded-xl border border-gray-200 overflow-hidden">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-600 hover:bg-gray-100 transition-colors"
-      >
-        <span>Preview ({results.length} results)</span>
-        {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-      </button>
-      {open && (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-100">
-              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">Business</th>
-              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 hidden sm:table-cell">Address</th>
-              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">Phone</th>
-              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">Match</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {results.map((r, i) => (
-              <tr key={r.place_id ?? i} className={r.matched_lead_id ? 'bg-green-50/40' : 'bg-white'}>
-                <td className="px-3 py-2.5">
-                  <div className="font-medium text-gray-900 text-xs leading-snug">{r.name}</div>
-                  {r.matched_lead_id && sourceBadge('both')}
-                  <a href={r.google_maps_url} target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-0.5 text-[10px] text-blue-500 hover:underline mt-0.5">
-                    Maps <ExternalLink size={9} />
-                  </a>
-                </td>
-                <td className="px-3 py-2.5 hidden sm:table-cell">
-                  <div className="text-xs text-gray-500 leading-snug">{r.formatted_address}</div>
-                </td>
-                <td className="px-3 py-2.5">
-                  <div className="text-xs font-mono text-gray-700">{r.phone ?? '—'}</div>
-                </td>
-                <td className="px-3 py-2.5">
-                  {r.matched_lead_id ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">
-                      <CheckCircle2 size={10} />
-                      {r.match_type === 'phone' ? 'Phone' : r.match_type === 'place_id' ? 'Place ID' : 'Name+addr'}
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded-full">
-                      <Plus size={10} />New
-                    </span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+    <div className="grid grid-cols-3 gap-2">
+      {card('New Leads',     m.newLeads,  'text-green-700')}
+      {card('Enriched',      m.enriched,  'text-indigo-700')}
+      {card('Dup Skipped',   m.dupSkipped)}
+      {card('Checked',       m.checked)}
+      {card('With Phone',    m.callable)}
+      {card('No Phone',      m.noPhone,   'text-amber-700')}
     </div>
   )
 }

@@ -19,6 +19,30 @@ export function normalizePhoneForDedup(phone: string | null | undefined): string
   return digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits
 }
 
+/**
+ * Validate that a string is a usable US phone number.
+ * Accepts 10-digit local numbers or 11-digit numbers starting with 1.
+ */
+export function isValidUSPhone(phone: string | null | undefined): boolean {
+  if (!phone) return false
+  const digits = phone.replace(/\D/g, '')
+  if (digits.length === 10) return true
+  if (digits.length === 11 && digits.startsWith('1')) return true
+  return false
+}
+
+/**
+ * Normalize a US phone to 10 digits (strip country code).
+ * Returns empty string if not a valid US number.
+ */
+export function normalizeUSPhone(phone: string | null | undefined): string {
+  if (!phone) return ''
+  const digits = phone.replace(/\D/g, '')
+  if (digits.length === 10) return digits
+  if (digits.length === 11 && digits.startsWith('1')) return digits.slice(1)
+  return ''
+}
+
 /** Uppercase, collapse whitespace, strip punctuation for name matching. */
 export function normalizeNameForDedup(name: string | null | undefined): string {
   if (!name) return ''
