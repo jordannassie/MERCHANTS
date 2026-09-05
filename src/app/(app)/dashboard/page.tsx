@@ -230,6 +230,98 @@ export default async function DashboardPage({
         </Link>
       )}
 
+      {/* ── SMS Activity ── */}
+      <SmsStatsCard />
+
+    </div>
+  )
+}
+
+// ── SMS stats card (client island) ────────────────────────────────────────────
+// Fetched client-side so it doesn't block the server render and avoids
+// coupling the dashboard to the sms_messages table at build time.
+
+async function SmsStatsCard() {
+  // Server component — fetch from our own API route
+  let stats: {
+    today: { sent: number; delivered: number; failed: number; replies: number; opted_out: number }
+    needs_reply_count: number
+    daily_limit: number
+    remaining_today: number
+    is_paused: boolean
+  } | null = null
+
+  try {
+    const base = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000'
+    const res = await fetch(`${base}/api/sms/stats`, { cache: 'no-store' })
+    if (res.ok) stats = await res.json()
+  } catch {
+    // If SMS not configured yet, silently skip the card
+  }
+
+  if (!stats) return null
+
+  const { today, needs_reply_count, daily_limit, remaining_today, is_paused } = stats
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">📱 SMS Today</h2>
+        {is_paused && (
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-50 border border-yellow-200 text-yellow-700 tracking-wide">
+            PAUSED
+          </span>
+        )}
+      </div>
+
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 mb-4">
+        <SmsStatTile emoji="📤" label="Sent" value={today.sent} sub={`/ ${daily_limit}`} />
+        <SmsStatTile emoji="✅" label="Delivered" value={today.delivered} />
+        <SmsStatTile emoji="❌" label="Failed" value={today.failed} alert={today.failed > 0} />
+        <SmsStatTile emoji="💬" label="Replies" value={today.replies} />
+        <SmsStatTile emoji="🚫" label="Opted Out" value={today.opted_out} />
+        <SmsStatTile emoji="🔔" label="Needs Reply" value={needs_reply_count} alert={needs_reply_count > 0} />
+      </div>
+
+      {/* Daily limit bar */}
+      <div>
+        <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+          <span>Daily limit</span>
+          <span>{today.sent} / {daily_limit} · {remaining_today} remaining</span>
+        </div>
+        <div className="w-full bg-gray-100 rounded-full h-1.5">
+          <div
+            className={`h-1.5 rounded-full transition-all ${
+              today.sent >= daily_limit ? 'bg-red-400' : today.sent > daily_limit * 0.8 ? 'bg-yellow-400' : 'bg-blue-500'
+            }`}
+            style={{ width: `${Math.min(100, Math.round((today.sent / daily_limit) * 100))}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SmsStatTile({
+  emoji,
+  label,
+  value,
+  sub,
+  alert,
+}: {
+  emoji: string
+  label: string
+  value: number
+  sub?: string
+  alert?: boolean
+}) {
+  return (
+    <div className={`rounded-lg border px-3 py-2.5 text-center ${alert && value > 0 ? 'bg-orange-50 border-orange-100' : 'bg-gray-50 border-gray-100'}`}>
+      <div className="text-lg">{emoji}</div>
+      <div className={`text-xl font-bold leading-tight ${alert && value > 0 ? 'text-orange-700' : 'text-gray-800'}`}>
+        {value.toLocaleString()}{sub && <span className="text-xs font-normal text-gray-400">{sub}</span>}
+      </div>
+      <div className="text-[10px] text-gray-400 mt-0.5">{label}</div>
     </div>
   )
 }

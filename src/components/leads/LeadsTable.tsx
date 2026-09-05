@@ -8,14 +8,30 @@ import { Phone } from 'lucide-react'
 import { LEAD_STATUSES, COUNTY_NAMES } from '@/lib/constants'
 import type { LeadStatus } from '@/lib/types'
 import { buildOutreachMessage } from '@/lib/outreach'
+import { SendTextModal } from '@/components/leads/SendTextModal'
+import { isValidUSPhone } from '@/lib/source-utils'
 
 interface Props { leads: Lead[] }
 
+/** Relative time for sms_last_sent_at */
+function relativeTime(iso: string | null | undefined): string | null {
+  if (!iso) return null
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins  = Math.floor(diff / 60_000)
+  if (mins < 1)   return 'just now'
+  if (mins < 60)  return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24)   return `${hrs}h ago`
+  const days = Math.floor(hrs / 24)
+  return `${days}d ago`
+}
+
 export function LeadsTable({ leads }: Props) {
   const [leadsList, setLeadsList] = useState<Lead[]>(leads)
-  const [phoneCopied, setPhoneCopied] = useState<Record<string, boolean>>({})
-  const [smsCopied, setSmsCopied] = useState<Record<string, boolean>>({})
-  const [toasts, setToasts] = useState<Array<{ id: string; text: string; kind: 'success' | 'error' }>>([])
+  const [phoneCopied, setPhoneCopied]   = useState<Record<string, boolean>>({})
+  const [smsCopied, setSmsCopied]       = useState<Record<string, boolean>>({})
+  const [toasts, setToasts]             = useState<Array<{ id: string; text: string; kind: 'success' | 'error' }>>([])
+  const [smsModal, setSmsModal]         = useState<{ lead: Lead; phone: string } | null>(null)
 
   function addToast(id: string, text: string, kind: 'success' | 'error') {
     const t = { id: `${Date.now()}-${id}`, text, kind }
@@ -59,7 +75,6 @@ export function LeadsTable({ leads }: Props) {
         ? new URLSearchParams(window.location.search).get('status') || 'new'
         : 'new'
     if (newStatus !== currentStatus && currentStatus !== 'all') {
-      // Remove card from current queue and highlight the next one
       setLeadsList(prev => {
         const idx = prev.findIndex(p => p.id === lead.id)
         const next = prev.filter(p => p.id !== lead.id)
@@ -86,6 +101,17 @@ export function LeadsTable({ leads }: Props) {
     }
   }
 
+  function handleSmsSent(lead: Lead, result: { messageId: string }) {
+    addToast(lead.id, 'Text sent!', 'success')
+    setLeadsList(prev =>
+      prev.map(p =>
+        p.id === lead.id
+          ? { ...p, sms_status: 'submitted', sms_last_sent_at: new Date().toISOString() }
+          : p
+      )
+    )
+  }
+
   if (leadsList.length === 0) {
     return (
       <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
@@ -108,6 +134,11 @@ export function LeadsTable({ leads }: Props) {
           const businessName = lead.display_name || lead.outlet_name
           const sms = buildOutreachMessage(businessName)
 
+          const canSendSms    = !!phone && isValidUSPhone(phone) && lead.status !== 'do_not_contact' && lead.sms_status !== 'opted_out'
+          const isOptedOut    = lead.sms_status === 'opted_out' || lead.status === 'do_not_contact'
+          const needsReply    = lead.sms_needs_reply === true || lead.sms_status === 'needs_reply'
+          const sentAgo       = relativeTime(lead.sms_last_sent_at)
+
           return (
             <div
               key={lead.id}
@@ -117,14 +148,21 @@ export function LeadsTable({ leads }: Props) {
               {/* Business name + location + dates */}
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                 <div className="min-w-0">
-                  <Link
-                    href={`/leads/${lead.id}`}
-                    className="font-semibold text-gray-900 text-base leading-tight hover:text-blue-600"
-                  >
-                    {name}
-                  </Link>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Link
+                      href={`/leads/${lead.id}`}
+                      className="font-semibold text-gray-900 text-base leading-tight hover:text-blue-600"
+                    >
+                      {name}
+                    </Link>
+                    {needsReply && (
+                      <span className="inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full border bg-orange-50 border-orange-200 text-orange-700 tracking-wide">
+                        💬 Needs Reply
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    {/* Source badge — visible at a glance before opening the lead */}
+                    {/* Source badge */}
                     {lead.lead_source_label && (
                       <span className={`inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full border tracking-wide ${
                         lead.lead_source_label === 'both'
@@ -204,6 +242,25 @@ export function LeadsTable({ leads }: Props) {
                     >
                       <Phone size={13} /> Call
                     </a>
+
+                    {/* SMS button / badge */}
+                    {isOptedOut ? (
+                      <span className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-400 border border-gray-200 rounded-lg bg-gray-50 cursor-not-allowed">
+                        🚫 Opted Out
+                      </span>
+                    ) : canSendSms ? (
+                      <button
+                        onClick={() => setSmsModal({ lead, phone })}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-green-700 border border-green-200 bg-green-50 hover:bg-green-100 rounded-lg transition-colors"
+                      >
+                        📱 Send Text
+                      </button>
+                    ) : null}
+
+                    {/* Last sent timestamp */}
+                    {sentAgo && !isOptedOut && (
+                      <span className="text-xs text-gray-400">Sent {sentAgo}</span>
+                    )}
                   </div>
                 ) : (
                   <span className="text-sm text-gray-400">No phone on file</span>
@@ -266,6 +323,18 @@ export function LeadsTable({ leads }: Props) {
           </div>
         ))}
       </div>
+
+      {/* SMS Modal */}
+      {smsModal && (
+        <SendTextModal
+          lead={{ ...smsModal.lead, phone: smsModal.phone }}
+          onClose={() => setSmsModal(null)}
+          onSent={(result) => {
+            handleSmsSent(smsModal.lead, result)
+            setSmsModal(null)
+          }}
+        />
+      )}
     </>
   )
 }

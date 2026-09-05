@@ -151,6 +151,11 @@ export interface Lead {
   main_note_updated_at: string | null
   // Source tracking (migration 017)
   lead_source_label: LeadSourceLabel | null
+  // QUO SMS integration (migration 019)
+  quo_contact_id?: string | null
+  sms_status?: 'submitted' | 'delivered' | 'failed' | 'needs_reply' | 'opted_out' | null
+  sms_last_sent_at?: string | null
+  sms_needs_reply?: boolean | null
   created_at: string
   updated_at: string
 }
