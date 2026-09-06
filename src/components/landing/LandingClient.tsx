@@ -225,6 +225,36 @@ export default function LandingClient() {
        </div>
      </section>
 
+     {/* ─── TRUSTED BRANDS ─────────────────────────────────────────────────── */}
+     <section className="bg-white border-y border-slate-100 py-10">
+       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+         <p className="text-xs font-semibold tracking-widest text-slate-400 uppercase mb-6">
+           Trusted by thousands of merchants — including brands within the Global Payments network
+         </p>
+         <div className="flex flex-wrap items-center justify-center gap-8 md:gap-12">
+           {[
+             { src: 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/brands/starbucks-logo-png-25.png', alt: 'Starbucks' },
+             { src: 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/brands/taco-bell-6-logo-png-transparent.png', alt: 'Taco Bell' },
+             { src: 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/brands/VW%20images.png', alt: 'Volkswagen' },
+             { src: 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/brands/7-eleven_logo.svg.webp', alt: '7-Eleven' },
+             { src: 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/brands/Burger_King_Logo.png', alt: 'Burger King' },
+             { src: 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/brands/Carl\'s_Jr._old_stacked.svg', alt: "Carl's Jr." },
+           ].map(({ src, alt }) => (
+             <div key={alt} className="flex items-center justify-center h-12">
+               <Image
+                 src={src}
+                 alt={alt}
+                 width={80}
+                 height={48}
+                 className="h-10 w-auto object-contain grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-all duration-300"
+                 unoptimized
+               />
+             </div>
+           ))}
+         </div>
+       </div>
+     </section>
+
      <section className="bg-white border-y border-slate-100 py-6">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-center gap-5">
           <Image
