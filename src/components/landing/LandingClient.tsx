@@ -391,12 +391,6 @@ export default function LandingClient() {
               </p>
 
               <div className="flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
-                <a
-                  href="tel:+19497361560"
-                  className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm px-5 py-3 rounded-xl transition-colors shadow-md shadow-blue-200"
-                >
-                  <Phone size={15} /> (949) 736-1560
-                </a>
               </div>
             </div>
           </div>
@@ -429,14 +423,12 @@ export default function LandingClient() {
               <p className="text-slate-500 text-lg leading-relaxed mb-8">
                 Whether you’re opening a new business, replacing equipment, or ready for a better payment solution, we’ll help get you set up quickly and simply.
               </p>
-              <div className="space-y-4 text-sm text-slate-600">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center shrink-0">
-                    <Phone size={14} className="text-blue-600" />
-                  </div>
-                  <a href="tel:+19497361560" className="hover:text-blue-600 transition-colors font-medium">(949) 736-1560</a>
-                </div>
-              </div>
+              <a
+                href="tel:+19497361560"
+                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm px-5 py-3 rounded-xl transition-colors shadow-md shadow-blue-200"
+              >
+                <Phone size={15} /> (949) 736-1560
+              </a>
             </div>
 
             {/* Right: form */}
