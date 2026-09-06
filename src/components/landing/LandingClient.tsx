@@ -642,7 +642,7 @@ export default function LandingClient() {
                 alt="Global Payments"
                 width={160}
                 height={48}
-                className="h-10 w-auto object-contain"
+                className="h-7 w-auto object-contain brightness-0"
                 unoptimized
               />
             </a>
