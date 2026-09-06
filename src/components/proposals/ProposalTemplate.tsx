@@ -227,6 +227,17 @@ export function ProposalTemplate({ data }: Props) {
             </div>
           </div>
 
+          {/* Accepted cards */}
+          <div className="flex justify-center mb-6">
+            <Image
+              src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Cards.png"
+              alt="Accepted: Amex, Visa, Mastercard, Discover"
+              width={280}
+              height={52}
+              className="h-10 w-auto object-contain"
+            />
+          </div>
+
           {/* Brand logos */}
           <div className="mb-6">
             <p className="text-center text-xs font-semibold tracking-widest text-gray-400 uppercase mb-3">
