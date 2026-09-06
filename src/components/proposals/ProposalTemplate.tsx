@@ -8,14 +8,15 @@ const LOGO_URL =
   'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Blacklogo.png'
 
 export interface ProposalData {
-  businessName: string
-  slug: string
-  savingsMonthly?: number | null
-  transactionRate?: string | null
-  equipment?: string | null
-  contract?: string | null
-  status: string
-  accepted: boolean
+  businessName:              string
+  slug:                      string
+  savingsMonthly?:           number | null
+  transactionRate?:          string | null
+  equipment?:                string | null
+  contract?:                 string | null
+  status:                    string
+  accepted:                  boolean
+  estimatedMonthlyCardSales?: number | null
 }
 
 interface Props {
@@ -28,6 +29,41 @@ export function ProposalTemplate({ data }: Props) {
   const [loading,     setLoading]     = useState(false)
   const [errors,      setErrors]      = useState<Record<string, string>>({})
   const [sheetOpen,   setSheetOpen]   = useState(false)
+
+  // Monthly card sales slider
+  const SLIDER_MIN  = 5_000
+  const SLIDER_MAX  = 250_000
+  const SLIDER_STEP = 5_000
+  const [cardSales, setCardSales] = useState<number>(
+    data.estimatedMonthlyCardSales && data.estimatedMonthlyCardSales >= SLIDER_MIN
+      ? data.estimatedMonthlyCardSales
+      : 50_000
+  )
+  const [savingVolume, setSavingVolume] = useState(false)
+
+  // Debounced save to DB
+  const saveVolumeTimeout = useState<ReturnType<typeof setTimeout> | null>(null)
+
+  function handleCardSalesChange(val: number) {
+    setCardSales(val)
+    if (saveVolumeTimeout[0]) clearTimeout(saveVolumeTimeout[0])
+    setSavingVolume(true)
+    saveVolumeTimeout[0] = setTimeout(async () => {
+      try {
+        await fetch(`/api/proposals/${slug}/card-sales`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ amount: val }),
+        })
+      } finally {
+        setSavingVolume(false)
+      }
+    }, 800)
+  }
+
+  function fmtDollars(n: number) {
+    return '$' + n.toLocaleString()
+  }
 
   // Form fields
   const [name,  setName]  = useState('')
@@ -121,6 +157,34 @@ export function ProposalTemplate({ data }: Props) {
             </p>
           </div>
 
+          {/* Monthly card sales slider */}
+          <div className="bg-blue-50/50 border border-blue-100 rounded-2xl px-6 py-6 mb-6">
+            <p className="text-sm font-semibold text-gray-700 mb-3 text-center">
+              About how much do you expect to process in card sales each month?
+            </p>
+            <p className="text-3xl font-black text-blue-600 text-center mb-4">
+              {fmtDollars(cardSales)}<span className="text-lg font-semibold text-blue-400"> / month</span>
+              {cardSales >= SLIDER_MAX && <span className="text-lg font-semibold text-blue-400">+</span>}
+            </p>
+            <div className="relative">
+              <input
+                type="range"
+                min={SLIDER_MIN}
+                max={SLIDER_MAX}
+                step={SLIDER_STEP}
+                value={cardSales}
+                onChange={e => handleCardSalesChange(Number(e.target.value))}
+                className="w-full h-2 rounded-full appearance-none cursor-pointer accent-blue-600"
+                style={{ background: `linear-gradient(to right, #2563eb ${((cardSales - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * 100}%, #dbeafe ${((cardSales - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * 100}%)` }}
+              />
+            </div>
+            <div className="flex justify-between mt-2 text-xs text-gray-400 font-medium">
+              <span>$5K</span>
+              <span>{savingVolume ? <span className="text-blue-400 italic">Saving…</span> : null}</span>
+              <span>$250K+</span>
+            </div>
+          </div>
+
           {/* 2×2 Card grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
             {/* Estimated savings */}
@@ -154,7 +218,7 @@ export function ProposalTemplate({ data }: Props) {
                     </p>
                   </>
                 ) : (
-                  <p className="text-lg font-bold text-gray-800">Custom savings review</p>
+                  <p className="text-lg font-bold text-gray-800">Calculated after rate review</p>
                 )}
               </div>
             </div>
@@ -439,6 +503,7 @@ function CtaSection({
 
   return (
     <div className="bg-blue-50/60 border border-blue-100 rounded-2xl px-5 py-6 space-y-4">
+      <h2 className="text-2xl font-black text-gray-900 text-center tracking-tight">FILL OUT FORM</h2>
       {/* Name + Email row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
