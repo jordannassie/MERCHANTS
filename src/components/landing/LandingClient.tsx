@@ -6,7 +6,7 @@ import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
 import {
   ChevronRight, Play, Shield, ArrowRight,
-  CheckCircle, Phone, Mail, LogIn, LifeBuoy, MessageCircle,
+  CheckCircle, Phone, Mail, LogIn, LifeBuoy, MessageCircle, MapPin,
 } from 'lucide-react'
 import { PinDialog } from './PinDialog'
 import { ComparisonTable } from './ComparisonTable'
@@ -423,28 +423,31 @@ export default function LandingClient() {
               <p className="text-slate-500 text-lg leading-relaxed mb-8">
                 Whether you’re opening a new business, replacing equipment, or ready for a better payment solution, we’ll help get you set up quickly and simply.
               </p>
-              {/* City locations */}
-              <div className="flex flex-wrap gap-2 mb-6">
-                {[
-                  { city: 'Miami, FL',         emoji: '🌴' },
-                  { city: 'Dallas, TX',         emoji: '⭐' },
-                  { city: 'San Francisco, CA',  emoji: '🌉' },
-                ].map(({ city, emoji }) => (
-                  <span
-                    key={city}
-                    className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full border border-blue-100"
-                  >
-                    {emoji} {city}
-                  </span>
-                ))}
-              </div>
-
               <a
                 href="tel:+19497361560"
                 className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm px-5 py-3 rounded-xl transition-colors shadow-md shadow-blue-200"
               >
                 <Phone size={15} /> (949) 736-1560
               </a>
+
+              {/* City locations */}
+              <div className="mt-7">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">Locations</p>
+                <div className="space-y-3">
+                  {[
+                    'Miami, FL',
+                    'Dallas, TX',
+                    'San Francisco, CA',
+                  ].map(city => (
+                    <div key={city} className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
+                        <MapPin size={14} className="text-slate-500" />
+                      </div>
+                      <span className="text-sm font-medium text-slate-700">{city}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
 
             {/* Right: form */}
