@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
+import { X } from 'lucide-react'
 
 const LOGO_URL =
   'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Blacklogo.png'
@@ -23,9 +24,10 @@ interface Props {
 
 export function ProposalTemplate({ data }: Props) {
   const { businessName, slug, savingsMonthly, transactionRate, equipment, contract } = data
-  const [accepted, setAccepted] = useState(data.accepted)
-  const [loading, setLoading]   = useState(false)
-  const [errors,  setErrors]    = useState<Record<string, string>>({})
+  const [accepted,    setAccepted]    = useState(data.accepted)
+  const [loading,     setLoading]     = useState(false)
+  const [errors,      setErrors]      = useState<Record<string, string>>({})
+  const [sheetOpen,   setSheetOpen]   = useState(false)
 
   // Form fields
   const [name,  setName]  = useState('')
@@ -325,18 +327,82 @@ export function ProposalTemplate({ data }: Props) {
             </div>
           </div>
 
-          {/* CTA form */}
-          <CtaSection
-            accepted={accepted}
-            loading={loading}
-            errors={errors}
-            name={name}   setName={setName}
-            email={email} setEmail={setEmail}
-            phone={phone} setPhone={setPhone}
-            onAccept={handleAccept}
-          />
+          {/* CTA form — desktop only inline */}
+          <div className="hidden md:block">
+            <CtaSection
+              accepted={accepted}
+              loading={loading}
+              errors={errors}
+              name={name}   setName={setName}
+              email={email} setEmail={setEmail}
+              phone={phone} setPhone={setPhone}
+              onAccept={handleAccept}
+            />
+          </div>
+
+          {/* Mobile: show success inline if already accepted */}
+          {accepted && (
+            <div className="md:hidden bg-green-50 border border-green-200 rounded-2xl px-6 py-8 text-center">
+              <span className="text-2xl font-black text-green-600 block mb-2">✓ Request Sent</span>
+              <p className="text-gray-500 text-sm max-w-sm mx-auto">
+                Thanks! Jordan will reach out and send your Service Agreement shortly.
+              </p>
+            </div>
+          )}
         </div>
       </main>
+
+      {/* ── Mobile sticky CTA button ─────────────────────────────────────── */}
+      {!accepted && (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 px-4 py-4 bg-white border-t border-gray-100 shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
+          <button
+            onClick={() => setSheetOpen(true)}
+            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-bold text-base py-4 rounded-xl transition-all"
+          >
+            Send me Service Agreement ›
+          </button>
+          <p className="text-center text-xs text-gray-400 mt-2">
+            🔒 Secure · No commitment required
+          </p>
+        </div>
+      )}
+
+      {/* ── Mobile bottom sheet ──────────────────────────────────────────── */}
+      {sheetOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="md:hidden fixed inset-0 z-40 bg-black/40"
+            onClick={() => setSheetOpen(false)}
+          />
+          {/* Sheet */}
+          <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl shadow-2xl px-5 pt-5 pb-10">
+            {/* Handle + close */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto absolute left-1/2 -translate-x-1/2 top-3" />
+              <p className="text-sm font-semibold text-gray-800">Get Your Service Agreement</p>
+              <button onClick={() => setSheetOpen(false)} className="text-gray-400 hover:text-gray-600 p-1">
+                <X size={18} />
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+              Fill in your details and Jordan will send your Service Agreement and give you a call to get everything set up.
+            </p>
+            <CtaSection
+              accepted={accepted}
+              loading={loading}
+              errors={errors}
+              name={name}   setName={setName}
+              email={email} setEmail={setEmail}
+              phone={phone} setPhone={setPhone}
+              onAccept={async () => {
+                await handleAccept()
+                setSheetOpen(false)
+              }}
+            />
+          </div>
+        </>
+      )}
     </div>
   )
 }
