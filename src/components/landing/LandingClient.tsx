@@ -416,6 +416,16 @@ export default function LandingClient() {
 
             {/* Left: copy */}
             <div>
+              {/* Team photo */}
+              <div className="relative w-full rounded-2xl overflow-hidden shadow-lg mb-7">
+                <Image
+                  src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/Us.png"
+                  alt="Process.Direct Team"
+                  width={800}
+                  height={500}
+                  className="w-full h-auto object-cover"
+                />
+              </div>
               <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-5">
                 <Shield size={12} /> Simple. Personal. Built for your business.
               </div>
