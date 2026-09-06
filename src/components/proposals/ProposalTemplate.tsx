@@ -227,6 +227,18 @@ export function ProposalTemplate({ data }: Props) {
             </div>
           </div>
 
+          {/* Video */}
+          <div className="rounded-2xl overflow-hidden shadow-md mb-6">
+            <video
+              src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/video/pointofsaleherovideo.mp4"
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="w-full h-auto object-cover"
+            />
+          </div>
+
           {/* Accepted cards */}
           <div className="flex justify-center mb-6">
             <Image

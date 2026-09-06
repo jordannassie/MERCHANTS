@@ -203,6 +203,22 @@ export default function LandingClient() {
         </div>
       </section>
 
+      {/* ─── HERO VIDEO ─────────────────────────────────────────────────────── */}
+      <section className="bg-white py-8">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="rounded-2xl overflow-hidden shadow-lg">
+            <video
+              src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/video/pointofsaleherovideo.mp4"
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="w-full h-auto object-cover"
+            />
+          </div>
+        </div>
+      </section>
+
       {/* ─── QUICKBOOKS STRIP ───────────────────────────────────────────────── */}
       {/* ─── TRUST STATS (full-width) ────────────────────────────────────────── */}
      <section className="w-full bg-blue-50/40 py-12">
