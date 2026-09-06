@@ -34,6 +34,8 @@ const ALWAYS_PUBLIC = [
   '/api/admin/login',
   '/api/admin/logout',
   '/api/admin/session',
+  '/api/proposals',  // proposal accept endpoint (public)
+  '/p',              // public proposal pages
   '/_next',
   '/favicon',
   '/login',

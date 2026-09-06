@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { buildOutreachMessage } from '@/lib/outreach'
+import { getProposalUrl } from '@/lib/proposals'
 
 interface Props {
   lead: {
@@ -10,6 +11,7 @@ interface Props {
     outlet_name?: string | null
     phone: string
     sms_status?: string | null
+    proposal_slug?: string | null
   }
   onClose: () => void
   onSent: (result: { messageId: string }) => void
@@ -23,11 +25,11 @@ function formatPhone(phone: string): string {
   return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`
 }
 
-const OPT_OUT_SUFFIX = '\n\nReply STOP to opt out.'
-
 export function SendTextModal({ lead, onClose, onSent }: Props) {
   const businessName = lead.display_name || lead.outlet_name || null
-  const defaultMessage = buildOutreachMessage(businessName) + OPT_OUT_SUFFIX
+  const proposalUrl  = lead.proposal_slug ? getProposalUrl(lead.proposal_slug) : null
+  // buildOutreachMessage always includes "Reply STOP to opt out." now
+  const defaultMessage = buildOutreachMessage(businessName, proposalUrl)
 
   const [content, setContent]   = useState(defaultMessage)
   const [loading, setLoading]   = useState(false)

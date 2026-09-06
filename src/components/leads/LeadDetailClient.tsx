@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { updateLeadCRM, starLead, updateLeadStatus } from '@/lib/actions/leads'
 import { ContactPanel } from './ContactPanel'
+import { ProposalEditor } from '@/components/proposals/ProposalEditor'
 
 interface Props {
   lead: Lead
@@ -269,6 +270,11 @@ export function LeadDetailClient({ lead: initialLead, contacts: initialContacts,
             <Edit2 size={11} /> Edit CRM fields
           </button>
         </div>
+      </div>
+
+      {/* Proposal */}
+      <div className="mt-4">
+        <ProposalEditor lead={lead} onUpdate={(updated) => setLead(l => ({ ...l, ...updated }))} />
       </div>
 
       {/* Contacts */}

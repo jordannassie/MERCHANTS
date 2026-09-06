@@ -156,6 +156,16 @@ export interface Lead {
   sms_status?: 'submitted' | 'delivered' | 'failed' | 'needs_reply' | 'opted_out' | null
   sms_last_sent_at?: string | null
   sms_needs_reply?: boolean | null
+  // Proposal system (migration 022)
+  proposal_slug?:             string | null
+  proposal_savings_monthly?:  number | null
+  proposal_transaction_rate?: string | null
+  proposal_equipment?:        string | null
+  proposal_contract?:         string | null
+  proposal_status?:           'not_sent' | 'sent' | 'viewed' | 'accepted' | null
+  proposal_sent_at?:          string | null
+  proposal_viewed_at?:        string | null
+  proposal_accepted_at?:      string | null
   created_at: string
   updated_at: string
 }

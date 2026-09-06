@@ -200,6 +200,15 @@ async function main() {
   } else {
     console.log('[migrate] ✓ 021 system_settings present')
   }
+
+  // ── 022: Proposal fields on leads ────────────────────────────────────────
+  const col022 = await columnExists('leads', 'proposal_slug')
+  if (!col022) {
+    const sql022 = readMigration('022_proposal_fields.sql')
+    if (sql022) await applyMigration('022_proposal_fields.sql', sql022)
+  } else {
+    console.log('[migrate] ✓ 022 proposal fields present')
+  }
 }
 
 async function applyMigration(filename, sql) {

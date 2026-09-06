@@ -8,6 +8,7 @@ import { Phone } from 'lucide-react'
 import { LEAD_STATUSES, COUNTY_NAMES } from '@/lib/constants'
 import type { LeadStatus } from '@/lib/types'
 import { buildOutreachMessage } from '@/lib/outreach'
+import { getProposalUrl } from '@/lib/proposals'
 import { SendTextModal } from '@/components/leads/SendTextModal'
 import { isValidUSPhone } from '@/lib/source-utils'
 
@@ -27,11 +28,37 @@ function relativeTime(iso: string | null | undefined): string | null {
 }
 
 export function LeadsTable({ leads }: Props) {
-  const [leadsList, setLeadsList] = useState<Lead[]>(leads)
+  const [leadsList, setLeadsList]       = useState<Lead[]>(leads)
   const [phoneCopied, setPhoneCopied]   = useState<Record<string, boolean>>({})
   const [smsCopied, setSmsCopied]       = useState<Record<string, boolean>>({})
+  const [linkCopied, setLinkCopied]     = useState<Record<string, boolean>>({})
+  const [slugLoading, setSlugLoading]   = useState<Record<string, boolean>>({})
   const [toasts, setToasts]             = useState<Array<{ id: string; text: string; kind: 'success' | 'error' }>>([])
   const [smsModal, setSmsModal]         = useState<{ lead: Lead; phone: string } | null>(null)
+
+  async function handleGetLink(lead: Lead) {
+    setSlugLoading(s => ({ ...s, [lead.id]: true }))
+    try {
+      const res = await fetch('/api/proposals/ensure-slug', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadId: lead.id }),
+      })
+      const json = await res.json()
+      if (json.ok && json.slug) {
+        setLeadsList(prev =>
+          prev.map(p => p.id === lead.id ? { ...p, proposal_slug: json.slug, proposal_status: p.proposal_status ?? 'not_sent' } : p)
+        )
+        addToast(lead.id, 'Proposal link created!', 'success')
+      } else {
+        addToast(lead.id, 'Could not generate link', 'error')
+      }
+    } catch {
+      addToast(lead.id, 'Could not generate link', 'error')
+    } finally {
+      setSlugLoading(s => ({ ...s, [lead.id]: false }))
+    }
+  }
 
   function addToast(id: string, text: string, kind: 'success' | 'error') {
     const t = { id: `${Date.now()}-${id}`, text, kind }
@@ -131,8 +158,9 @@ export function LeadsTable({ leads }: Props) {
           const county = COUNTY_NAMES[String(lead.outlet_county_code ?? '')] || lead.outlet_county_code || ''
           const phone = lead.permit_phone ?? lead.primary_phone
           const normalized = phone ? phone.replace(/\D/g, '') : ''
-          const businessName = lead.display_name || lead.outlet_name
-          const sms = buildOutreachMessage(businessName)
+          const businessName  = lead.display_name || lead.outlet_name
+          const proposalUrl   = lead.proposal_slug ? getProposalUrl(lead.proposal_slug) : null
+          const sms           = buildOutreachMessage(businessName, proposalUrl)
 
           const canSendSms    = !!phone && isValidUSPhone(phone) && lead.status !== 'do_not_contact' && lead.sms_status !== 'opted_out'
           const isOptedOut    = lead.sms_status === 'opted_out' || lead.status === 'do_not_contact'
@@ -303,6 +331,56 @@ export function LeadsTable({ leads }: Props) {
                   </div>
                 </div>
               </div>
+
+              {/* Proposal section */}
+              <div className="border-t border-gray-100 pt-3">
+                <div className="flex items-center justify-between mb-1.5 flex-wrap gap-2">
+                  <div className="text-xs text-gray-400">Proposal</div>
+                  <ProposalStatusBadge status={lead.proposal_status} />
+                </div>
+                {lead.proposal_slug ? (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-gray-500 font-mono truncate max-w-[200px]">
+                      process.direct/p/{lead.proposal_slug}
+                    </span>
+                    <a
+                      href={proposalUrl!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs px-2.5 py-1 border border-gray-200 rounded-md hover:bg-gray-50 text-gray-600 transition-colors"
+                    >
+                      Open ↗
+                    </a>
+                    <button
+                      onClick={async () => {
+                        const ok = await copyToClipboard(proposalUrl!)
+                        if (ok) {
+                          setLinkCopied(s => ({ ...s, [lead.id]: true }))
+                          addToast(lead.id, 'Proposal link copied', 'success')
+                          setTimeout(() => setLinkCopied(s => ({ ...s, [lead.id]: false })), 1800)
+                        } else {
+                          addToast(lead.id, 'Could not copy link', 'error')
+                        }
+                      }}
+                      className={`text-xs px-2.5 py-1 border rounded-md transition-all ${
+                        linkCopied[lead.id]
+                          ? 'bg-green-50 text-green-700 border-green-300'
+                          : 'border-gray-200 hover:bg-gray-50 text-gray-600'
+                      }`}
+                    >
+                      {linkCopied[lead.id] ? '✓ Copied!' : 'Copy Link'}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => handleGetLink(lead)}
+                    disabled={slugLoading[lead.id]}
+                    className="text-xs px-2.5 py-1 border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-md transition-colors disabled:opacity-50"
+                  >
+                    {slugLoading[lead.id] ? 'Generating…' : '+ Get Link'}
+                  </button>
+                )}
+              </div>
             </div>
           )
         })}
@@ -327,7 +405,7 @@ export function LeadsTable({ leads }: Props) {
       {/* SMS Modal */}
       {smsModal && (
         <SendTextModal
-          lead={{ ...smsModal.lead, phone: smsModal.phone }}
+          lead={{ ...smsModal.lead, phone: smsModal.phone, proposal_slug: smsModal.lead.proposal_slug }}
           onClose={() => setSmsModal(null)}
           onSent={(result) => {
             handleSmsSent(smsModal.lead, result)
@@ -337,6 +415,22 @@ export function LeadsTable({ leads }: Props) {
       )}
     </>
   )
+}
+
+function ProposalStatusBadge({ status }: { status?: string | null }) {
+  if (!status || status === 'not_sent') {
+    return <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-200">Not Sent</span>
+  }
+  if (status === 'sent') {
+    return <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Sent</span>
+  }
+  if (status === 'viewed') {
+    return <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">Viewed</span>
+  }
+  if (status === 'accepted') {
+    return <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200">✓ Accepted</span>
+  }
+  return null
 }
 
 function StatusDropdown({

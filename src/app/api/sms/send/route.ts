@@ -137,6 +137,19 @@ export async function POST(req: NextRequest) {
     statusUpdates.status = 'attempted'
   }
 
+  // If this message contains a proposal link, mark proposal as sent (only if not already viewed/accepted)
+  if (content.includes('/p/')) {
+    const { data: proposalLead } = await db
+      .from('leads')
+      .select('proposal_status')
+      .eq('id', leadId)
+      .maybeSingle()
+    if (proposalLead?.proposal_status === 'not_sent' || proposalLead?.proposal_status == null) {
+      statusUpdates.proposal_status = 'sent'
+      statusUpdates.proposal_sent_at = sentAt
+    }
+  }
+
   await db.from('leads').update(statusUpdates).eq('id', leadId)
 
   // Fire-and-forget contact sync
