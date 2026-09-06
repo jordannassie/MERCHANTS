@@ -430,24 +430,6 @@ export default function LandingClient() {
                 <Phone size={15} /> (949) 736-1560
               </a>
 
-              {/* City locations */}
-              <div className="mt-7">
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">Locations</p>
-                <div className="space-y-3">
-                  {[
-                    'Miami, FL',
-                    'Dallas, TX',
-                    'San Francisco, CA',
-                  ].map(city => (
-                    <div key={city} className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
-                        <MapPin size={14} className="text-slate-500" />
-                      </div>
-                      <span className="text-sm font-medium text-slate-700">{city}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
             </div>
 
             {/* Right: form */}
