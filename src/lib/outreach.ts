@@ -39,6 +39,7 @@ export function buildOutreachMessage(
       `If it looks good, approve it there and we can get you set up this week.`,
       OPT_OUT,
       SIGNATURE,
+      proposalUrl,
     ].join('\n\n')
   }
 
