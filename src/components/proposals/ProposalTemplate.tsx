@@ -260,12 +260,17 @@ export function ProposalTemplate({ data }: Props) {
                   className="w-full h-full object-contain"
                 />
               </div>
-              <div>
-                <p className="text-xs font-semibold tracking-widest text-gray-400 uppercase mb-1">
-                  Equipment
-                </p>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <p className="text-xs font-semibold tracking-widest text-gray-400 uppercase">
+                    Equipment
+                  </p>
+                  <span className="inline-block bg-green-500 text-white text-xs font-black px-2 py-0.5 rounded-full tracking-wide">
+                    FREE
+                  </span>
+                </div>
                 <p className="text-lg font-bold text-gray-900">
-                  {equipment || 'FREE POS System'}
+                  {equipment || 'POS System'}
                 </p>
                 <p className="text-sm text-green-600 font-semibold mt-0.5">Included at no cost</p>
               </div>
