@@ -253,31 +253,21 @@ export function ProposalTemplate({ data }: Props) {
 
             {/* Equipment */}
             <div className="border border-gray-200 rounded-xl p-5 flex items-start gap-4">
-              <div className="flex-shrink-0 w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center">
-                <svg
-                  className="w-5 h-5 text-gray-600"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M10.5 1.5H8.25A2.25 2.25 0 0 0 6 3.75v16.5a2.25 2.25 0 0 0 2.25 2.25h7.5A2.25 2.25 0 0 0 18 20.25V3.75a2.25 2.25 0 0 0-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3"
-                  />
-                </svg>
+              <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-gray-50 flex items-center justify-center">
+                <img
+                  src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/a920pro-pci-7-secondary-display.webp"
+                  alt="FREE POS Terminal"
+                  className="w-full h-full object-contain"
+                />
               </div>
               <div>
                 <p className="text-xs font-semibold tracking-widest text-gray-400 uppercase mb-1">
                   Equipment
                 </p>
                 <p className="text-lg font-bold text-gray-900">
-                  {equipment || 'Based on your business'}
+                  {equipment || 'FREE POS System'}
                 </p>
-                {equipment && (
-                  <p className="text-sm text-gray-500 mt-0.5">Modern, portable, and powerful.</p>
-                )}
+                <p className="text-sm text-green-600 font-semibold mt-0.5">Included at no cost</p>
               </div>
             </div>
 
