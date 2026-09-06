@@ -374,7 +374,7 @@ export default function LandingClient() {
 
             <div className="flex-1 text-center md:text-left">
               <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-4">
-                <Shield size={12} /> Your Local Payment Expert
+                <Shield size={12} /> Founder, Process.Direct
               </div>
               <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 mb-3">
                 Jordan Nassie
@@ -382,16 +382,12 @@ export default function LandingClient() {
 
               {/* Jordan's promise */}
               <blockquote className="mb-5 border-l-4 border-blue-500 pl-4 text-slate-600 italic text-base leading-relaxed">
-                "Let me help you save money and give you excellent support."
-                <footer className="mt-1 text-xs not-italic font-semibold text-slate-400">— Jordan Nassie</footer>
+                "Let us help you save money and get the right setup in place."
+                <footer className="mt-1 text-xs not-italic font-semibold text-slate-400">— Jordan Nassie, Founder</footer>
               </blockquote>
 
               <p className="text-slate-500 text-lg leading-relaxed mb-6">
-                Jordan is a payment processing specialist dedicated to helping
-                businesses nationwide cut unnecessary fees and find the right equipment
-                for the way they sell. With hands-on experience across restaurants, retail,
-                and service businesses, Jordan delivers honest recommendations — no jargon,
-                no pressure, just results.
+                Jordan founded Process.Direct to give businesses a smarter, simpler path to payment processing — without the pushy sales tactics or hidden fees. We have local teams who can support you wherever you are. Let us help you cut unnecessary costs, get the right equipment, and stay supported long after you're set up.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
