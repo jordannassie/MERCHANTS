@@ -10,7 +10,7 @@
  * All messages end with "Reply STOP to opt out."
  */
 
-const SIGNATURE = `Best,\nJordan\nhttps://process.direct/`
+const SIGNATURE = `Best,\nJordan`
 const OPT_OUT   = `Reply STOP to opt out.`
 
 /**
