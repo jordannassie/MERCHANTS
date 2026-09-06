@@ -51,14 +51,16 @@ export function ProposalTemplate({ data }: Props) {
     <div className="min-h-screen bg-white flex flex-col">
       {/* Nav */}
       <nav className="px-6 py-4 border-b border-gray-100">
-        <Image
-          src={LOGO_URL}
-          alt="Process.Direct"
-          width={160}
-          height={42}
-          className="h-9 w-auto object-contain"
-          priority
-        />
+        <a href="https://process.direct" aria-label="Process.Direct home">
+          <Image
+            src={LOGO_URL}
+            alt="Process.Direct"
+            width={220}
+            height={58}
+            className="h-12 w-auto object-contain"
+            priority
+          />
+        </a>
       </nav>
 
       {/* Main content */}
