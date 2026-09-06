@@ -229,8 +229,11 @@ export function ProposalTemplate({ data }: Props) {
 
           {/* Brand logos */}
           <div className="mb-6">
-            <p className="text-center text-xs font-semibold tracking-widest text-gray-400 uppercase mb-4">
-              Trusted by brands within our Global Payments network
+            <p className="text-center text-xs font-semibold tracking-widest text-gray-400 uppercase mb-3">
+              Payment Infrastructure Trusted at Scale
+            </p>
+            <p className="text-center text-sm text-gray-400 max-w-lg mx-auto mb-5 leading-relaxed">
+              Process.Direct provides payment solutions through Global Payments infrastructure — technology trusted by businesses from local merchants to major national brands.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-6 md:gap-10">
               {[
