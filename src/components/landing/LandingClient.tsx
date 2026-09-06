@@ -423,6 +423,22 @@ export default function LandingClient() {
               <p className="text-slate-500 text-lg leading-relaxed mb-8">
                 Whether you’re opening a new business, replacing equipment, or ready for a better payment solution, we’ll help get you set up quickly and simply.
               </p>
+              {/* City locations */}
+              <div className="flex flex-wrap gap-2 mb-6">
+                {[
+                  { city: 'Miami, FL',         emoji: '🌴' },
+                  { city: 'Dallas, TX',         emoji: '⭐' },
+                  { city: 'San Francisco, CA',  emoji: '🌉' },
+                ].map(({ city, emoji }) => (
+                  <span
+                    key={city}
+                    className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full border border-blue-100"
+                  >
+                    {emoji} {city}
+                  </span>
+                ))}
+              </div>
+
               <a
                 href="tel:+19497361560"
                 className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm px-5 py-3 rounded-xl transition-colors shadow-md shadow-blue-200"
