@@ -182,6 +182,24 @@ async function main() {
   } else {
     console.log('[migrate] ✓ 019 sms_messages present')
   }
+
+  // ── 020: Enrichment tracking on leads ───────────────────────────────────
+  const col020 = await columnExists('leads', 'google_enrichment_attempted_at')
+  if (!col020) {
+    const sql020 = readMigration('020_enrichment_tracking.sql')
+    if (sql020) await applyMigration('020_enrichment_tracking.sql', sql020)
+  } else {
+    console.log('[migrate] ✓ 020 google_enrichment_attempted_at present')
+  }
+
+  // ── 021: Sweep state — system_settings + google_places_seen ────────────
+  const tbl021 = await columnExists('system_settings', 'key')
+  if (!tbl021) {
+    const sql021 = readMigration('021_sweep_state.sql')
+    if (sql021) await applyMigration('021_sweep_state.sql', sql021)
+  } else {
+    console.log('[migrate] ✓ 021 system_settings present')
+  }
 }
 
 async function applyMigration(filename, sql) {

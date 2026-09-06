@@ -3,530 +3,363 @@
 /**
  * GoogleMapsSearchPanel
  *
- * Simple two-mode UI for finding callable Google Maps leads.
- * User-facing interface is intentionally minimal:
- *   • All Texas Sweep — one button, runs all metros + all internal categories
- *   • Single City     — enter a city, runs all internal categories for it
+ * Simple control card for the Google Daily Leads automation.
  *
- * Categories/phrases are never exposed to the user.
- * A business is only imported as a lead when it has: name + valid US phone + TX location.
+ * Shows:
+ *   • ON / OFF toggle
+ *   • Today's new callable leads vs. daily goal
+ *   • Searches used today
+ *   • Current Texas search position (task N of 315)
+ *   • Last run / Next scheduled run
+ *   • "Run Test" button — fires exactly one search to verify connectivity
+ *
+ * No category selectors, city selectors, ZIP fields, quantity sliders,
+ * or advanced controls. All processing is server-side.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { ExternalLink, Loader2, AlertCircle, ChevronDown, ChevronUp, MapPin, CheckCircle2 } from 'lucide-react'
-import { generateSweepTasks, getAllPhrases, TX_SWEEP_METROS, type SweepTask } from '@/lib/google-categories'
-import type { GooglePlacePreview } from '@/lib/types'
+import { useState, useEffect, useCallback } from 'react'
+import { Loader2, AlertCircle, CheckCircle2 } from 'lucide-react'
 
-// ── localStorage persistence ─────────────────────────────────────────────────
-const SWEEP_KEY = 'merchant_radar_sweep_v2'
-
-interface SweepSession {
-  id: string
-  mode: 'sweep' | 'city'
-  city?: string
-  tasks: SweepTask[]       // full ordered list (city mode: one city × all phrases)
-  taskIndex: number        // next task to run
-  // Metrics
-  checked: number          // raw Google results seen
-  callable: number         // with valid phone
-  newLeads: number
-  enriched: number
-  dupSkipped: number
-  noPhone: number
-  startedAt: string
-  status: 'running' | 'paused' | 'done'
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface SweepStatus {
+  enabled:                boolean
+  api_key_configured:     boolean
+  daily_goal:             number
+  daily_search_limit:     number
+  searches_used_today:    number
+  searches_remaining:     number
+  new_leads_today:        number
+  task_index:             number
+  tasks_total:            number
+  new_leads_all_time:     number
+  enriched_all_time:      number
+  last_run_at:            string | null
+  last_complete_cycle_at: string | null
+  next_run_at:            string
+  dup_skipped_today:      number
+  error?:                 string
 }
 
-function loadSession(): SweepSession | null {
-  try { return JSON.parse(localStorage.getItem(SWEEP_KEY) ?? 'null') } catch { return null }
-}
-function saveSession(s: SweepSession) {
-  try { localStorage.setItem(SWEEP_KEY, JSON.stringify(s)) } catch { /* ignore */ }
-}
-function clearSession() {
-  try { localStorage.removeItem(SWEEP_KEY) } catch { /* ignore */ }
-}
-
-// ── Types ────────────────────────────────────────────────────────────────────
-type Mode = 'sweep' | 'city'
-
-interface Metrics {
-  checked:   number
-  callable:  number
-  newLeads:  number
-  enriched:  number
-  dupSkipped: number
-  noPhone:   number
+interface TestResult {
+  ok:                boolean
+  quota_exceeded:    boolean
+  task_index?:       number
+  metro?:            string
+  phrase?:           string
+  checked?:          number
+  callable?:         number
+  new_leads?:        number
+  enriched?:         number
+  dup_skipped?:      number
+  no_phone?:         number
+  searches_remaining?: number
+  error?:            string
+  note?:             string
 }
 
-const EMPTY_METRICS: Metrics = { checked: 0, callable: 0, newLeads: 0, enriched: 0, dupSkipped: 0, noPhone: 0 }
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function fmtDate(iso: string | null): string {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  const now = new Date()
+  const diffMs = now.getTime() - d.getTime()
+  const diffMin = Math.round(diffMs / 60_000)
+  if (diffMin < 2)   return 'Just now'
+  if (diffMin < 60)  return `${diffMin}m ago`
+  if (diffMin < 120) return '1h ago'
+  const diffHr = Math.round(diffMin / 60)
+  if (diffHr < 24)   return `${diffHr}h ago`
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+}
 
-// ── Panel ────────────────────────────────────────────────────────────────────
+function fmtNext(iso: string): string {
+  const d = new Date(iso)
+  const now = new Date()
+  if (d.toDateString() === now.toDateString()) {
+    return `Today at ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })}`
+  }
+  const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1)
+  if (d.toDateString() === tomorrow.toDateString()) {
+    return `Tomorrow at ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })}`
+  }
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 export function GoogleMapsSearchPanel() {
-  const [mode, setMode] = useState<Mode>('sweep')
-
-  // City mode
-  const [city, setCity] = useState('')
-
-  // Advanced: manual phrase override
-  const [showAdvanced, setShowAdvanced] = useState(false)
-  const [advancedPhrase, setAdvancedPhrase] = useState('')
-
-  // Sweep state
-  const [session, setSession]   = useState<SweepSession | null>(null)
-  const [metrics, setMetrics]   = useState<Metrics>(EMPTY_METRICS)
-  const [running, setRunning]   = useState(false)
+  const [status, setStatus]     = useState<SweepStatus | null>(null)
+  const [loading, setLoading]   = useState(true)
+  const [toggling, setToggling] = useState(false)
+  const [testing, setTesting]   = useState(false)
+  const [testResult, setTestResult] = useState<TestResult | null>(null)
   const [error, setError]       = useState<string | null>(null)
-  const [lastLog, setLastLog]   = useState<string[]>([])   // last 6 status lines
-  const [completed, setCompleted] = useState(false)
-  const [completedReport, setCompletedReport] = useState<Metrics>(EMPTY_METRICS)
 
-  const stopRef = useRef(false)   // signal to break mid-loop
-
-  // Rehydrate from localStorage on mount
-  useEffect(() => {
-    const saved = loadSession()
-    if (saved && saved.status !== 'done') {
-      setSession(saved)
-      setMetrics({
-        checked:   saved.checked,
-        callable:  saved.callable,
-        newLeads:  saved.newLeads,
-        enriched:  saved.enriched,
-        dupSkipped: saved.dupSkipped,
-        noPhone:   saved.noPhone,
-      })
-      if (saved.mode === 'city') { setMode('city'); setCity(saved.city ?? '') }
-    }
-  }, [])
-
-  // ── Helpers ────────────────────────────────────────────────────────────────
-  function pushLog(line: string) {
-    setLastLog(prev => [...prev.slice(-5), line])
-  }
-
-  /** Call /api/import/google-search then /api/import/google-import for one task. */
-  async function runTask(task: SweepTask): Promise<{
-    checked: number; callable: number; newLeads: number; enriched: number; dupSkipped: number; noPhone: number
-  }> {
-    const searchRes = await fetch('/api/import/google-search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ state: 'TX', location: task.metro, query: task.phrase }),
-    }).then(r => r.json())
-
-    if (searchRes.error) throw new Error(searchRes.error)
-
-    const results: GooglePlacePreview[] = searchRes.results ?? []
-    const checked:  number = searchRes.checked_count ?? results.length
-    const callable: number = searchRes.callable_count ?? results.length
-    const noPhone:  number = searchRes.no_phone_count ?? 0
-
-    if (results.length === 0) return { checked, callable: 0, newLeads: 0, enriched: 0, dupSkipped: 0, noPhone }
-
-    const importRes = await fetch('/api/import/google-import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ results, state: 'TX', location: task.metro, query: task.phrase }),
-    }).then(r => r.json())
-
-    if (importRes.error) throw new Error(importRes.error)
-
-    return {
-      checked,
-      callable,
-      newLeads:  importRes.new_leads      ?? 0,
-      enriched:  importRes.enriched_leads ?? 0,
-      dupSkipped: importRes.skipped_dup   ?? 0,
-      noPhone,
-    }
-  }
-
-  /** Run the sweep loop starting from `startIndex`. Resumes if paused. */
-  const runSweep = useCallback(async (tasks: SweepTask[], startIndex: number, initial: Metrics, sessionId: string, sessionMode: Mode, sessionCity?: string) => {
-    setRunning(true)
-    setError(null)
-    stopRef.current = false
-
-    let m = { ...initial }
-    let idx = startIndex
-
-    const newSession: SweepSession = {
-      id:       sessionId,
-      mode:     sessionMode,
-      city:     sessionCity,
-      tasks,
-      taskIndex: idx,
-      ...m,
-      startedAt: new Date().toISOString(),
-      status:   'running',
-    }
-    setSession(newSession)
-
+  const fetchStatus = useCallback(async () => {
     try {
-      while (idx < tasks.length) {
-        if (stopRef.current) break
-
-        const task = tasks[idx]
-        pushLog(`🔍 Searching "${task.phrase}" in ${task.metro}…`)
-
-        try {
-          const result = await runTask(task)
-          m = {
-            checked:   m.checked   + result.checked,
-            callable:  m.callable  + result.callable,
-            newLeads:  m.newLeads  + result.newLeads,
-            enriched:  m.enriched  + result.enriched,
-            dupSkipped: m.dupSkipped + result.dupSkipped,
-            noPhone:   m.noPhone   + result.noPhone,
-          }
-          setMetrics({ ...m })
-          pushLog(`✅ ${task.metro} / ${task.phrase}: ${result.newLeads} new, ${result.enriched} enriched, ${result.noPhone} no phone`)
-        } catch (taskErr) {
-          pushLog(`⚠️ ${task.metro} / ${task.phrase}: ${String(taskErr).slice(0, 60)}`)
-        }
-
-        idx++
-
-        // Save progress after every task
-        const updatedSession: SweepSession = { ...newSession, taskIndex: idx, ...m, status: stopRef.current ? 'paused' : 'running' }
-        saveSession(updatedSession)
-        setSession(updatedSession)
-
-        // Small delay between tasks to respect rate limits
-        if (idx < tasks.length && !stopRef.current) {
-          await new Promise(r => setTimeout(r, 600))
-        }
-      }
-
-      if (!stopRef.current) {
-        // All done
-        const doneSession: SweepSession = { ...newSession, taskIndex: idx, ...m, status: 'done' }
-        saveSession(doneSession)
-        setSession(doneSession)
-        setCompleted(true)
-        setCompletedReport({ ...m })
-        pushLog(`🎉 Done! ${m.newLeads} new leads, ${m.enriched} enriched.`)
-      }
+      const res = await fetch('/api/import/sweep/status')
+      if (!res.ok) throw new Error(`Status ${res.status}`)
+      const data = await res.json() as SweepStatus
+      setStatus(data)
+      setError(null)
     } catch (err) {
       setError(String(err))
     } finally {
-      setRunning(false)
+      setLoading(false)
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
-  // ── Start All Texas Sweep ─────────────────────────────────────────────────
-  function startSweep() {
-    const tasks = generateSweepTasks()
-    const id = Date.now().toString()
-    setCompleted(false)
-    setLastLog([])
-    setMetrics(EMPTY_METRICS)
-    runSweep(tasks, 0, EMPTY_METRICS, id, 'sweep')
+  // Load on mount + refresh every 30s when enabled
+  useEffect(() => {
+    fetchStatus()
+  }, [fetchStatus])
+
+  useEffect(() => {
+    if (!status?.enabled) return
+    const t = setInterval(fetchStatus, 30_000)
+    return () => clearInterval(t)
+  }, [status?.enabled, fetchStatus])
+
+  const handleToggle = async (enable: boolean) => {
+    setToggling(true)
+    try {
+      const res = await fetch('/api/import/sweep/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: enable }),
+      })
+      if (!res.ok) throw new Error('Toggle failed')
+      setStatus(s => s ? { ...s, enabled: enable } : s)
+    } catch {
+      setError('Failed to update automation setting. Please try again.')
+    } finally {
+      setToggling(false)
+    }
   }
 
-  // ── Start Single City search ──────────────────────────────────────────────
-  function startCity() {
-    const trimmedCity = city.trim()
-    if (!trimmedCity) return
-    const phrases = advancedPhrase.trim() ? [advancedPhrase.trim()] : getAllPhrases()
-    const tasks: SweepTask[] = phrases.map(phrase => ({
-      metro: trimmedCity,
-      phrase,
-      state: 'TX',
-      textQuery: `${phrase} ${trimmedCity} TX`,
-    }))
-    const id = Date.now().toString()
-    setCompleted(false)
-    setLastLog([])
-    setMetrics(EMPTY_METRICS)
-    runSweep(tasks, 0, EMPTY_METRICS, id, 'city', trimmedCity)
+  const handleRunTest = async () => {
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const res = await fetch('/api/import/sweep/run-test', { method: 'POST' })
+      const data = await res.json() as TestResult
+      setTestResult(data)
+      // Refresh status after test (quota counter changed)
+      await fetchStatus()
+    } catch (err) {
+      setTestResult({ ok: false, quota_exceeded: false, error: String(err) })
+    } finally {
+      setTesting(false)
+    }
   }
 
-  // ── Resume paused session ─────────────────────────────────────────────────
-  function resumeSession() {
-    if (!session) return
-    setCompleted(false)
-    runSweep(session.tasks, session.taskIndex, metrics, session.id, session.mode, session.city)
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 p-4 text-sm text-gray-500">
+        <Loader2 className="w-4 h-4 animate-spin" /> Loading…
+      </div>
+    )
   }
 
-  // ── Pause / stop ──────────────────────────────────────────────────────────
-  function pauseSweep() {
-    stopRef.current = true
+  if (error && !status) {
+    return (
+      <div className="flex items-start gap-2 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+        <div>
+          <p className="font-medium">Could not load status</p>
+          <p className="text-xs mt-0.5">{error}</p>
+          <button onClick={fetchStatus} className="text-xs underline mt-1">Retry</button>
+        </div>
+      </div>
+    )
   }
 
-  // ── Start fresh (clear saved session) ────────────────────────────────────
-  function startFresh() {
-    clearSession()
-    setSession(null)
-    setMetrics(EMPTY_METRICS)
-    setLastLog([])
-    setCompleted(false)
-    setError(null)
-  }
+  const s = status!
+  const quotaPct      = s.daily_search_limit > 0 ? Math.round((s.searches_used_today / s.daily_search_limit) * 100) : 0
+  const goalPct       = s.daily_goal > 0 ? Math.round((s.new_leads_today / s.daily_goal) * 100) : 0
+  const cyclePct      = s.tasks_total > 0 ? Math.round((s.task_index / s.tasks_total) * 100) : 0
+  const noQuota       = s.searches_remaining <= 0
+  const noKey         = !s.api_key_configured
+  const testDisabled  = testing || noKey || (noQuota && !s.enabled)
 
-  // ── Computed progress ─────────────────────────────────────────────────────
-  const tasksTotal     = session?.tasks.length ?? 0
-  const tasksDone      = session ? Math.min(session.taskIndex, tasksTotal) : 0
-  const progressPct    = tasksTotal > 0 ? Math.round((tasksDone / tasksTotal) * 100) : 0
-  const isPaused       = session?.status === 'paused'
-  const hasSavedSession = !!session && session.status !== 'done'
-
-  // Which metro are we currently on?
-  const currentTask = session ? session.tasks[session.taskIndex] : null
-  const uniqueMetrosDone = session ? new Set(session.tasks.slice(0, tasksDone).map(t => t.metro)).size : 0
-
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
+      {/* ── Main card ────────────────────────────────────────────────────────── */}
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
 
-      {/* ── Mode Tabs ─────────────────────────────────────────────────────── */}
-      {!running && !hasSavedSession && !completed && (
-        <div className="flex gap-2 bg-gray-100 p-1 rounded-lg w-fit">
-          <button
-            onClick={() => setMode('sweep')}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              mode === 'sweep' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            🗺️ All Texas Sweep
-          </button>
-          <button
-            onClick={() => setMode('city')}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              mode === 'city' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            📍 Single City
-          </button>
-        </div>
-      )}
-
-      {/* ── Resume Banner ─────────────────────────────────────────────────── */}
-      {hasSavedSession && !running && !completed && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-amber-800">
-              {session!.mode === 'city'
-                ? `📍 Paused city search: ${session!.city}`
-                : '🗺️ All Texas Sweep paused'}
-            </p>
-            <p className="text-xs text-amber-600 mt-0.5">
-              {tasksDone} of {tasksTotal} combinations done · {metrics.newLeads} new leads · {metrics.enriched} enriched
-            </p>
+        {/* Header + toggle */}
+        <div className="px-4 py-3 flex items-start justify-between gap-3 border-b border-gray-100">
+          <div>
+            <p className="text-sm font-semibold text-gray-900">🗺 Google Daily Leads</p>
+            <p className="text-xs text-gray-400 mt-0.5">Runs at 12:00 UTC (7 AM CDT) · Finds up to 90 new callable Texas businesses per day</p>
           </div>
-          <div className="flex gap-2 shrink-0">
+
+          {/* ON / OFF toggle */}
+          <div className="flex items-center gap-2 shrink-0">
+            <span className={`text-xs font-medium ${s.enabled ? 'text-green-700' : 'text-gray-400'}`}>
+              {s.enabled ? 'ON' : 'OFF'}
+            </span>
             <button
-              onClick={resumeSession}
-              className="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700"
+              onClick={() => handleToggle(!s.enabled)}
+              disabled={toggling || noKey}
+              title={noKey ? 'GOOGLE_MAPS_API_KEY is not configured' : undefined}
+              className={`relative w-10 h-5 rounded-full transition-colors focus:outline-none ${
+                s.enabled ? 'bg-green-500' : 'bg-gray-300'
+              } ${(toggling || noKey) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
             >
-              Resume
-            </button>
-            <button
-              onClick={startFresh}
-              className="px-3 py-1.5 bg-white border border-amber-300 text-amber-700 rounded-lg text-sm font-medium hover:bg-amber-50"
-            >
-              Start Over
+              <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                s.enabled ? 'translate-x-5' : 'translate-x-0.5'
+              }`} />
             </button>
           </div>
         </div>
-      )}
 
-      {/* ── All Texas Sweep Form ───────────────────────────────────────────── */}
-      {mode === 'sweep' && !running && !hasSavedSession && !completed && (
-        <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
-          <div>
-            <p className="text-sm font-medium text-gray-700">State</p>
-            <p className="text-sm text-gray-500 mt-0.5">Texas (TX) — searches {TX_SWEEP_METROS.length} cities across all merchant categories</p>
+        {/* Warnings */}
+        {noKey && (
+          <div className="px-4 py-2 bg-amber-50 border-b border-amber-100 text-xs text-amber-700">
+            ⚠ <strong>GOOGLE_MAPS_API_KEY</strong> is not set in Netlify environment variables. Add it to enable automation.
           </div>
-          <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-blue-700 space-y-1">
-            <p>🔍 Automatically searches {TX_SWEEP_METROS.length} Texas metros × all merchant categories</p>
-            <p>📞 Only adds businesses with a valid phone number to your leads queue</p>
-            <p>♻️ Safe to rerun weekly — skips existing leads, never resets pipeline</p>
+        )}
+        {noQuota && !noKey && (
+          <div className="px-4 py-2 bg-blue-50 border-b border-blue-100 text-xs text-blue-700">
+            📊 Daily Google quota reached — resumes tomorrow at 12:00 UTC.
           </div>
-          <button
-            onClick={startSweep}
-            className="w-full py-3 bg-indigo-600 text-white rounded-xl font-semibold text-sm hover:bg-indigo-700 transition-colors"
-          >
-            🗺️ Find All Texas Businesses
-          </button>
-        </div>
-      )}
+        )}
 
-      {/* ── Single City Form ──────────────────────────────────────────────── */}
-      {mode === 'city' && !running && !hasSavedSession && !completed && (
-        <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+        {/* Today's stats */}
+        <div className="px-4 py-3 space-y-3">
+
+          {/* New leads goal bar */}
           <div>
-            <label className="text-sm font-medium text-gray-700 block mb-1">City</label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={city}
-                onChange={e => setCity(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && city.trim()) startCity() }}
-                placeholder="e.g. Houston"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-              <button
-                onClick={startCity}
-                disabled={!city.trim()}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-              >
-                📍 Find All Businesses in This City
-              </button>
+            <div className="flex justify-between text-xs text-gray-600 mb-1">
+              <span className="font-medium">New callable leads today</span>
+              <span className="font-semibold text-gray-900">{s.new_leads_today} / {s.daily_goal}</span>
             </div>
-            <p className="text-xs text-gray-400 mt-1">All merchant categories searched automatically · Phone required</p>
+            <div className="w-full bg-gray-100 rounded-full h-2">
+              <div
+                className="bg-green-500 h-2 rounded-full transition-all"
+                style={{ width: `${Math.min(100, goalPct)}%` }}
+              />
+            </div>
           </div>
 
-          {/* ── Advanced collapsed ──────────────────────────────────────── */}
-          <div className="border-t pt-3">
-            <button
-              onClick={() => setShowAdvanced(v => !v)}
-              className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600"
-            >
-              {showAdvanced ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-              Advanced Search
-            </button>
-            {showAdvanced && (
-              <div className="mt-3 space-y-2">
-                <label className="text-xs font-medium text-gray-600 block">Override search phrase (optional)</label>
-                <input
-                  type="text"
-                  value={advancedPhrase}
-                  onChange={e => setAdvancedPhrase(e.target.value)}
-                  placeholder="e.g. taco trucks — leave blank to run all categories"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-                <p className="text-xs text-gray-400">When blank, all internal merchant categories run automatically.</p>
+          {/* Searches quota bar */}
+          <div>
+            <div className="flex justify-between text-xs text-gray-500 mb-1">
+              <span>Searches used today</span>
+              <span>{s.searches_used_today} / {s.daily_search_limit}</span>
+            </div>
+            <div className="w-full bg-gray-100 rounded-full h-1.5">
+              <div
+                className={`h-1.5 rounded-full transition-all ${quotaPct >= 90 ? 'bg-amber-400' : 'bg-indigo-400'}`}
+                style={{ width: `${Math.min(100, quotaPct)}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Position + cycle */}
+          <div className="grid grid-cols-2 gap-3 text-xs text-gray-600">
+            <div>
+              <p className="text-gray-400">Current position</p>
+              <p className="font-medium text-gray-800">Task {s.task_index + 1} of {s.tasks_total} <span className="text-gray-400">({cyclePct}%)</span></p>
+            </div>
+            <div>
+              <p className="text-gray-400">Duplicates skipped today</p>
+              <p className="font-medium text-gray-800">{s.dup_skipped_today}</p>
+            </div>
+            <div>
+              <p className="text-gray-400">Last run</p>
+              <p className="font-medium text-gray-800">{fmtDate(s.last_run_at)}</p>
+            </div>
+            <div>
+              <p className="text-gray-400">Next scheduled run</p>
+              <p className="font-medium text-gray-800">{fmtNext(s.next_run_at)}</p>
+            </div>
+            {s.last_complete_cycle_at && (
+              <div className="col-span-2">
+                <p className="text-gray-400">Last complete Texas cycle</p>
+                <p className="font-medium text-gray-800">{fmtDate(s.last_complete_cycle_at)}</p>
               </div>
             )}
           </div>
         </div>
-      )}
 
-      {/* ── Active Sweep Progress ─────────────────────────────────────────── */}
-      {(running || (hasSavedSession && running)) && (
-        <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
-              <span className="text-sm font-semibold text-gray-800">
-                {session?.mode === 'city' ? `Searching ${session?.city}…` : 'All Texas Sweep running…'}
-              </span>
+        {/* Run Test button */}
+        <div className="px-4 py-3 border-t border-gray-100 bg-gray-50">
+          <button
+            onClick={handleRunTest}
+            disabled={testDisabled}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+              testDisabled
+                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                : 'bg-indigo-600 text-white hover:bg-indigo-700'
+            }`}
+          >
+            {testing ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Running test…</> : '▶ Run Test'}
+          </button>
+          {noKey && <p className="text-xs text-gray-400 mt-1">Set GOOGLE_MAPS_API_KEY in Netlify env vars first.</p>}
+          {noQuota && !noKey && <p className="text-xs text-gray-400 mt-1">No quota remaining today — test resumes tomorrow.</p>}
+        </div>
+      </div>
+
+      {/* ── Test result ───────────────────────────────────────────────────────── */}
+      {testResult && (
+        <div className={`rounded-xl border px-4 py-3 text-sm ${
+          testResult.quota_exceeded     ? 'bg-blue-50 border-blue-200' :
+          !testResult.ok && testResult.error ? 'bg-red-50 border-red-200' :
+                                               'bg-green-50 border-green-200'
+        }`}>
+          {testResult.quota_exceeded ? (
+            <p className="text-blue-700 font-medium">📊 Daily quota reached — resumes tomorrow at 12:00 UTC</p>
+          ) : testResult.error ? (
+            <div>
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                <p className="text-red-700 font-medium">Test failed</p>
+              </div>
+              <p className="text-red-600 text-xs mt-1">{testResult.error}</p>
             </div>
-            <button
-              onClick={pauseSweep}
-              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50"
-            >
-              Pause
-            </button>
-          </div>
-
-          {/* Progress bar */}
-          <div>
-            <div className="flex justify-between text-xs text-gray-500 mb-1">
-              <span>{tasksDone} of {tasksTotal} searches</span>
-              <span>{progressPct}%</span>
-            </div>
-            <div className="w-full bg-gray-100 rounded-full h-2">
-              <div
-                className="bg-indigo-600 h-2 rounded-full transition-all"
-                style={{ width: `${progressPct}%` }}
-              />
-            </div>
-            {session?.mode === 'sweep' && currentTask && (
-              <p className="text-xs text-gray-400 mt-1">
-                Now: {currentTask.metro} — {uniqueMetrosDone} of {TX_SWEEP_METROS.length} cities started
-              </p>
-            )}
-          </div>
-
-          {/* Live metrics */}
-          <MetricsGrid m={metrics} />
-
-          {/* Last N log lines */}
-          {lastLog.length > 0 && (
-            <div className="bg-gray-50 rounded-lg p-3 space-y-0.5">
-              {lastLog.map((line, i) => (
-                <p key={i} className="text-xs text-gray-500 font-mono">{line}</p>
-              ))}
+          ) : (
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <CheckCircle2 className="w-4 h-4 text-green-600" />
+                <p className="text-green-800 font-semibold">
+                  Test passed — {testResult.metro} / {testResult.phrase}
+                </p>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <div className="bg-white rounded-lg p-2 text-center">
+                  <p className="text-lg font-bold text-gray-800">{testResult.checked ?? 0}</p>
+                  <p className="text-gray-500">Checked</p>
+                </div>
+                <div className="bg-white rounded-lg p-2 text-center">
+                  <p className="text-lg font-bold text-green-700">{testResult.callable ?? 0}</p>
+                  <p className="text-gray-500">With Phone</p>
+                </div>
+                <div className="bg-white rounded-lg p-2 text-center">
+                  <p className="text-lg font-bold text-indigo-700">{testResult.new_leads ?? 0}</p>
+                  <p className="text-gray-500">Would Add</p>
+                </div>
+                <div className="bg-white rounded-lg p-2 text-center">
+                  <p className="text-lg font-bold text-purple-700">{testResult.enriched ?? 0}</p>
+                  <p className="text-gray-500">Would Enrich</p>
+                </div>
+                <div className="bg-white rounded-lg p-2 text-center">
+                  <p className="text-lg font-bold text-gray-600">{testResult.dup_skipped ?? 0}</p>
+                  <p className="text-gray-500">Dup Skipped</p>
+                </div>
+                <div className="bg-white rounded-lg p-2 text-center">
+                  <p className="text-lg font-bold text-amber-600">{testResult.no_phone ?? 0}</p>
+                  <p className="text-gray-500">No Phone</p>
+                </div>
+              </div>
+              <p className="text-xs text-green-700 mt-2 italic">{testResult.note}</p>
+              {(testResult.searches_remaining ?? 0) > 0 && (
+                <p className="text-xs text-gray-500 mt-1">{testResult.searches_remaining} searches remaining today</p>
+              )}
             </div>
           )}
         </div>
       )}
-
-      {/* ── Paused State (mid-sweep) ─────────────────────────────────────── */}
-      {isPaused && !running && (
-        <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
-          <p className="text-sm font-semibold text-gray-700">Sweep paused at {tasksDone}/{tasksTotal}</p>
-          <MetricsGrid m={metrics} />
-          {lastLog.length > 0 && (
-            <div className="bg-gray-50 rounded-lg p-3 space-y-0.5">
-              {lastLog.map((line, i) => (
-                <p key={i} className="text-xs text-gray-500 font-mono">{line}</p>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Error ─────────────────────────────────────────────────────────── */}
-      {error && (
-        <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-          <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-medium text-red-700">Search error</p>
-            <p className="text-xs text-red-600 mt-0.5">{error}</p>
-            <button onClick={startFresh} className="text-xs text-red-600 underline mt-1 hover:text-red-800">
-              Start over
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── Completion Report ─────────────────────────────────────────────── */}
-      {completed && !running && (
-        <div className="bg-white border border-green-200 rounded-xl p-5 space-y-4">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5 text-green-600" />
-            <p className="text-sm font-semibold text-green-800">
-              {session?.mode === 'city'
-                ? `${session?.city} search complete!`
-                : 'All Texas Sweep complete!'}
-            </p>
-          </div>
-          <MetricsGrid m={completedReport} highlight />
-          <div className="flex gap-2 pt-1">
-            <button
-              onClick={startFresh}
-              className="flex-1 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700"
-            >
-              {mode === 'sweep' ? '🗺️ Run Again' : '📍 New Search'}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── Metrics Grid ─────────────────────────────────────────────────────────────
-function MetricsGrid({ m, highlight }: { m: Metrics; highlight?: boolean }) {
-  const card = (label: string, value: number, color?: string) => (
-    <div className={`rounded-lg p-3 text-center ${highlight ? 'bg-green-50' : 'bg-gray-50'}`}>
-      <p className={`text-xl font-bold ${color ?? 'text-gray-900'}`}>{value.toLocaleString()}</p>
-      <p className="text-xs text-gray-500 mt-0.5">{label}</p>
-    </div>
-  )
-  return (
-    <div className="grid grid-cols-3 gap-2">
-      {card('New Leads',     m.newLeads,  'text-green-700')}
-      {card('Enriched',      m.enriched,  'text-indigo-700')}
-      {card('Dup Skipped',   m.dupSkipped)}
-      {card('Checked',       m.checked)}
-      {card('With Phone',    m.callable)}
-      {card('No Phone',      m.noPhone,   'text-amber-700')}
     </div>
   )
 }

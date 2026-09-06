@@ -8,6 +8,14 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
+# Daily Google Places lead sweep
+# Runs at 12:00 UTC (7:00 AM CDT / 6:00 AM CST) — 4 hours after Google quota resets.
+# Processes up to 5 search tasks per invocation, saves progress to Supabase.
+# Automation is OFF by default — enable it in the Imports page.
+[[scheduled-functions]]
+  name = "google-daily-sweep"
+  schedule = "0 12 * * *"
+
 # Daily SIFT permit-phone import
 # Runs at 07:00 UTC (02:00 CDT / 01:00 CST) — after the TX Comptroller
 # publishes new weekly files. Imports are idempotent; the same file is
