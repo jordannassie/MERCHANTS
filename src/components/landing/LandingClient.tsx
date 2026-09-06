@@ -397,12 +397,6 @@ export default function LandingClient() {
                 >
                   <Phone size={15} /> (949) 736-1560
                 </a>
-                <a
-                  href="mailto:jordannassie@gmail.com"
-                  className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-sm px-5 py-3 rounded-xl transition-colors"
-                >
-                  <Mail size={15} /> jordannassie@gmail.com
-                </a>
               </div>
             </div>
           </div>
@@ -441,12 +435,6 @@ export default function LandingClient() {
                     <Phone size={14} className="text-blue-600" />
                   </div>
                   <a href="tel:+19497361560" className="hover:text-blue-600 transition-colors font-medium">(949) 736-1560</a>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center shrink-0">
-                    <Mail size={14} className="text-blue-600" />
-                  </div>
-                  <a href="mailto:jordannassie@gmail.com" className="hover:text-blue-600 transition-colors font-medium">jordannassie@gmail.com</a>
                 </div>
               </div>
             </div>
