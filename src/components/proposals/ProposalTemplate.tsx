@@ -518,7 +518,7 @@ function CtaSection({
 
   return (
     <div className="bg-blue-50/60 border border-blue-100 rounded-2xl px-5 py-6 space-y-4">
-      <h2 className="text-2xl font-black text-gray-900 text-center tracking-tight">Get Your Service Agreement Today</h2>
+      <h2 className="text-2xl font-black text-gray-900 text-center tracking-tight">Get a FREE Service Agreement Today</h2>
       {/* Name + Email row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
