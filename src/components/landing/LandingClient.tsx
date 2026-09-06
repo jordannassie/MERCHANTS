@@ -228,8 +228,11 @@ export default function LandingClient() {
      {/* ─── TRUSTED BRANDS ─────────────────────────────────────────────────── */}
      <section className="bg-white border-y border-slate-100 py-10">
        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-         <p className="text-xs font-semibold tracking-widest text-slate-400 uppercase mb-6">
-           Trusted by thousands of merchants — including brands within our Global Payments network
+         <p className="text-xs font-semibold tracking-widest text-slate-400 uppercase mb-3">
+           Payment Infrastructure Trusted at Scale
+         </p>
+         <p className="text-sm text-slate-500 max-w-xl mx-auto mb-7 leading-relaxed">
+           Process.Direct provides payment solutions through Global Payments infrastructure — technology trusted by businesses from local merchants to major national brands.
          </p>
          <div className="flex flex-wrap items-center justify-center gap-8 md:gap-12">
            {[
