@@ -37,13 +37,13 @@ export function buildOutreachMessage(
       `Hi, this is Jordan from Process Direct. I noticed ${name} is getting set up ${locPhrase}.`,
       `I created a payment processing proposal for you:\n${proposalUrl}`,
       `If it looks good, approve it there and we can get you set up this week.`,
-      SIGNATURE,
       OPT_OUT,
+      SIGNATURE,
     ].join('\n\n')
   }
 
   const opening = `Hi, this is Jordan from Process Direct. I noticed ${name} is setting up operations ${locPhrase}.`
   const body    = `Have you already arranged your POS system and card processing? If you're still looking for assistance, I'd be glad to help.`
 
-  return `${opening}\n\n${body}\n\n${SIGNATURE}\n\n${OPT_OUT}`
+  return `${opening}\n\n${body}\n\n${OPT_OUT}\n\n${SIGNATURE}`
 }
