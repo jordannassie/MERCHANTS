@@ -631,6 +631,21 @@ export default function LandingClient() {
               height={48}
               className="h-12 w-auto object-contain"
             />
+            <a
+              href="https://www.globalpayments.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0"
+            >
+              <Image
+                src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/brands/logoprimary-with-wordmark.svg"
+                alt="Global Payments"
+                width={160}
+                height={48}
+                className="h-10 w-auto object-contain"
+                unoptimized
+              />
+            </a>
             <p className="text-xs text-slate-400 text-center sm:text-left leading-relaxed">
               Hawthorne Payments, LLC is a registered ISO of PNC Bank, N.A., Pittsburgh, PA
             </p>
