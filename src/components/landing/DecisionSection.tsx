@@ -76,7 +76,7 @@ export function DecisionSection({ onNewBusiness, onExistingBusiness, onTalkWithJ
               onClick={onTalkWithJordan}
               className="inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-base px-8 py-4 rounded-xl shadow-lg transition-all"
             >
-              Talk With Jordan <ArrowRight size={16} />
+              Talk With Us <ArrowRight size={16} />
             </button>
           </div>
         </div>
