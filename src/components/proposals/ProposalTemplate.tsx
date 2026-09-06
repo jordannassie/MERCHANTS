@@ -306,7 +306,7 @@ export function ProposalTemplate({ data }: Props) {
           {/* Trust bar */}
           <div className="border border-gray-100 rounded-xl px-4 py-3 mb-6">
             <div className="flex items-center justify-around flex-wrap gap-3">
-              {['No pressure', 'No jargon', 'Free initial review', 'Texas-based'].map(item => (
+              {['No pressure', 'No jargon', 'Free initial review', 'USA-based'].map(item => (
                 <span key={item} className="flex items-center gap-1.5 text-sm text-gray-500">
                   <svg
                     className="w-4 h-4 text-blue-500 flex-shrink-0"
@@ -345,7 +345,7 @@ export function ProposalTemplate({ data }: Props) {
             <div className="md:hidden bg-green-50 border border-green-200 rounded-2xl px-6 py-8 text-center">
               <span className="text-2xl font-black text-green-600 block mb-2">✓ Request Sent</span>
               <p className="text-gray-500 text-sm max-w-sm mx-auto">
-                Thanks! Jordan will reach out and send your Service Agreement shortly.
+                Thanks! We'll reach out and send your Service Agreement shortly.
               </p>
             </div>
           )}
@@ -386,7 +386,7 @@ export function ProposalTemplate({ data }: Props) {
               </button>
             </div>
             <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-              Fill in your details and Jordan will send your Service Agreement and give you a call to get everything set up.
+              Fill in your details and we'll send your Service Agreement and give you a call to get everything set up.
             </p>
             <CtaSection
               accepted={accepted}
@@ -425,7 +425,7 @@ function CtaSection({
       <div className="bg-green-50 border border-green-200 rounded-2xl px-6 py-8 text-center">
         <span className="text-3xl font-black text-green-600 block mb-2">✓ Proposal Accepted</span>
         <p className="text-gray-500 text-sm max-w-sm mx-auto">
-          Thanks! Jordan will send your Service Agreement so we can get your account set up.
+                Thanks! We'll send your Service Agreement so we can get your account set up.
         </p>
       </div>
     )
