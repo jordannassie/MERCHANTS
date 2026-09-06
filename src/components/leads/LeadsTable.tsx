@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import type { Lead } from '@/lib/types'
 import { fmtDate, fmtPhone } from '@/lib/utils'
@@ -13,6 +13,9 @@ import { SendTextModal } from '@/components/leads/SendTextModal'
 import { isValidUSPhone } from '@/lib/source-utils'
 
 interface Props { leads: Lead[] }
+
+/** Track which lead IDs have already had ensure-slug called (module-level to survive re-renders) */
+const ensureSlugCalled = new Set<string>()
 
 /** Relative time for sms_last_sent_at */
 function relativeTime(iso: string | null | undefined): string | null {
@@ -32,32 +35,64 @@ export function LeadsTable({ leads }: Props) {
   const [phoneCopied, setPhoneCopied]   = useState<Record<string, boolean>>({})
   const [smsCopied, setSmsCopied]       = useState<Record<string, boolean>>({})
   const [linkCopied, setLinkCopied]     = useState<Record<string, boolean>>({})
-  const [slugLoading, setSlugLoading]   = useState<Record<string, boolean>>({})
+  const [slugCreating, setSlugCreating] = useState<Record<string, boolean>>({})
   const [toasts, setToasts]             = useState<Array<{ id: string; text: string; kind: 'success' | 'error' }>>([])
   const [smsModal, setSmsModal]         = useState<{ lead: Lead; phone: string } | null>(null)
 
-  async function handleGetLink(lead: Lead) {
-    setSlugLoading(s => ({ ...s, [lead.id]: true }))
-    try {
-      const res = await fetch('/api/proposals/ensure-slug', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leadId: lead.id }),
-      })
-      const json = await res.json()
-      if (json.ok && json.slug) {
-        setLeadsList(prev =>
-          prev.map(p => p.id === lead.id ? { ...p, proposal_slug: json.slug, proposal_status: p.proposal_status ?? 'not_sent' } : p)
-        )
-        addToast(lead.id, 'Proposal link created!', 'success')
-      } else {
-        addToast(lead.id, 'Could not generate link', 'error')
+  // Auto-generate slugs for leads that don't have one yet
+  useEffect(() => {
+    leadsList.forEach(lead => {
+      if (!lead.proposal_slug && !ensureSlugCalled.has(lead.id)) {
+        ensureSlugCalled.add(lead.id)
+        setSlugCreating(s => ({ ...s, [lead.id]: true }))
+        fetch('/api/proposals/ensure-slug', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ leadId: lead.id }),
+        })
+          .then(r => r.json())
+          .then(json => {
+            if (json.ok && json.slug) {
+              setLeadsList(prev =>
+                prev.map(p =>
+                  p.id === lead.id
+                    ? { ...p, proposal_slug: json.slug, proposal_status: p.proposal_status ?? 'not_sent' }
+                    : p
+                )
+              )
+            }
+          })
+          .catch(() => {}) // fail silently
+          .finally(() => {
+            setSlugCreating(s => ({ ...s, [lead.id]: false }))
+          })
       }
-    } catch {
-      addToast(lead.id, 'Could not generate link', 'error')
-    } finally {
-      setSlugLoading(s => ({ ...s, [lead.id]: false }))
-    }
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leadsList])
+
+  async function handleReset(lead: Lead) {
+    if (!lead.proposal_slug) return
+    if (!window.confirm('Reset this proposal status to Not Sent?')) return
+    try {
+      const res = await fetch(`/api/proposals/${lead.proposal_slug}/reset`, { method: 'POST' })
+      const json = await res.json()
+      if (json.ok) {
+        setLeadsList(prev =>
+          prev.map(p =>
+            p.id === lead.id
+              ? {
+                  ...p,
+                  proposal_status: 'not_sent',
+                  proposal_sent_at: null,
+                  proposal_viewed_at: null,
+                  proposal_accepted_at: null,
+                }
+              : p
+          )
+        )
+      }
+    } catch {} // fail silently
   }
 
   function addToast(id: string, text: string, kind: 'success' | 'error') {
@@ -336,20 +371,27 @@ export function LeadsTable({ leads }: Props) {
               <div className="border-t border-gray-100 pt-3">
                 <div className="flex items-center justify-between mb-1.5 flex-wrap gap-2">
                   <div className="text-xs text-gray-400">Proposal</div>
-                  <ProposalStatusBadge status={lead.proposal_status} />
+                  <div className="flex items-center gap-2">
+                    <ProposalStatusBadge status={lead.proposal_status} />
+                    {lead.proposal_slug && lead.proposal_status && lead.proposal_status !== 'not_sent' && (
+                      <button
+                        onClick={() => handleReset(lead)}
+                        className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {lead.proposal_slug ? (
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs text-gray-500 font-mono truncate max-w-[200px]">
-                      process.direct/p/{lead.proposal_slug}
-                    </span>
                     <a
                       href={proposalUrl!}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-xs px-2.5 py-1 border border-gray-200 rounded-md hover:bg-gray-50 text-gray-600 transition-colors"
+                      className="text-xs text-blue-600 hover:text-blue-800 font-mono truncate max-w-[200px] transition-colors"
                     >
-                      Open ↗
+                      process.direct/p/{lead.proposal_slug}
                     </a>
                     <button
                       onClick={async () => {
@@ -371,15 +413,9 @@ export function LeadsTable({ leads }: Props) {
                       {linkCopied[lead.id] ? '✓ Copied!' : 'Copy Link'}
                     </button>
                   </div>
-                ) : (
-                  <button
-                    onClick={() => handleGetLink(lead)}
-                    disabled={slugLoading[lead.id]}
-                    className="text-xs px-2.5 py-1 border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-md transition-colors disabled:opacity-50"
-                  >
-                    {slugLoading[lead.id] ? 'Generating…' : '+ Get Link'}
-                  </button>
-                )}
+                ) : slugCreating[lead.id] ? (
+                  <span className="text-xs text-gray-400 italic">Creating proposal link…</span>
+                ) : null}
               </div>
             </div>
           )
