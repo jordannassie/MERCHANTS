@@ -227,6 +227,33 @@ export function ProposalTemplate({ data }: Props) {
             </div>
           </div>
 
+          {/* Brand logos */}
+          <div className="mb-6">
+            <p className="text-center text-xs font-semibold tracking-widest text-gray-400 uppercase mb-4">
+              Trusted by brands within our Global Payments network
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-6 md:gap-10">
+              {[
+                { src: 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/brands/starbucks-logo-png-25.png', alt: 'Starbucks' },
+                { src: 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/brands/taco-bell-6-logo-png-transparent.png', alt: 'Taco Bell' },
+                { src: 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/brands/VW%20images.png', alt: 'Volkswagen' },
+                { src: 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/brands/7-eleven_logo.svg.webp', alt: '7-Eleven' },
+                { src: 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/brands/Burger_King_Logo.png', alt: 'Burger King' },
+                { src: "https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/brands/Carl's_Jr._logo_(2022).svg", alt: "Carl's Jr." },
+              ].map(({ src, alt }) => (
+                <Image
+                  key={alt}
+                  src={src}
+                  alt={alt}
+                  width={70}
+                  height={40}
+                  className="h-8 w-auto object-contain opacity-90"
+                  unoptimized
+                />
+              ))}
+            </div>
+          </div>
+
           {/* Trust bar */}
           <div className="border border-gray-100 rounded-xl px-4 py-3 mb-6">
             <div className="flex items-center justify-around flex-wrap gap-3">

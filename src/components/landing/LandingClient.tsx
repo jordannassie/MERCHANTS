@@ -246,7 +246,7 @@ export default function LandingClient() {
                  alt={alt}
                  width={80}
                  height={48}
-                 className="h-10 w-auto object-contain grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-all duration-300"
+                 className="h-10 w-auto object-contain opacity-90 hover:opacity-100 transition-opacity duration-200"
                  unoptimized
                />
              </div>
