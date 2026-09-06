@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
-import { X } from 'lucide-react'
+import { X, User, Mail, Phone as PhoneIcon } from 'lucide-react'
 
 const LOGO_URL =
   'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Blacklogo.png'
@@ -431,46 +431,56 @@ function CtaSection({
     )
   }
 
-  const inputCls = (field: string) =>
-    `w-full px-4 py-3 rounded-xl border text-sm text-gray-900 placeholder-gray-400 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
+  const wrapCls = (field: string) =>
+    `flex items-center gap-2 bg-white rounded-xl border px-3 py-3 transition focus-within:ring-2 focus-within:ring-blue-500 ${
       errors[field] ? 'border-red-400' : 'border-gray-200'
     }`
+  const inputCls = 'flex-1 text-sm text-gray-900 placeholder-gray-400 bg-transparent focus:outline-none'
 
   return (
     <div className="bg-blue-50/60 border border-blue-100 rounded-2xl px-5 py-6 space-y-4">
       {/* Name + Email row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <input
-            type="text"
-            placeholder="Name"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            className={inputCls('name')}
-          />
+          <div className={wrapCls('name')}>
+            <User size={15} className="text-blue-400 shrink-0" />
+            <input
+              type="text"
+              placeholder="Name"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              className={inputCls}
+            />
+          </div>
           {errors.name && <p className="mt-1 text-xs text-red-500">{errors.name}</p>}
         </div>
         <div>
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            className={inputCls('email')}
-          />
+          <div className={wrapCls('email')}>
+            <Mail size={15} className="text-blue-400 shrink-0" />
+            <input
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              className={inputCls}
+            />
+          </div>
           {errors.email && <p className="mt-1 text-xs text-red-500">{errors.email}</p>}
         </div>
       </div>
 
       {/* Phone row */}
       <div>
-        <input
-          type="tel"
-          placeholder="Phone"
-          value={phone}
-          onChange={e => setPhone(e.target.value)}
-          className={inputCls('phone')}
-        />
+        <div className={wrapCls('phone')}>
+          <PhoneIcon size={15} className="text-blue-400 shrink-0" />
+          <input
+            type="tel"
+            placeholder="Phone"
+            value={phone}
+            onChange={e => setPhone(e.target.value)}
+            className={inputCls}
+          />
+        </div>
         {errors.phone && <p className="mt-1 text-xs text-red-500">{errors.phone}</p>}
       </div>
 
