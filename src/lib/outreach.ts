@@ -34,8 +34,9 @@ export function buildOutreachMessage(
 
   if (proposalUrl) {
     return [
-      `Hi, this is Jordan from Process Direct. I noticed ${name} is getting set up ${locPhrase}.`,
-      `I created a payment processing proposal for you. If it looks good, approve it there and we can get you set up this week.`,
+      `Hi, this is Jordan from Process Direct. I noticed ${name} is getting set up ${locPhrase} — congrats on starting your new business 🎉`,
+      `I created a payment processing proposal for you. If it looks good, we can get you set up this week to start accepting payments and get you a FREE POS system too.`,
+      `I'm here if you have any questions.`,
       SIGNATURE,
       proposalUrl,
     ].join('\n\n')
