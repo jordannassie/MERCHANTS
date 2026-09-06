@@ -2,10 +2,10 @@ import Image from 'next/image'
 import Link from 'next/link'
 
 export const metadata = {
-  title: 'Opening a Business in Texas? | Process.Direct',
+  title: 'Opening a New Business? | Process.Direct',
   description: 'Find the right POS and payment system before opening day. Get a free setup plan from Process.Direct.',
   openGraph: {
-    title: 'Opening a Business in Texas? | Process.Direct',
+    title: 'Opening a New Business? | Process.Direct',
     description: 'Find the right POS and payment system before opening day. Get a free setup plan from Process.Direct.',
   },
   robots: { index: true, follow: true },
@@ -23,13 +23,13 @@ export default function GtpPage() {
 
       <section className="max-w-6xl mx-auto grid md:grid-cols-2 gap-8 p-6 items-start">
         <div>
-          <h1 className="text-4xl font-extrabold mb-4">Opening a Business in Texas?</h1>
+          <h1 className="text-4xl font-extrabold mb-4">Opening a New Business?</h1>
           <h2 className="text-xl text-slate-600 mb-4">Find the right POS and payment system before opening day.</h2>
           <p className="text-slate-500 mb-6">Tell us about your business and we’ll recommend a simple payment setup based on what you need. No pressure and no obligation.</p>
           <ul className="grid grid-cols-1 gap-2 text-sm text-slate-600">
             <li>• Month-to-month options</li>
             <li>• Free equipment options for qualified businesses</li>
-            <li>• Local Texas setup help</li>
+            <li>• Dedicated setup support</li>
           </ul>
         </div>
         <div>

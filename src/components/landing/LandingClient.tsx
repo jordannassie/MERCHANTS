@@ -182,7 +182,7 @@ export default function LandingClient() {
 
             {/* Trust indicators */}
             <div className="mt-12 flex flex-wrap justify-center gap-6 text-xs text-slate-400 font-medium">
-              {['No pressure', 'No jargon', 'Free initial review', 'Texas-based'].map(t => (
+              {['No pressure', 'No jargon', 'Free initial review', 'Nationwide'].map(t => (
                 <span key={t} className="flex items-center gap-1.5">
                   <CheckCircle size={11} className="text-blue-400" /> {t}
                 </span>
@@ -359,23 +359,14 @@ export default function LandingClient() {
       <section id="about" className="bg-white py-20 md:py-28">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row items-center gap-12">
-            {/* Photos: Jordan + Texas mural */}
-            <div className="shrink-0 flex flex-col sm:flex-row md:flex-col gap-4 items-center">
+            {/* Photo: Jordan */}
+            <div className="shrink-0 flex items-center justify-center">
               <div className="relative w-56 h-56 md:w-64 md:h-64 rounded-2xl overflow-hidden shadow-xl ring-4 ring-blue-50">
                 <Image
                   src={JORDAN_PHOTO}
                   alt="Jordan Nassie"
                   fill
                   className="object-cover"
-                  sizes="(max-width: 768px) 224px, 256px"
-                />
-              </div>
-              <div className="relative w-56 h-36 md:w-64 md:h-40 rounded-2xl overflow-hidden shadow-lg">
-                <Image
-                  src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/texas.png"
-                  alt="Texas"
-                  fill
-                  className="object-cover object-center"
                   sizes="(max-width: 768px) 224px, 256px"
                 />
               </div>
@@ -396,10 +387,10 @@ export default function LandingClient() {
               </blockquote>
 
               <p className="text-slate-500 text-lg leading-relaxed mb-6">
-                Jordan is a Texas-based payment processing specialist dedicated to helping
-                local businesses cut unnecessary fees and find the right equipment for the
-                way they sell. With hands-on experience across restaurants, retail, and
-                service businesses, Jordan delivers honest recommendations — no jargon,
+                Jordan is a payment processing specialist dedicated to helping
+                businesses nationwide cut unnecessary fees and find the right equipment
+                for the way they sell. With hands-on experience across restaurants, retail,
+                and service businesses, Jordan delivers honest recommendations — no jargon,
                 no pressure, just results.
               </p>
 
