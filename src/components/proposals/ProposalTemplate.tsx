@@ -24,24 +24,45 @@ interface Props {
 export function ProposalTemplate({ data }: Props) {
   const { businessName, slug, savingsMonthly, transactionRate, equipment, contract } = data
   const [accepted, setAccepted] = useState(data.accepted)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading]   = useState(false)
+  const [errors,  setErrors]    = useState<Record<string, string>>({})
+
+  // Form fields
+  const [name,  setName]  = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
 
   const savingsYear = savingsMonthly ? savingsMonthly * 12 : null
 
+  function validate() {
+    const errs: Record<string, string> = {}
+    if (!name.trim())  errs.name  = 'Name is required.'
+    if (!email.trim()) errs.email = 'Email is required.'
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))
+      errs.email = 'Please enter a valid email address.'
+    if (!phone.trim()) errs.phone = 'Phone is required.'
+    return errs
+  }
+
   async function handleAccept() {
+    const errs = validate()
+    if (Object.keys(errs).length) { setErrors(errs); return }
+    setErrors({})
     setLoading(true)
-    setError(null)
     try {
-      const res = await fetch(`/api/proposals/${slug}/accept`, { method: 'POST' })
+      const res  = await fetch(`/api/proposals/${slug}/accept`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ name: name.trim(), email: email.trim(), phone: phone.trim() }),
+      })
       const json = await res.json()
       if (json.ok) {
         setAccepted(true)
       } else {
-        setError('Something went wrong. Please try again.')
+        setErrors({ form: json.error ?? 'Something went wrong. Please try again.' })
       }
     } catch {
-      setError('Something went wrong. Please try again.')
+      setErrors({ form: 'Something went wrong. Please try again.' })
     } finally {
       setLoading(false)
     }
@@ -304,74 +325,108 @@ export function ProposalTemplate({ data }: Props) {
             </div>
           </div>
 
-          {/* CTA — inline on desktop, sticky on mobile */}
-          <div className="hidden md:block">
-            <CtaSection
-              accepted={accepted}
-              loading={loading}
-              error={error}
-              onAccept={handleAccept}
-            />
-          </div>
+          {/* CTA form */}
+          <CtaSection
+            accepted={accepted}
+            loading={loading}
+            errors={errors}
+            name={name}   setName={setName}
+            email={email} setEmail={setEmail}
+            phone={phone} setPhone={setPhone}
+            onAccept={handleAccept}
+          />
         </div>
       </main>
-
-      {/* Mobile sticky CTA */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-4 py-4 shadow-lg">
-        <CtaSection
-          accepted={accepted}
-          loading={loading}
-          error={error}
-          onAccept={handleAccept}
-        />
-      </div>
     </div>
   )
 }
 
 function CtaSection({
-  accepted,
-  loading,
-  error,
+  accepted, loading, errors,
+  name, setName, email, setEmail, phone, setPhone,
   onAccept,
 }: {
-  accepted: boolean
-  loading: boolean
-  error: string | null
-  onAccept: () => void
+  accepted:  boolean
+  loading:   boolean
+  errors:    Record<string, string>
+  name:      string;  setName:  (v: string) => void
+  email:     string;  setEmail: (v: string) => void
+  phone:     string;  setPhone: (v: string) => void
+  onAccept:  () => void
 }) {
   if (accepted) {
     return (
-      <div className="text-center py-4">
-        <div className="inline-flex flex-col items-center gap-2">
-          <span className="text-2xl font-black text-green-600">✓ Proposal Accepted</span>
-          <p className="text-gray-500 text-sm max-w-sm">
-            Thanks. Jordan will send your Service Agreement so we can get your account set up.
-          </p>
-        </div>
+      <div className="bg-green-50 border border-green-200 rounded-2xl px-6 py-8 text-center">
+        <span className="text-3xl font-black text-green-600 block mb-2">✓ Proposal Accepted</span>
+        <p className="text-gray-500 text-sm max-w-sm mx-auto">
+          Thanks! Jordan will send your Service Agreement so we can get your account set up.
+        </p>
       </div>
     )
   }
 
+  const inputCls = (field: string) =>
+    `w-full px-4 py-3 rounded-xl border text-sm text-gray-900 placeholder-gray-400 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
+      errors[field] ? 'border-red-400' : 'border-gray-200'
+    }`
+
   return (
-    <div className="space-y-2">
-      {error && (
-        <p className="text-center text-sm text-red-600">{error}</p>
-      )}
+    <div className="bg-blue-50/60 border border-blue-100 rounded-2xl px-5 py-6 space-y-4">
+      {/* Name + Email row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <input
+            type="text"
+            placeholder="Name"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            className={inputCls('name')}
+          />
+          {errors.name && <p className="mt-1 text-xs text-red-500">{errors.name}</p>}
+        </div>
+        <div>
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            className={inputCls('email')}
+          />
+          {errors.email && <p className="mt-1 text-xs text-red-500">{errors.email}</p>}
+        </div>
+      </div>
+
+      {/* Phone row */}
+      <div>
+        <input
+          type="tel"
+          placeholder="Phone"
+          value={phone}
+          onChange={e => setPhone(e.target.value)}
+          className={inputCls('phone')}
+        />
+        {errors.phone && <p className="mt-1 text-xs text-red-500">{errors.phone}</p>}
+      </div>
+
+      {/* Form-level error */}
+      {errors.form && <p className="text-center text-sm text-red-600">{errors.form}</p>}
+
+      {/* Submit button */}
       <button
         onClick={onAccept}
         disabled={loading}
-        className="w-full max-w-xl mx-auto flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold text-base py-4 rounded-xl transition-colors"
+        className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold text-base py-4 rounded-xl transition-colors"
       >
         {loading ? (
           <>
             <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            Processing…
+            Sending…
           </>
         ) : (
-          'I accept the proposal, send me a Service Agreement ›'
+          'Send me Service Agreement ›'
         )}
       </button>
+
       <p className="text-center text-xs text-gray-400">
         🔒 Your information is secure and will only be used to process this proposal.
       </p>
