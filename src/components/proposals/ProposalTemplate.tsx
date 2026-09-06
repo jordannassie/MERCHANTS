@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import Image from 'next/image'
 import { X, User, Mail, Phone as PhoneIcon } from 'lucide-react'
 
@@ -40,15 +40,13 @@ export function ProposalTemplate({ data }: Props) {
       : 50_000
   )
   const [savingVolume, setSavingVolume] = useState(false)
-
-  // Debounced save to DB
-  const saveVolumeTimeout = useState<ReturnType<typeof setTimeout> | null>(null)
+  const saveVolumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   function handleCardSalesChange(val: number) {
     setCardSales(val)
-    if (saveVolumeTimeout[0]) clearTimeout(saveVolumeTimeout[0])
+    if (saveVolumeTimeoutRef.current) clearTimeout(saveVolumeTimeoutRef.current)
     setSavingVolume(true)
-    saveVolumeTimeout[0] = setTimeout(async () => {
+    saveVolumeTimeoutRef.current = setTimeout(async () => {
       try {
         await fetch(`/api/proposals/${slug}/card-sales`, {
           method:  'POST',

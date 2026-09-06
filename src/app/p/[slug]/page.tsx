@@ -5,7 +5,7 @@ import { ProposalTemplate } from '@/components/proposals/ProposalTemplate'
 
 // Only safe, public-facing fields — never expose internal CRM data
 const SAFE_SELECT =
-  'display_name, outlet_name, taxpayer_name, proposal_slug, proposal_savings_monthly, proposal_transaction_rate, proposal_equipment, proposal_contract, proposal_status, proposal_viewed_at, proposal_accepted_at, estimated_monthly_card_sales'
+  'display_name, outlet_name, taxpayer_name, proposal_slug, proposal_savings_monthly, proposal_transaction_rate, proposal_equipment, proposal_contract, proposal_status, proposal_viewed_at, proposal_accepted_at'
 
 interface PageProps {
   params: Promise<{ slug: string }>
@@ -65,7 +65,7 @@ export default async function ProposalPage({ params }: PageProps) {
         contract: lead.proposal_contract ?? null,
         status: lead.proposal_status ?? 'not_sent',
         accepted: lead.proposal_status === 'accepted',
-        estimatedMonthlyCardSales: lead.estimated_monthly_card_sales ?? null,
+        estimatedMonthlyCardSales: null, // loaded lazily client-side after migration applied
       }}
     />
   )
