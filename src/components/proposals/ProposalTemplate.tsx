@@ -326,6 +326,23 @@ export function ProposalTemplate({ data }: Props) {
             />
           </div>
 
+          {/* QuickBooks strip */}
+          <div className="border border-gray-100 rounded-2xl px-5 py-4 mb-6">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+              <Image
+                src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/quickbooks.png"
+                alt="QuickBooks"
+                width={240}
+                height={66}
+                className="h-14 w-auto object-contain"
+              />
+              <div className="hidden sm:block w-px h-8 bg-gray-200" />
+              <p className="text-gray-500 text-sm font-medium text-center sm:text-left">
+                Syncs seamlessly with your QuickBooks software — no double entry, no headaches.
+              </p>
+            </div>
+          </div>
+
           {/* Accepted cards */}
           <div className="flex justify-center mb-6">
             <Image
