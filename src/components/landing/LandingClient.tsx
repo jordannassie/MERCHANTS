@@ -637,9 +637,9 @@ export default function LandingClient() {
             <Image
               src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/lgoso%20prartner.png"
               alt="Hawthorne Payments"
-              width={160}
-              height={48}
-              className="h-12 w-auto object-contain"
+              width={200}
+              height={60}
+              className="h-16 w-auto object-contain"
             />
             <a
               href="https://www.globalpayments.com/"
@@ -650,9 +650,9 @@ export default function LandingClient() {
               <Image
                 src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/brands/logoprimary-with-wordmark.svg"
                 alt="Global Payments"
-                width={160}
-                height={48}
-                className="h-7 w-auto object-contain brightness-0"
+                width={120}
+                height={36}
+                className="h-5 w-auto object-contain brightness-0"
                 unoptimized
               />
             </a>

@@ -9,6 +9,7 @@ interface Props {
     id: string
     display_name?: string | null
     outlet_name?: string | null
+    outlet_city?: string | null
     phone: string
     sms_status?: string | null
     proposal_slug?: string | null
@@ -28,8 +29,7 @@ function formatPhone(phone: string): string {
 export function SendTextModal({ lead, onClose, onSent }: Props) {
   const businessName = lead.display_name || lead.outlet_name || null
   const proposalUrl  = lead.proposal_slug ? getProposalUrl(lead.proposal_slug) : null
-  // buildOutreachMessage always includes "Reply STOP to opt out." now
-  const defaultMessage = buildOutreachMessage(businessName, proposalUrl)
+  const defaultMessage = buildOutreachMessage(businessName, proposalUrl, lead.outlet_city ?? null)
 
   const [content, setContent]   = useState(defaultMessage)
   const [loading, setLoading]   = useState(false)

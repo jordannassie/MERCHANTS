@@ -195,7 +195,7 @@ export function LeadsTable({ leads }: Props) {
           const normalized = phone ? phone.replace(/\D/g, '') : ''
           const businessName  = lead.display_name || lead.outlet_name
           const proposalUrl   = lead.proposal_slug ? getProposalUrl(lead.proposal_slug) : null
-          const sms           = buildOutreachMessage(businessName, proposalUrl)
+          const sms           = buildOutreachMessage(businessName, proposalUrl, city || null)
 
           const canSendSms    = !!phone && isValidUSPhone(phone) && lead.status !== 'do_not_contact' && lead.sms_status !== 'opted_out'
           const isOptedOut    = lead.sms_status === 'opted_out' || lead.status === 'do_not_contact'
