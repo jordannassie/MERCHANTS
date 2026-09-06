@@ -229,7 +229,7 @@ export default function LandingClient() {
      <section className="bg-white border-y border-slate-100 py-10">
        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
          <p className="text-xs font-semibold tracking-widest text-slate-400 uppercase mb-6">
-           Trusted by thousands of merchants — including brands within the Global Payments network
+           Trusted by thousands of merchants — including brands within our Global Payments network
          </p>
          <div className="flex flex-wrap items-center justify-center gap-8 md:gap-12">
            {[
