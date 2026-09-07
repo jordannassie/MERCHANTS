@@ -290,7 +290,7 @@ export function ProposalTemplate({ data }: Props) {
                   Local Rep
                 </p>
                 <p className="text-lg font-bold text-gray-900">
-                  24/7 Service
+                  24/7 Support
                 </p>
                 <p className="text-sm text-blue-600 font-semibold mt-0.5">Always here to help</p>
               </div>
