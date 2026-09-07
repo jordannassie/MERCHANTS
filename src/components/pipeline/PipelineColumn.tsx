@@ -1,10 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import type { Lead } from '@/lib/types'
-import { fmtPhone, PRIORITY_COLORS } from '@/lib/utils'
-import { Phone, Star, FileText } from 'lucide-react'
+import { fmtPhone } from '@/lib/utils'
+import { Phone } from 'lucide-react'
 
 interface Props {
   status: string
@@ -13,70 +12,77 @@ interface Props {
 }
 
 const COL_COLORS: Record<string, string> = {
-  new: 'bg-gray-100 text-gray-700',
-  attempted: 'bg-yellow-100 text-yellow-800',
-  connected: 'bg-blue-100 text-blue-800',
-  follow_up: 'bg-orange-100 text-orange-800',
-  appointment: 'bg-purple-100 text-purple-800',
-  won: 'bg-green-100 text-green-800',
+  attempted:            'bg-yellow-100 text-yellow-800',
+  connected:            'bg-blue-100 text-blue-800',
+  agreement_requested:  'bg-green-100 text-green-800',
+  won:                  'bg-emerald-100 text-emerald-800',
+  lost:                 'bg-gray-100 text-gray-500',
+  do_not_contact:       'bg-red-50 text-red-600',
 }
 
 export function PipelineColumn({ status, label, leads }: Props) {
-  const router = useRouter()
-
-  async function moveCard(leadId: string, newStatus: string) {
-    await fetch(`/api/leads/${leadId}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus }),
-    })
-    router.refresh()
-  }
-
   return (
     <div className="flex-shrink-0 w-64 min-w-[256px]">
-      {/* Column header — sticky while scrolling vertically */}
+      {/* Column header */}
       <div
-        className={`sticky top-0 z-10 rounded-lg px-3 py-1.5 mb-3 flex items-center justify-between ${COL_COLORS[status] ?? 'bg-gray-100'}`}
+        className={`sticky top-0 z-10 rounded-lg px-3 py-1.5 mb-3 flex items-center justify-between ${COL_COLORS[status] ?? 'bg-gray-100 text-gray-700'}`}
       >
-        <span className="text-sm font-medium">{label}</span>
+        <span className="text-sm font-semibold tracking-wide">{label}</span>
         <span className="text-xs font-medium">{leads.length}</span>
       </div>
 
       <div className="space-y-2">
         {leads.map(lead => {
           const phone = lead.permit_phone ?? lead.primary_phone
-          const hasNote = Boolean(lead.main_note)
+          const viewCount = lead.proposal_view_count ?? 0
+          const followupStep = lead.followup_step ?? 0
+          const isAgreement = lead.status === 'agreement_requested'
 
           return (
             <div
               key={lead.id}
-              className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm"
+              className={`bg-white rounded-xl border p-3 shadow-sm ${
+                isAgreement ? 'border-green-200' : 'border-gray-200'
+              }`}
             >
-              {/* Business name + star */}
-              <div className="flex items-start justify-between gap-2 mb-1.5">
+              {/* Business name */}
+              <div className="mb-1.5">
                 <Link
                   href={`/leads/${lead.id}`}
                   className="font-medium text-sm text-gray-900 hover:text-blue-600 line-clamp-2"
                 >
                   {lead.display_name || lead.outlet_name || '(Unnamed)'}
                 </Link>
-                {lead.starred && (
-                  <Star size={11} className="text-yellow-400 fill-yellow-400 shrink-0 mt-0.5" />
+                {lead.outlet_city && (
+                  <p className="text-xs text-gray-400 mt-0.5 truncate">{lead.outlet_city}</p>
                 )}
               </div>
 
-              {/* City + priority badge */}
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-gray-500 truncate pr-1">{lead.outlet_city}</span>
-                <span
-                  className={`text-xs px-1.5 py-0.5 rounded font-medium shrink-0 ${PRIORITY_COLORS[lead.priority]}`}
-                >
-                  {lead.priority}
-                </span>
+              {/* Badges */}
+              <div className="flex flex-wrap gap-1 mb-2">
+                {lead.sms_needs_reply && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200">
+                    Replied
+                  </span>
+                )}
+                {isAgreement && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-100 text-green-700 border border-green-200">
+                    Agreement
+                  </span>
+                )}
+                {viewCount > 0 && (
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100">
+                    Proposal viewed {viewCount}×
+                  </span>
+                )}
+                {followupStep > 0 && (
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-yellow-50 text-yellow-700 border border-yellow-100">
+                    Follow-up {followupStep} of 3
+                  </span>
+                )}
               </div>
 
-              {/* Best phone */}
+              {/* Phone */}
               {phone ? (
                 <a
                   href={`tel:${phone}`}
@@ -84,16 +90,13 @@ export function PipelineColumn({ status, label, leads }: Props) {
                 >
                   <Phone size={10} />
                   {fmtPhone(phone)}
-                  {lead.permit_phone && !lead.primary_phone && (
-                    <span className="text-[10px] text-gray-400">permit</span>
-                  )}
                 </a>
               ) : (
                 <p className="text-xs text-gray-300 mb-2">No phone</p>
               )}
 
-              {/* Call + Note buttons */}
-              <div className="flex gap-1.5 mb-2">
+              {/* Actions */}
+              <div className="flex gap-1.5">
                 {phone ? (
                   <a
                     href={`tel:${phone}`}
@@ -110,51 +113,13 @@ export function PipelineColumn({ status, label, leads }: Props) {
                   </Link>
                 )}
 
-                {/* Note → lead detail page anchored to #main-note */}
                 <Link
-                  href={`/leads/${lead.id}#main-note`}
-                  className="flex-1 inline-flex items-center justify-center gap-1 text-xs font-semibold px-2 py-1.5 rounded-lg bg-yellow-400 hover:bg-yellow-500 text-yellow-900 transition-colors"
+                  href={`/leads/${lead.id}`}
+                  className="flex-1 inline-flex items-center justify-center gap-1 text-xs font-semibold px-2 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors"
                 >
-                  <FileText size={10} /> Note
-                  {hasNote && (
-                    <span className="w-2 h-2 rounded-full bg-yellow-700 ml-0.5" title="Note saved" />
-                  )}
+                  Open
                 </Link>
               </div>
-
-              {/* "Note saved" indicator when note has content */}
-              {hasNote && (
-                <Link
-                  href={`/leads/${lead.id}#main-note`}
-                  className="w-full text-[10px] text-yellow-700 bg-yellow-50 border border-yellow-200 rounded px-2 py-1 mb-2 flex items-center gap-1 hover:bg-yellow-100 transition-colors"
-                >
-                  <FileText size={9} />
-                  <span>Note saved</span>
-                </Link>
-              )}
-
-              {/* Status dropdown */}
-              <select
-                value={status}
-                onChange={e => moveCard(lead.id, e.target.value)}
-                className="w-full text-xs border border-gray-200 rounded px-1.5 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                aria-label={`Move ${lead.display_name ?? 'lead'} to status`}
-              >
-                {[
-                  'new',
-                  'attempted',
-                  'connected',
-                  'follow_up',
-                  'appointment',
-                  'won',
-                  'lost',
-                  'do_not_contact',
-                ].map(s => (
-                  <option key={s} value={s}>
-                    {s.replace(/_/g, ' ')}
-                  </option>
-                ))}
-              </select>
             </div>
           )
         })}

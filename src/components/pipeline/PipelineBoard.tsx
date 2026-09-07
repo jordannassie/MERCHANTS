@@ -6,20 +6,23 @@ import type { Lead } from '@/lib/types'
 import { Phone } from 'lucide-react'
 import { PipelineColumn } from './PipelineColumn'
 
-// Desktop Kanban columns (matches original behaviour)
-const DESKTOP_STAGES = ['new', 'attempted', 'connected', 'follow_up', 'appointment', 'won']
+// Active pipeline stages (Desktop Kanban)
+const DESKTOP_STAGES = ['attempted', 'connected', 'agreement_requested', 'won']
 
-// Mobile stage-tab bar includes Lost
-const MOBILE_STAGES = ['new', 'attempted', 'connected', 'follow_up', 'appointment', 'won', 'lost']
+// Closed stages
+const CLOSED_STAGES = ['lost', 'do_not_contact']
+
+// Mobile stage-tab bar
+const MOBILE_STAGES_ACTIVE = ['attempted', 'connected', 'agreement_requested', 'won']
+const MOBILE_STAGES_CLOSED = ['lost', 'do_not_contact']
 
 const STAGE_LABELS: Record<string, string> = {
-  new: 'New',
-  attempted: 'Attempted',
-  connected: 'Connected',
-  follow_up: 'Follow-up',
-  appointment: 'Appt',
-  won: 'Won',
-  lost: 'Lost',
+  attempted:            'CONTACTED',
+  connected:            'REPLIED',
+  agreement_requested:  'AGREEMENT',
+  won:                  'WON',
+  lost:                 'Lost',
+  do_not_contact:       'DNC',
 }
 
 interface Props {
@@ -41,6 +44,10 @@ export function PipelineBoard({
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [cityFilter, setCityFilter] = useState('')
+  const [showClosed, setShowClosed] = useState(false)
+
+  const desktopStages = showClosed ? CLOSED_STAGES : DESKTOP_STAGES
+  const mobileStages = showClosed ? MOBILE_STAGES_CLOSED : MOBILE_STAGES_ACTIVE
 
   // Collect unique cities from all pipeline leads for the location filter
   const allLeads = useMemo(() => Object.values(byStatus).flat(), [byStatus])
@@ -67,11 +74,9 @@ export function PipelineBoard({
   }
 
   function setHasPhone(value: boolean) {
-    // hasPhone defaults to true — only encode when false
     router.push(buildUrl({ hasPhone: value ? null : 'false' }))
   }
 
-  // City filter applied client-side to the active stage's leads
   function applyCity(leads: Lead[]) {
     if (!cityFilter) return leads
     return leads.filter(l => l.outlet_city === cityFilter)
@@ -79,11 +84,12 @@ export function PipelineBoard({
 
   const mobileLeads = applyCity(byStatus[activeStage] ?? [])
 
-  // Per-stage counts (respecting city filter for mobile display only)
   function stageCount(stage: string) {
     const leads = byStatus[stage] ?? []
     return cityFilter ? leads.filter(l => l.outlet_city === cityFilter).length : leads.length
   }
+
+  const currentMobileStages = mobileStages
 
   return (
     <>
@@ -91,9 +97,28 @@ export function PipelineBoard({
           MOBILE LAYOUT
           ═══════════════════════════════════════════════════════════ */}
       <div className="md:hidden">
+        {/* Active / Closed toggle */}
+        <div className="flex items-center gap-2 mb-3">
+          <button
+            onClick={() => setShowClosed(false)}
+            className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
+              !showClosed ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300'
+            }`}
+          >
+            Active
+          </button>
+          <button
+            onClick={() => setShowClosed(true)}
+            className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
+              showClosed ? 'bg-gray-700 text-white border-gray-700' : 'bg-white text-gray-600 border-gray-300'
+            }`}
+          >
+            Closed
+          </button>
+        </div>
+
         {/* Compact filter row */}
         <div className="flex items-center gap-2 flex-wrap mb-3">
-          {/* Location / city filter */}
           {cities.length > 0 && (
             <select
               value={cityFilter}
@@ -103,14 +128,11 @@ export function PipelineBoard({
             >
               <option value="">All cities</option>
               {cities.map(c => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
+                <option key={c} value={c}>{c}</option>
               ))}
             </select>
           )}
 
-          {/* Has phone toggle */}
           <button
             onClick={() => setHasPhone(!hasPhone)}
             className={`inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
@@ -124,10 +146,10 @@ export function PipelineBoard({
           </button>
         </div>
 
-        {/* Stage tab bar — sticky, horizontal scroll, no scrollbar */}
+        {/* Stage tab bar */}
         <div className="sticky top-0 z-20 bg-white -mx-4 px-4 border-b border-gray-100">
           <div className="flex gap-1 overflow-x-auto scrollbar-hide py-2">
-            {MOBILE_STAGES.map(stage => {
+            {currentMobileStages.map(stage => {
               const count = stageCount(stage)
               const isActive = activeStage === stage
               return (
@@ -141,9 +163,7 @@ export function PipelineBoard({
                   }`}
                 >
                   {STAGE_LABELS[stage]}
-                  <span
-                    className={`text-[10px] font-bold ${isActive ? 'opacity-90' : 'text-gray-400'}`}
-                  >
+                  <span className={`text-[10px] font-bold ${isActive ? 'opacity-90' : 'text-gray-400'}`}>
                     {count}
                   </span>
                 </button>
@@ -152,7 +172,6 @@ export function PipelineBoard({
           </div>
         </div>
 
-        {/* Single full-width column for the active stage */}
         <div className="mt-4">
           <PipelineColumn
             status={activeStage}
@@ -168,7 +187,28 @@ export function PipelineBoard({
       <div className="hidden md:block">
         {/* Desktop filter bar */}
         <div className="flex flex-wrap items-center gap-2 mb-4">
-          <span className="text-xs text-gray-500 font-medium mr-1">Show:</span>
+          {/* Active / Closed toggle */}
+          <div className="flex items-center gap-1 mr-2">
+            <button
+              onClick={() => setShowClosed(false)}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
+                !showClosed ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+              }`}
+            >
+              Active
+            </button>
+            <button
+              onClick={() => setShowClosed(true)}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
+                showClosed ? 'bg-gray-700 text-white border-gray-700' : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+              }`}
+            >
+              Closed
+            </button>
+          </div>
+
+          <span className="text-xs text-gray-300">|</span>
+
           <button
             onClick={() => setHasPhone(true)}
             className={`inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${
@@ -200,10 +240,10 @@ export function PipelineBoard({
           </span>
         </div>
 
-        {/* Kanban board — constrained width, horizontal scroll */}
+        {/* Kanban board */}
         <div className="overflow-x-auto pb-4" style={{ scrollbarWidth: 'thin' }}>
           <div className="flex gap-4" style={{ minWidth: 'max-content' }}>
-            {DESKTOP_STAGES.map(status => (
+            {desktopStages.map(status => (
               <PipelineColumn
                 key={status}
                 status={status}

@@ -1,120 +1,430 @@
 import { Metadata } from 'next'
 import Link from 'next/link'
 import { createServiceClient } from '@/lib/supabase/service'
-import type { Lead } from '@/lib/types'
-import { fmtDateTime, STATUS_COLORS, PRIORITY_COLORS } from '@/lib/utils'
-import { Phone, ChevronRight, AlertCircle, Clock, Calendar, CheckCircle2 } from 'lucide-react'
+import { fmtPhone } from '@/lib/utils'
+import { Phone, ChevronRight, MessageSquare, FileCheck, Flame, Clock } from 'lucide-react'
+import { SendNowButton } from '@/components/follow-ups/SendNowButton'
 
 export const metadata: Metadata = { title: 'Follow-ups — Merchant Radar' }
 export const dynamic = 'force-dynamic'
 
-type Section = 'overdue' | 'today' | 'tomorrow' | 'next7' | 'later'
+function timeAgo(dateStr: string | null | undefined): string {
+  if (!dateStr) return ''
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diff / 60_000)
+  if (mins < 60) return `${mins} min ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+  return `${Math.floor(hours / 24)}d ago`
+}
 
-export default async function FollowUpsPage() {
-  const supabase = createServiceClient()
+function stepLabel(step: number | null | undefined): string {
+  if (!step) return 'Follow-up #1'
+  return `Follow-up #${step + 1}`
+}
 
+interface PageProps {
+  searchParams: Promise<Record<string, string | undefined>>
+}
+
+export default async function FollowUpsPage({ searchParams }: PageProps) {
+  const sp = await searchParams
+  const filter = sp.filter ?? ''
+
+  const db = createServiceClient()
   const now = new Date()
-  const todayStart = new Date(now); todayStart.setHours(0,0,0,0)
-  const todayEnd = new Date(now); todayEnd.setHours(23,59,59,999)
-  const tomorrowStart = new Date(todayStart); tomorrowStart.setDate(tomorrowStart.getDate()+1)
-  const tomorrowEnd = new Date(todayEnd); tomorrowEnd.setDate(tomorrowEnd.getDate()+1)
-  const next7End = new Date(todayEnd); next7End.setDate(next7End.getDate()+7)
+  const nowIso = now.toISOString()
+  const tomorrowIso = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString()
+  const in48hIso = new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString()
+  const in7dIso = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
-  const { data: leads } = await supabase
+  // ── A. NEEDS ATTENTION ────────────────────────────────────────────────────
+
+  // 1. Agreement Requests
+  const { data: agreementLeads } = await db
     .from('leads')
-    .select('id,display_name,outlet_name,outlet_city,primary_phone,status,priority,next_follow_up_at,last_contacted_at')
-    .not('next_follow_up_at', 'is', null)
+    .select('id,display_name,outlet_name,outlet_city,permit_phone,primary_phone,proposal_contact_name,proposal_contact_phone,agreement_requested_at,status')
+    .in('proposal_status', ['agreement_requested', 'accepted'])
+    .order('agreement_requested_at', { ascending: false })
+
+  // 2. Replies (sms_needs_reply = true)
+  const { data: replyLeads } = await db
+    .from('leads')
+    .select('id,display_name,outlet_name,outlet_city,permit_phone,primary_phone,sms_last_sent_at,status')
+    .eq('sms_needs_reply', true)
+    .order('sms_last_sent_at', { ascending: false })
+
+  // 3. Hot Proposals (viewed, not needs-reply, not agreement/accepted)
+  const { data: hotLeads } = await db
+    .from('leads')
+    .select('id,display_name,outlet_name,outlet_city,permit_phone,primary_phone,proposal_last_viewed_at,proposal_view_count,proposal_status')
+    .eq('proposal_status', 'viewed')
+    .not('sms_needs_reply', 'eq', true)
+    .order('proposal_last_viewed_at', { ascending: false, nullsFirst: false })
+
+  // ── B. DUE TODAY ──────────────────────────────────────────────────────────
+  const { data: dueLeads } = await db
+    .from('leads')
+    .select('id,display_name,outlet_name,outlet_city,permit_phone,primary_phone,next_follow_up_at,followup_step,proposal_status,status')
+    .lte('next_follow_up_at', nowIso)
+    .is('followup_completed_at', null)
     .not('status', 'in', '(won,lost,do_not_contact)')
-    .order('next_follow_up_at')
+    .not('proposal_status', 'in', '(agreement_requested,accepted)')
+    .order('next_follow_up_at', { ascending: true })
 
-  const all = (leads ?? []) as Lead[]
+  // Filter out sms_needs_reply in JS (Supabase can't do `is false` easily)
+  const dueTodayLeads = (dueLeads ?? []).filter(l => !(l as Record<string, unknown>).sms_needs_reply)
 
-  const sections: { id: Section; label: string; icon: React.ElementType; color: string; items: Lead[] }[] = [
-    {
-      id: 'overdue', label: 'Overdue', icon: AlertCircle, color: 'text-red-500',
-      items: all.filter(l => l.next_follow_up_at && new Date(l.next_follow_up_at) < todayStart),
-    },
-    {
-      id: 'today', label: 'Due Today', icon: Clock, color: 'text-orange-500',
-      items: all.filter(l => l.next_follow_up_at && new Date(l.next_follow_up_at) >= todayStart && new Date(l.next_follow_up_at) <= todayEnd),
-    },
-    {
-      id: 'tomorrow', label: 'Tomorrow', icon: Calendar, color: 'text-blue-500',
-      items: all.filter(l => l.next_follow_up_at && new Date(l.next_follow_up_at) >= tomorrowStart && new Date(l.next_follow_up_at) <= tomorrowEnd),
-    },
-    {
-      id: 'next7', label: 'Next 7 Days', icon: Calendar, color: 'text-gray-500',
-      items: all.filter(l => l.next_follow_up_at && new Date(l.next_follow_up_at) > tomorrowEnd && new Date(l.next_follow_up_at) <= next7End),
-    },
-    {
-      id: 'later', label: 'Later', icon: Clock, color: 'text-gray-400',
-      items: all.filter(l => l.next_follow_up_at && new Date(l.next_follow_up_at) > next7End),
-    },
-  ]
+  // ── C. UPCOMING ───────────────────────────────────────────────────────────
+  const { data: tomorrowLeads } = await db
+    .from('leads')
+    .select('id,display_name,outlet_name,outlet_city,permit_phone,primary_phone,next_follow_up_at,followup_step,proposal_status,status')
+    .gt('next_follow_up_at', nowIso)
+    .lte('next_follow_up_at', in48hIso)
+    .is('followup_completed_at', null)
+    .not('status', 'in', '(won,lost,do_not_contact)')
+    .order('next_follow_up_at', { ascending: true })
 
-  const totalDue = sections[0].items.length + sections[1].items.length
+  const { data: next7Leads } = await db
+    .from('leads')
+    .select('id,display_name,outlet_name,outlet_city,permit_phone,primary_phone,next_follow_up_at,followup_step,proposal_status,status')
+    .gt('next_follow_up_at', in48hIso)
+    .lte('next_follow_up_at', in7dIso)
+    .is('followup_completed_at', null)
+    .not('status', 'in', '(won,lost,do_not_contact)')
+    .order('next_follow_up_at', { ascending: true })
+
+  // ── Apply filter ──────────────────────────────────────────────────────────
+  const showAgreements = !filter || filter === 'agreement'
+  const showReplies = !filter || filter === 'replies'
+  const showHot = !filter || filter === 'hot'
+  const showDue = !filter || filter === 'due'
+  const showUpcoming = !filter
+
+  const totalAttention =
+    (agreementLeads?.length ?? 0) +
+    (replyLeads?.length ?? 0) +
+    (hotLeads?.length ?? 0)
 
   return (
     <div className="px-4 md:px-8 py-6 max-w-3xl mx-auto">
-      <div className="mb-4">
-        <h1 className="text-xl font-semibold text-gray-900">Follow-ups</h1>
-        {totalDue > 0 && <p className="text-sm text-orange-600 mt-0.5">{totalDue} overdue or due today</p>}
+      {/* Header */}
+      <div className="mb-5 flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-gray-900">Follow-ups</h1>
+          {totalAttention > 0 && (
+            <p className="text-sm text-orange-600 mt-0.5">
+              {totalAttention} item{totalAttention !== 1 ? 's' : ''} need attention
+            </p>
+          )}
+        </div>
+        {filter && (
+          <Link
+            href="/follow-ups"
+            className="text-xs text-blue-600 hover:underline"
+          >
+            Clear filter
+          </Link>
+        )}
       </div>
 
-      {all.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
-          <CheckCircle2 size={32} className="text-green-500 mx-auto mb-3" />
-          <p className="font-medium text-gray-900">All caught up!</p>
-          <p className="text-sm text-gray-500 mt-1">No follow-ups scheduled.</p>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {sections.map(section => section.items.length > 0 && (
-            <div key={section.id}>
-              <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
-                <section.icon size={14} className={section.color} />
-                {section.label}
-                <span className="text-gray-400 font-normal">({section.items.length})</span>
-              </h2>
-              <div className="space-y-2">
-                {section.items.map(lead => (
-                  <div key={lead.id} className={`bg-white rounded-xl border p-4 ${section.id === 'overdue' ? 'border-red-200' : 'border-gray-200'}`}>
+      <div className="space-y-8">
+
+        {/* ── NEEDS ATTENTION ── */}
+        {(showAgreements || showReplies || showHot) && (
+          <section>
+            <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">
+              Needs Attention
+            </h2>
+            <div className="space-y-2">
+
+              {/* Agreement Requests */}
+              {showAgreements && (agreementLeads ?? []).map(lead => {
+                const phone = (lead.proposal_contact_phone || lead.permit_phone || lead.primary_phone) as string | null
+                return (
+                  <div key={lead.id} className="bg-white rounded-xl border border-green-200 p-4 shadow-sm">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <Link href={`/leads/${lead.id}`} className="font-medium text-gray-900 hover:text-blue-600 truncate block">
-                          {lead.display_name || lead.outlet_name || '(Unnamed)'}
-                        </Link>
-                        <p className="text-xs text-gray-500 mt-0.5">{lead.outlet_city}</p>
-                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[lead.status]}`}>{lead.status.replace('_', ' ')}</span>
-                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${PRIORITY_COLORS[lead.priority]}`}>{lead.priority}</span>
-                          {lead.next_follow_up_at && (
-                            <span className={`text-xs ${section.id === 'overdue' ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
-                              {fmtDateTime(lead.next_follow_up_at)}
-                            </span>
-                          )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200 uppercase tracking-wide">
+                            <FileCheck size={9} /> Agreement Request
+                          </span>
                         </div>
+                        <Link href={`/leads/${lead.id}`} className="font-semibold text-gray-900 hover:text-blue-600 block truncate">
+                          {(lead.display_name || lead.outlet_name || '(Unnamed)') as string}
+                          {lead.outlet_city ? <span className="text-gray-400 font-normal"> — {lead.outlet_city as string}</span> : null}
+                        </Link>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {lead.proposal_contact_name
+                            ? `${lead.proposal_contact_name as string}${phone ? ` · ${fmtPhone(phone)}` : ''}`
+                            : 'Agreement requested'}
+                          {lead.agreement_requested_at
+                            ? ` · ${timeAgo(lead.agreement_requested_at as string)}`
+                            : ''}
+                        </p>
                       </div>
-                      <div className="flex flex-col gap-2 shrink-0">
-                        {lead.primary_phone && (
-                          <a href={`tel:${lead.primary_phone}`}
-                            className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700">
-                            <Phone size={12} /> Call
+                      <div className="flex gap-1.5 shrink-0">
+                        {phone && (
+                          <a
+                            href={`tel:${phone}`}
+                            className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                          >
+                            <Phone size={11} /> Call
                           </a>
                         )}
-                        <Link href={`/leads/${lead.id}`}
-                          className="flex items-center gap-1 px-3 py-2 border border-gray-300 text-gray-700 text-xs rounded-lg hover:bg-gray-50">
-                          Open <ChevronRight size={12} />
+                        <Link
+                          href={`/leads/${lead.id}`}
+                          className="inline-flex items-center gap-1 text-xs font-medium px-3 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50"
+                        >
+                          Open <ChevronRight size={11} />
                         </Link>
                       </div>
                     </div>
                   </div>
-                ))}
-              </div>
+                )
+              })}
+
+              {/* Replies */}
+              {showReplies && (replyLeads ?? []).map(lead => {
+                const phone = (lead.permit_phone || lead.primary_phone) as string | null
+                return (
+                  <div key={lead.id} className="bg-white rounded-xl border border-orange-200 p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-200 uppercase tracking-wide">
+                            <MessageSquare size={9} /> Reply
+                          </span>
+                        </div>
+                        <Link href={`/leads/${lead.id}`} className="font-semibold text-gray-900 hover:text-blue-600 block truncate">
+                          {(lead.display_name || lead.outlet_name || '(Unnamed)') as string}
+                        </Link>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Replied {timeAgo(lead.sms_last_sent_at as string | null)}
+                        </p>
+                      </div>
+                      <div className="flex gap-1.5 shrink-0">
+                        <Link
+                          href={`/leads/${lead.id}`}
+                          className="inline-flex items-center gap-1 text-xs font-medium px-3 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50"
+                        >
+                          Open <ChevronRight size={11} />
+                        </Link>
+                        {phone && (
+                          <a
+                            href={`tel:${phone}`}
+                            className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                          >
+                            <Phone size={11} /> Call
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+
+              {/* Hot Proposals */}
+              {showHot && (hotLeads ?? []).map(lead => {
+                const phone = (lead.permit_phone || lead.primary_phone) as string | null
+                const viewCount = (lead.proposal_view_count ?? 0) as number
+                return (
+                  <div key={lead.id} className="bg-white rounded-xl border border-blue-200 p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200 uppercase tracking-wide">
+                            <Flame size={9} /> Hot Proposal
+                          </span>
+                        </div>
+                        <Link href={`/leads/${lead.id}`} className="font-semibold text-gray-900 hover:text-blue-600 block truncate">
+                          {(lead.display_name || lead.outlet_name || '(Unnamed)') as string}
+                        </Link>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Viewed {viewCount}×
+                          {lead.proposal_last_viewed_at
+                            ? ` · Last viewed ${timeAgo(lead.proposal_last_viewed_at as string)}`
+                            : ''}
+                        </p>
+                      </div>
+                      <div className="flex gap-1.5 shrink-0">
+                        {phone && (
+                          <a
+                            href={`tel:${phone}`}
+                            className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                          >
+                            <Phone size={11} /> Call
+                          </a>
+                        )}
+                        <Link
+                          href={`/leads/${lead.id}`}
+                          className="inline-flex items-center gap-1 text-xs font-medium px-3 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50"
+                        >
+                          Open <ChevronRight size={11} />
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+
+              {showAgreements && showReplies && showHot &&
+                (agreementLeads ?? []).length === 0 &&
+                (replyLeads ?? []).length === 0 &&
+                (hotLeads ?? []).length === 0 && (
+                <div className="text-center py-8 text-gray-400 text-sm">
+                  Nothing needs attention right now 🎉
+                </div>
+              )}
             </div>
-          ))}
-        </div>
-      )}
+          </section>
+        )}
+
+        {/* ── DUE TODAY ── */}
+        {showDue && (
+          <section>
+            <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3 flex items-center gap-2">
+              <Clock size={12} /> Due Today
+              {dueTodayLeads.length > 0 && (
+                <span className="text-yellow-600 normal-case font-semibold">
+                  ({dueTodayLeads.length})
+                </span>
+              )}
+            </h2>
+            {dueTodayLeads.length === 0 ? (
+              <p className="text-sm text-gray-400">No follow-ups due today.</p>
+            ) : (
+              <div className="space-y-2">
+                {dueTodayLeads.map(lead => {
+                  const phone = (lead.permit_phone || lead.primary_phone) as string | null
+                  const step = (lead.followup_step ?? 0) as number
+                  const proposalViewed = lead.proposal_status === 'viewed'
+                  return (
+                    <div key={lead.id} className="bg-white rounded-xl border border-yellow-200 p-4 shadow-sm">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 border border-yellow-200 uppercase tracking-wide">
+                              Follow-up #{step + 1}
+                            </span>
+                            {proposalViewed && (
+                              <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                                Proposal viewed
+                              </span>
+                            )}
+                          </div>
+                          <Link href={`/leads/${lead.id}`} className="font-semibold text-gray-900 hover:text-blue-600 block truncate">
+                            {(lead.display_name || lead.outlet_name || '(Unnamed)') as string}
+                            {lead.outlet_city ? <span className="text-gray-400 font-normal"> — {lead.outlet_city as string}</span> : null}
+                          </Link>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            Due {timeAgo(lead.next_follow_up_at as string | null) || 'today'}
+                          </p>
+                        </div>
+                        <div className="flex gap-1.5 shrink-0">
+                          <SendNowButton leadId={lead.id} />
+                          <Link
+                            href={`/leads/${lead.id}`}
+                            className="inline-flex items-center gap-1 text-xs font-medium px-3 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50"
+                          >
+                            Open <ChevronRight size={11} />
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ── UPCOMING ── */}
+        {showUpcoming && (
+          <>
+            {(tomorrowLeads ?? []).length > 0 && (
+              <section>
+                <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">
+                  Tomorrow
+                </h2>
+                <div className="space-y-2">
+                  {(tomorrowLeads ?? []).map(lead => {
+                    const phone = (lead.permit_phone || lead.primary_phone) as string | null
+                    const step = (lead.followup_step ?? 0) as number
+                    return (
+                      <div key={lead.id} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200 uppercase tracking-wide mb-1">
+                              Follow-up #{step + 1}
+                            </span>
+                            <Link href={`/leads/${lead.id}`} className="font-semibold text-gray-900 hover:text-blue-600 block truncate">
+                              {(lead.display_name || lead.outlet_name || '(Unnamed)') as string}
+                              {lead.outlet_city ? <span className="text-gray-400 font-normal"> — {lead.outlet_city as string}</span> : null}
+                            </Link>
+                          </div>
+                          <div className="flex gap-1.5 shrink-0">
+                            {phone && (
+                              <a href={`tel:${phone}`} className="inline-flex items-center gap-1 text-xs px-2 py-1.5 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50">
+                                <Phone size={10} />
+                              </a>
+                            )}
+                            <Link href={`/leads/${lead.id}`} className="inline-flex items-center gap-1 text-xs font-medium px-3 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50">
+                              Open <ChevronRight size={11} />
+                            </Link>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </section>
+            )}
+
+            {(next7Leads ?? []).length > 0 && (
+              <section>
+                <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">
+                  Next 7 Days
+                </h2>
+                <div className="space-y-2">
+                  {(next7Leads ?? []).map(lead => {
+                    const phone = (lead.permit_phone || lead.primary_phone) as string | null
+                    const step = (lead.followup_step ?? 0) as number
+                    return (
+                      <div key={lead.id} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200 uppercase tracking-wide mb-1">
+                              Follow-up #{step + 1}
+                            </span>
+                            <Link href={`/leads/${lead.id}`} className="font-semibold text-gray-900 hover:text-blue-600 block truncate">
+                              {(lead.display_name || lead.outlet_name || '(Unnamed)') as string}
+                              {lead.outlet_city ? <span className="text-gray-400 font-normal"> — {lead.outlet_city as string}</span> : null}
+                            </Link>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              Due {new Date(lead.next_follow_up_at as string).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                            </p>
+                          </div>
+                          <div className="flex gap-1.5 shrink-0">
+                            {phone && (
+                              <a href={`tel:${phone}`} className="inline-flex items-center gap-1 text-xs px-2 py-1.5 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50">
+                                <Phone size={10} />
+                              </a>
+                            )}
+                            <Link href={`/leads/${lead.id}`} className="inline-flex items-center gap-1 text-xs font-medium px-3 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50">
+                              Open <ChevronRight size={11} />
+                            </Link>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </section>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }

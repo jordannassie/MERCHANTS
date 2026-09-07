@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { sendSms, syncContact } from '@/lib/quo'
 import { isValidUSPhone, normalizeUSPhone } from '@/lib/source-utils'
+import { enrollLeadInSequence } from '@/lib/followup-engine'
 
 const DAILY_LIMIT = 50
 
@@ -151,6 +152,13 @@ export async function POST(req: NextRequest) {
   }
 
   await db.from('leads').update(statusUpdates).eq('id', leadId)
+
+  // Enroll in follow-up sequence after first manual SMS (status was 'new')
+  if (lead.status === 'new') {
+    enrollLeadInSequence(db, leadId, sentAt).catch(err =>
+      console.error('[sms/send] enrollLeadInSequence failed:', err)
+    )
+  }
 
   // Fire-and-forget contact sync
   const businessName = lead.display_name || lead.outlet_name || 'Business'

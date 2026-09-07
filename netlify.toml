@@ -27,6 +27,14 @@
   name = "sift-phone-cron"
   schedule = "0 7 * * *"
 
+# Daily sales follow-up automation
+# Runs at 15:00 UTC (10:00 AM CDT / 9:00 AM CST).
+# Sends automated follow-up SMS messages to leads in the sequence.
+# Only runs if sales_followup_enabled = 'true' in system_settings.
+[[scheduled-functions]]
+  name = "sales-followup-cron"
+  schedule = "0 15 * * *"
+
 # Set secrets in the Netlify UI (Site configuration → Environment variables).
 # NEVER commit real keys here.
 # Required keys:

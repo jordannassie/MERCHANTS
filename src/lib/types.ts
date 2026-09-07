@@ -56,6 +56,7 @@ export type LeadStatus =
   | 'connected'
   | 'follow_up'
   | 'appointment'
+  | 'agreement_requested'
   | 'won'
   | 'lost'
   | 'do_not_contact'
@@ -162,10 +163,21 @@ export interface Lead {
   proposal_transaction_rate?: string | null
   proposal_equipment?:        string | null
   proposal_contract?:         string | null
-  proposal_status?:           'not_sent' | 'sent' | 'viewed' | 'accepted' | null
+  proposal_status?:           'not_sent' | 'sent' | 'viewed' | 'agreement_requested' | 'accepted' | null
   proposal_sent_at?:          string | null
   proposal_viewed_at?:        string | null
   proposal_accepted_at?:      string | null
+  proposal_contact_name?:     string | null
+  proposal_contact_email?:    string | null
+  proposal_contact_phone?:    string | null
+  // Sales follow-up system (migration 025)
+  followup_step?:              number | null
+  followup_started_at?:        string | null
+  followup_completed_at?:      string | null
+  last_followup_sent_at?:      string | null
+  proposal_view_count?:        number | null
+  proposal_last_viewed_at?:    string | null
+  agreement_requested_at?:     string | null
   created_at: string
   updated_at: string
 }

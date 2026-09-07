@@ -1,7 +1,6 @@
 import { Metadata } from 'next'
 import { createServiceClient } from '@/lib/supabase/service'
 import type { Lead } from '@/lib/types'
-import { PIPELINE_STATUSES } from '@/lib/constants'
 import { PipelineBoard } from '@/components/pipeline/PipelineBoard'
 
 export const metadata: Metadata = { title: 'Pipeline — Merchant Radar' }
@@ -14,21 +13,30 @@ interface PageProps {
 // NULL-safe non-chain filter
 const NON_CHAIN = 'category.is.null,category.neq.corporate_chain'
 
-// Mobile shows Lost as well; keep PIPELINE_STATUSES for desktop Kanban grouping
-const ALL_STAGES = [...PIPELINE_STATUSES, 'lost'] as const
+// Active pipeline stages (kanban columns)
+const ACTIVE_STAGES = ['attempted', 'connected', 'agreement_requested', 'won'] as const
+// Closed stages for closed view
+const CLOSED_STAGES = ['lost', 'do_not_contact'] as const
 
-// Columns with main_note (requires migration 011 — falls back gracefully without it)
+const ALL_STAGES = [...ACTIVE_STAGES, ...CLOSED_STAGES] as const
+
 const SELECT_FULL =
-  'id,display_name,outlet_name,taxpayer_name,outlet_city,priority,status,score,primary_phone,permit_phone,next_follow_up_at,starred,main_note,main_note_updated_at,category'
-const SELECT_COMPAT =
-  'id,display_name,outlet_name,taxpayer_name,outlet_city,priority,status,score,primary_phone,permit_phone,next_follow_up_at,starred,category'
+  'id,display_name,outlet_name,taxpayer_name,outlet_city,priority,status,score,primary_phone,permit_phone,' +
+  'next_follow_up_at,starred,main_note,main_note_updated_at,category,' +
+  'proposal_status,proposal_view_count,sms_needs_reply,followup_step,agreement_requested_at'
 
-const DEFAULT_STAGE = 'new'
+const SELECT_COMPAT =
+  'id,display_name,outlet_name,taxpayer_name,outlet_city,priority,status,score,primary_phone,permit_phone,' +
+  'next_follow_up_at,starred,category,' +
+  'proposal_status,sms_needs_reply,followup_step,agreement_requested_at'
+
+const DEFAULT_STAGE = 'attempted'
 
 export default async function PipelinePage({ searchParams }: PageProps) {
   const sp = await searchParams
   const hasPhone = sp.hasPhone !== 'false'
-  // Mobile active stage — default to 'new'
+
+  // Mobile active stage — default to 'attempted'
   const activeStage = ALL_STAGES.includes(sp.stage as (typeof ALL_STAGES)[number])
     ? sp.stage
     : DEFAULT_STAGE
@@ -79,7 +87,7 @@ export default async function PipelinePage({ searchParams }: PageProps) {
     leadsData = (rawLeads ?? []) as unknown as Lead[]
   }
 
-  // Group by status (includes 'lost' for mobile)
+  // Group by status
   const byStatus = ([...ALL_STAGES] as string[]).reduce<Record<string, Lead[]>>((acc, s) => {
     acc[s] = leadsData.filter(l => l.status === s)
     return acc
@@ -90,7 +98,7 @@ export default async function PipelinePage({ searchParams }: PageProps) {
       <div className="mb-3">
         <h1 className="text-xl font-semibold text-gray-900">Pipeline</h1>
         <p className="text-xs text-gray-500 mt-0.5 hidden md:block">
-          Tap <strong>Call</strong> to dial, <strong>Note</strong> to open the notepad.
+          Tap <strong>Call</strong> to dial · <strong>Open</strong> to view details.
         </p>
       </div>
 

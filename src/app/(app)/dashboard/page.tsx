@@ -9,6 +9,7 @@ import { Metadata } from 'next'
 import Link from 'next/link'
 import { createServiceClient } from '@/lib/supabase/service'
 import { getRegionCounties } from '@/lib/regions'
+import { SalesFollowupToggle } from '@/components/dashboard/SalesFollowupToggle'
 
 export const metadata: Metadata = { title: 'Dashboard — Merchant Radar' }
 export const dynamic = 'force-dynamic'
@@ -73,6 +74,40 @@ export default async function DashboardPage({
 
   const db = createServiceClient()
 
+  // ── Sales follow-up system state ──────────────────────────────────────────
+  const { data: followupSetting } = await db
+    .from('system_settings')
+    .select('value')
+    .eq('key', 'sales_followup_enabled')
+    .maybeSingle()
+  const followupEnabled = followupSetting?.value === 'true'
+
+  const nowIso = new Date().toISOString()
+
+  // ── Today's work counts (sales follow-up) ────────────────────────────────
+  const [
+    { count: cReplies },
+    { count: cHotProposals },
+    { count: cAgreements },
+    { count: cFollowupsDue },
+  ] = await Promise.all([
+    db.from('leads').select('*', { count: 'exact', head: true }).eq('sms_needs_reply', true),
+
+    db.from('leads').select('*', { count: 'exact', head: true })
+      .eq('proposal_status', 'viewed')
+      .not('sms_needs_reply', 'eq', true),
+
+    db.from('leads').select('*', { count: 'exact', head: true })
+      .in('proposal_status', ['agreement_requested', 'accepted']),
+
+    db.from('leads').select('*', { count: 'exact', head: true })
+      .lte('next_follow_up_at', nowIso)
+      .is('followup_completed_at', null)
+      .not('status', 'in', '(won,lost,do_not_contact)')
+      .not('sms_needs_reply', 'eq', true)
+      .not('proposal_status', 'in', '(agreement_requested,accepted)'),
+  ])
+
   // ── COUNT queries — all parallel, no rows fetched ─────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function withCounty(q: any): any {
@@ -131,6 +166,79 @@ export default async function DashboardPage({
           {greeting()}, Jordan
         </h1>
         <p className="text-sm text-gray-400 mt-0.5">Sales scoreboard · {region}</p>
+      </div>
+
+      {/* ── Sales Follow-up System Toggle ── */}
+      <SalesFollowupToggle enabled={followupEnabled} />
+
+      {/* ── Today's Work ── */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">Today&apos;s Work</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <Link
+            href="/follow-ups?filter=replies"
+            className={`rounded-xl border p-4 flex flex-col gap-1 hover:shadow-sm transition-shadow ${
+              (cReplies ?? 0) > 0
+                ? 'bg-orange-50 border-orange-200'
+                : 'bg-gray-50 border-gray-100'
+            }`}
+          >
+            <span className={`text-xs font-medium ${(cReplies ?? 0) > 0 ? 'text-orange-600' : 'text-gray-500'}`}>
+              💬 Replies
+            </span>
+            <span className={`text-3xl font-bold ${(cReplies ?? 0) > 0 ? 'text-orange-700' : 'text-gray-700'}`}>
+              {(cReplies ?? 0).toLocaleString()}
+            </span>
+          </Link>
+
+          <Link
+            href="/follow-ups?filter=hot"
+            className={`rounded-xl border p-4 flex flex-col gap-1 hover:shadow-sm transition-shadow ${
+              (cHotProposals ?? 0) > 0
+                ? 'bg-blue-50 border-blue-200'
+                : 'bg-gray-50 border-gray-100'
+            }`}
+          >
+            <span className={`text-xs font-medium ${(cHotProposals ?? 0) > 0 ? 'text-blue-600' : 'text-gray-500'}`}>
+              🔥 Hot Proposals
+            </span>
+            <span className={`text-3xl font-bold ${(cHotProposals ?? 0) > 0 ? 'text-blue-700' : 'text-gray-700'}`}>
+              {(cHotProposals ?? 0).toLocaleString()}
+            </span>
+          </Link>
+
+          <Link
+            href="/follow-ups?filter=agreement"
+            className={`rounded-xl border p-4 flex flex-col gap-1 hover:shadow-sm transition-shadow ${
+              (cAgreements ?? 0) > 0
+                ? 'bg-green-50 border-green-200'
+                : 'bg-gray-50 border-gray-100'
+            }`}
+          >
+            <span className={`text-xs font-medium ${(cAgreements ?? 0) > 0 ? 'text-green-600' : 'text-gray-500'}`}>
+              ✍️ Agreements
+            </span>
+            <span className={`text-3xl font-bold ${(cAgreements ?? 0) > 0 ? 'text-green-700' : 'text-gray-700'}`}>
+              {(cAgreements ?? 0).toLocaleString()}
+            </span>
+          </Link>
+
+          <Link
+            href="/follow-ups?filter=due"
+            className={`rounded-xl border p-4 flex flex-col gap-1 hover:shadow-sm transition-shadow ${
+              (cFollowupsDue ?? 0) > 0
+                ? 'bg-yellow-50 border-yellow-200'
+                : 'bg-gray-50 border-gray-100'
+            }`}
+          >
+            <span className={`text-xs font-medium ${(cFollowupsDue ?? 0) > 0 ? 'text-yellow-600' : 'text-gray-500'}`}>
+              📅 Follow-ups Due
+            </span>
+            <span className={`text-3xl font-bold ${(cFollowupsDue ?? 0) > 0 ? 'text-yellow-700' : 'text-gray-700'}`}>
+              {(cFollowupsDue ?? 0).toLocaleString()}
+            </span>
+          </Link>
+        </div>
       </div>
 
       {/* ── Region tabs ── */}

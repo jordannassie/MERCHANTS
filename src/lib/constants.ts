@@ -30,6 +30,7 @@ export const LEAD_STATUSES = [
   { value: 'connected', label: 'Connected' },
   { value: 'follow_up', label: 'Follow-up' },
   { value: 'appointment', label: 'Appointment' },
+  { value: 'agreement_requested', label: 'Agreement' },
   { value: 'won', label: 'Won' },
   { value: 'lost', label: 'Lost' },
   { value: 'do_not_contact', label: 'Do Not Contact' },
@@ -96,4 +97,4 @@ export const CALL_OUTCOMES = [
   { value: 'won', label: 'Won' },
 ] as const
 
-export const PIPELINE_STATUSES = ['new','attempted','connected','follow_up','appointment','won'] as const
+export const PIPELINE_STATUSES = ['attempted','connected','agreement_requested','won'] as const

@@ -145,18 +145,38 @@ async function handleMessageReceived(
         { onConflict: 'normalized_phone' }
       )
 
-      // Update lead
+      // Update lead — also stop automation
       await db.from('leads').update({
-        status:          'do_not_contact',
-        sms_status:      'opted_out',
-        sms_needs_reply: false,
+        status:                 'do_not_contact',
+        sms_status:             'opted_out',
+        sms_needs_reply:        false,
+        next_follow_up_at:      null,
+        followup_completed_at:  now,
       }).eq('id', leadId)
     } else {
-      // Non-STOP reply — needs reply
-      await db.from('leads').update({
-        sms_needs_reply: true,
-        sms_status:      'needs_reply',
-      }).eq('id', leadId)
+      // Non-STOP reply — needs reply; stop automation; advance status if early-stage
+      const { data: replyLead } = await db
+        .from('leads')
+        .select('status')
+        .eq('id', leadId)
+        .maybeSingle()
+
+      const statusUpdate: Record<string, unknown> = {
+        sms_needs_reply:       true,
+        sms_status:            'needs_reply',
+        next_follow_up_at:     null,
+        followup_completed_at: now,
+      }
+
+      if (
+        replyLead?.status === 'attempted' ||
+        replyLead?.status === 'follow_up' ||
+        replyLead?.status === 'new'
+      ) {
+        statusUpdate.status = 'connected'
+      }
+
+      await db.from('leads').update(statusUpdate).eq('id', leadId)
     }
   } else {
     // Lead not found — still log inbound with best-effort info

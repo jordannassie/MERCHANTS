@@ -5,7 +5,7 @@ import { ProposalTemplate } from '@/components/proposals/ProposalTemplate'
 
 // Only safe, public-facing fields — never expose internal CRM data
 const SAFE_SELECT =
-  'display_name, outlet_name, taxpayer_name, proposal_slug, proposal_savings_monthly, proposal_transaction_rate, proposal_equipment, proposal_contract, proposal_status, proposal_viewed_at, proposal_accepted_at'
+  'display_name, outlet_name, taxpayer_name, proposal_slug, proposal_savings_monthly, proposal_transaction_rate, proposal_equipment, proposal_contract, proposal_status, proposal_viewed_at, proposal_accepted_at, proposal_view_count'
 
 interface PageProps {
   params: Promise<{ slug: string }>
@@ -43,13 +43,24 @@ export default async function ProposalPage({ params }: PageProps) {
 
   if (!lead) notFound()
 
-  // Track first view server-side (fire-and-forget — intentionally not awaited)
-  if (!lead.proposal_viewed_at && lead.proposal_status !== 'accepted') {
-    void db
-      .from('leads')
-      .update({ proposal_viewed_at: new Date().toISOString(), proposal_status: 'viewed' })
-      .eq('proposal_slug', slug)
-  }
+  // Track every view server-side (fire-and-forget — intentionally not awaited)
+  const now = new Date().toISOString()
+  const viewedAt = lead.proposal_viewed_at ?? now
+  // Only update status to 'viewed' if not already at a later stage
+  const protectedStatuses = ['agreement_requested', 'accepted']
+  const newStatus = protectedStatuses.includes(lead.proposal_status ?? '')
+    ? lead.proposal_status
+    : 'viewed'
+
+  void db
+    .from('leads')
+    .update({
+      proposal_view_count: (lead.proposal_view_count ?? 0) + 1,
+      proposal_last_viewed_at: now,
+      proposal_viewed_at: viewedAt,
+      proposal_status: newStatus,
+    })
+    .eq('proposal_slug', slug)
 
   const businessName =
     lead.display_name || lead.outlet_name || lead.taxpayer_name || 'Your Business'
@@ -64,7 +75,9 @@ export default async function ProposalPage({ params }: PageProps) {
         equipment: lead.proposal_equipment ?? null,
         contract: lead.proposal_contract ?? null,
         status: lead.proposal_status ?? 'not_sent',
-        accepted: lead.proposal_status === 'accepted',
+        accepted:
+          lead.proposal_status === 'accepted' ||
+          lead.proposal_status === 'agreement_requested',
         estimatedMonthlyCardSales: null, // loaded lazily client-side after migration applied
       }}
     />
