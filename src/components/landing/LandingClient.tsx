@@ -377,13 +377,13 @@ export default function LandingClient() {
                 <Shield size={12} /> Founder, Process.Direct
               </div>
               <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 mb-3">
-                Jordan Nassie
+                Jordan
               </h2>
 
               {/* Jordan's promise */}
               <blockquote className="mb-5 border-l-4 border-blue-500 pl-4 text-slate-600 italic text-base leading-relaxed">
                 "Let us help you Save Money and get the right setup in place, for every Payment that goes through your Business."
-                <footer className="mt-1 text-xs not-italic font-semibold text-slate-400">— Jordan Nassie, Founder</footer>
+                <footer className="mt-1 text-xs not-italic font-semibold text-slate-400">— Jordan, Founder</footer>
               </blockquote>
 
               <p className="text-slate-500 text-lg leading-relaxed mb-6">
