@@ -1,19 +1,21 @@
 /**
  * POST /api/enrich/find-contacts-bulk
- * Run Google Places matching for up to 25 leads.
+ * Run Google Places matching for up to 200 leads in one request.
+ * Processes them sequentially in chunks of MAX_BATCH (25) with a 350 ms delay.
  * Only updates migration-005 columns. Rich metadata goes into enrichment_jobs.
  */
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { findPlacesContact, type LeadForSearch } from '@/lib/google-places'
-import { checkRateLimit, rateLimitExceeded } from '@/lib/rate-limit'
 import { z } from 'zod'
 
-const MAX_BATCH = 25
+export const maxDuration = 300 // 5 minutes — allows up to 200 leads at ~350 ms each
+
+const MAX_BATCH = 25   // chunk size for hot_missing_phone mode (infrastructure, not a business cap)
 const DELAY_MS = 350
 
 const schema = z.union([
-  z.object({ mode: z.literal('selected'), leadIds: z.array(z.string().uuid()).min(1).max(MAX_BATCH) }),
+  z.object({ mode: z.literal('selected'), leadIds: z.array(z.string().uuid()).min(1).max(200) }),
   z.object({ mode: z.literal('hot_missing_phone'), confirmed: z.literal(true) }),
 ])
 
@@ -32,10 +34,6 @@ export async function POST(request: NextRequest) {
   }
 
   const db = createServiceClient()
-
-  // Rate limit: max 3 bulk batches per 30 minutes
-  const rl = await checkRateLimit(db, 'bulk')
-  if (!rl.allowed) return rateLimitExceeded(rl) as unknown as ReturnType<typeof NextResponse.json>
 
   let leadsQuery = db
     .from('leads')

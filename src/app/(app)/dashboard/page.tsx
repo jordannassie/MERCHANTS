@@ -11,6 +11,8 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { getRegionCounties } from '@/lib/regions'
 import { SalesFollowupToggle } from '@/components/dashboard/SalesFollowupToggle'
 import { SmsSequencePanel } from '@/components/dashboard/SmsSequencePanel'
+import { NewOutreachCard } from '@/components/dashboard/NewOutreachCard'
+import { getNewOutreachSettings, countEligibleNewLeads } from '@/lib/new-outreach-engine'
 
 export const metadata: Metadata = { title: 'Dashboard — Merchant Radar' }
 export const dynamic = 'force-dynamic'
@@ -82,6 +84,12 @@ export default async function DashboardPage({
     .eq('key', 'sales_followup_enabled')
     .maybeSingle()
   const followupEnabled = followupSetting?.value === 'true'
+
+  // ── New outreach system state ──────────────────────────────────────────────
+  const [newOutreachSettings, newOutreachEligibleCount] = await Promise.all([
+    getNewOutreachSettings(db),
+    countEligibleNewLeads(db),
+  ])
 
   const nowIso = new Date().toISOString()
 
@@ -171,6 +179,15 @@ export default async function DashboardPage({
 
       {/* ── Sales Follow-up System Toggle ── */}
       <SalesFollowupToggle enabled={followupEnabled} />
+
+      {/* ── New Outreach Card ── */}
+      <NewOutreachCard
+        enabled={newOutreachSettings.enabled}
+        batchSize={newOutreachSettings.batchSize}
+        sendTime={newOutreachSettings.sendTime}
+        eligibleCount={newOutreachEligibleCount}
+        lastRunDate={newOutreachSettings.lastRunDate}
+      />
 
       {/* ── SMS Sequence Panel ── */}
       <SmsSequencePanel />

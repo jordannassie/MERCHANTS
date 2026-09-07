@@ -27,10 +27,7 @@ import { applyDedup, isValidUSPhone, normalizePhoneForDedup, type DedupeCandidat
 import {
   getSetting,
   getOrCreateSweep,
-  countSearchesToday,
   getTask,
-  DAILY_GOAL,
-  DAILY_SEARCH_LIMIT,
   MAX_TASKS_PER_BATCH,
   BATCH_TIME_BUDGET_MS,
   RECHECK_DAYS,
@@ -43,7 +40,7 @@ import type { GooglePlacePreview } from '@/lib/types'
 
 export const maxDuration = 26
 
-type StopReason = 'goal_reached' | 'quota_exceeded' | 'time_budget' | 'all_done' | 'disabled' | 'no_key' | 'error'
+type StopReason = 'batch_limit' | 'quota_exceeded' | 'time_budget' | 'all_done' | 'disabled' | 'no_key' | 'error'
 
 interface BatchResult {
   tasks_processed: number
@@ -261,7 +258,6 @@ export async function POST(): Promise<NextResponse> {
   const sweep    = await getOrCreateSweep()
   const startMs  = Date.now()
 
-  let searchesUsedAtStart = await countSearchesToday()
   let tasksProcessed = 0
   let totalNewLeads  = 0
   let totalEnriched  = 0
@@ -277,15 +273,8 @@ export async function POST(): Promise<NextResponse> {
   let allTimeEnriched = sweep.enriched
 
   while (tasksProcessed < MAX_TASKS_PER_BATCH) {
-    // Time budget check
+    // Time budget check — hard stop before Netlify kills the function
     if (Date.now() - startMs > BATCH_TIME_BUDGET_MS) { stopReason = 'time_budget'; break }
-
-    // Daily goal check
-    if (newLeadsToday >= DAILY_GOAL) { stopReason = 'goal_reached'; break }
-
-    // Daily search quota check
-    const searchesUsedNow = searchesUsedAtStart + tasksProcessed
-    if (searchesUsedNow >= DAILY_SEARCH_LIMIT) { stopReason = 'quota_exceeded'; break }
 
     // Cycle complete?
     if (taskIndex >= TASKS_TOTAL) {
@@ -341,7 +330,7 @@ export async function POST(): Promise<NextResponse> {
     }
   }
 
-  if (stopReason === 'time_budget' && tasksProcessed > 0) stopReason = 'goal_reached' // finished all allowed tasks
+  if (stopReason === 'time_budget' && tasksProcessed > 0) stopReason = 'batch_limit' // completed all tasks in this batch
 
   return NextResponse.json({
     tasks_processed: tasksProcessed,

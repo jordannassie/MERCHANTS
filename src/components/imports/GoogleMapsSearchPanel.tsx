@@ -24,10 +24,9 @@ import { Loader2, AlertCircle, CheckCircle2 } from 'lucide-react'
 interface SweepStatus {
   enabled:                boolean
   api_key_configured:     boolean
-  daily_goal:             number
-  daily_search_limit:     number
+  daily_search_limit:     number   // informational only — not a blocking ceiling
   searches_used_today:    number
-  searches_remaining:     number
+  searches_remaining:     number   // informational
   new_leads_today:        number
   task_index:             number
   tasks_total:            number
@@ -175,11 +174,12 @@ export function GoogleMapsSearchPanel() {
 
   const s = status!
   const quotaPct      = s.daily_search_limit > 0 ? Math.round((s.searches_used_today / s.daily_search_limit) * 100) : 0
-  const goalPct       = s.daily_goal > 0 ? Math.round((s.new_leads_today / s.daily_goal) * 100) : 0
   const cyclePct      = s.tasks_total > 0 ? Math.round((s.task_index / s.tasks_total) * 100) : 0
-  const noQuota       = s.searches_remaining <= 0
+  // noQuota only triggers if the Google API itself reported quota_exceeded (tracked via sweep status)
+  // The DAILY_SEARCH_LIMIT is informational — it does not block new searches
+  const noQuota       = false
   const noKey         = !s.api_key_configured
-  const testDisabled  = testing || noKey || (noQuota && !s.enabled)
+  const testDisabled  = testing || noKey
 
   return (
     <div className="space-y-3">
@@ -190,7 +190,7 @@ export function GoogleMapsSearchPanel() {
         <div className="px-4 py-3 flex items-start justify-between gap-3 border-b border-gray-100">
           <div>
             <p className="text-sm font-semibold text-gray-900">🗺 Google Daily Leads</p>
-            <p className="text-xs text-gray-400 mt-0.5">Runs at 12:00 UTC (7 AM CDT) · Finds up to 90 new callable Texas businesses per day</p>
+            <p className="text-xs text-gray-400 mt-0.5">Runs hourly 9 AM–6 PM CDT · 20 tasks per run · Finds new callable Texas businesses</p>
           </div>
 
           {/* ON / OFF toggle */}
@@ -219,34 +219,19 @@ export function GoogleMapsSearchPanel() {
             ⚠ <strong>GOOGLE_MAPS_API_KEY</strong> is not set in Netlify environment variables. Add it to enable automation.
           </div>
         )}
-        {noQuota && !noKey && (
-          <div className="px-4 py-2 bg-blue-50 border-b border-blue-100 text-xs text-blue-700">
-            📊 Daily Google quota reached — resumes tomorrow at 12:00 UTC.
-          </div>
-        )}
 
         {/* Today's stats */}
         <div className="px-4 py-3 space-y-3">
 
-          {/* New leads goal bar */}
+          {/* Searches used today — informational bar */}
           <div>
             <div className="flex justify-between text-xs text-gray-600 mb-1">
               <span className="font-medium">New callable leads today</span>
-              <span className="font-semibold text-gray-900">{s.new_leads_today} / {s.daily_goal}</span>
+              <span className="font-semibold text-gray-900">{s.new_leads_today}</span>
             </div>
-            <div className="w-full bg-gray-100 rounded-full h-2">
-              <div
-                className="bg-green-500 h-2 rounded-full transition-all"
-                style={{ width: `${Math.min(100, goalPct)}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Searches quota bar */}
-          <div>
-            <div className="flex justify-between text-xs text-gray-500 mb-1">
+            <div className="flex justify-between text-xs text-gray-500 mb-1 mt-2">
               <span>Searches used today</span>
-              <span>{s.searches_used_today} / {s.daily_search_limit}</span>
+              <span>{s.searches_used_today}</span>
             </div>
             <div className="w-full bg-gray-100 rounded-full h-1.5">
               <div
@@ -297,7 +282,6 @@ export function GoogleMapsSearchPanel() {
             {testing ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Running test…</> : '▶ Run Test'}
           </button>
           {noKey && <p className="text-xs text-gray-400 mt-1">Set GOOGLE_MAPS_API_KEY in Netlify env vars first.</p>}
-          {noQuota && !noKey && <p className="text-xs text-gray-400 mt-1">No quota remaining today — test resumes tomorrow.</p>}
         </div>
       </div>
 
@@ -309,7 +293,7 @@ export function GoogleMapsSearchPanel() {
                                                'bg-green-50 border-green-200'
         }`}>
           {testResult.quota_exceeded ? (
-            <p className="text-blue-700 font-medium">📊 Daily quota reached — resumes tomorrow at 12:00 UTC</p>
+            <p className="text-blue-700 font-medium">📊 Google API quota reached — will resume when quota resets</p>
           ) : testResult.error ? (
             <div>
               <div className="flex items-start gap-2">

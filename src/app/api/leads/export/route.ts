@@ -44,7 +44,8 @@ export async function GET(request: NextRequest) {
   }
   if (sp.get('starred') === 'true') query = query.eq('starred', true)
 
-  query = query.order('score', { ascending: false }).limit(5000)
+  // TODO: replace with true server-side streaming/pagination for very large datasets
+  query = query.order('score', { ascending: false }).limit(50_000)
 
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

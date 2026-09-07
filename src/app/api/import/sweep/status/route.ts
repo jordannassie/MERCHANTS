@@ -16,7 +16,6 @@ import {
   getOrCreateSweep,
   countSearchesToday,
   nextRunAt,
-  DAILY_GOAL,
   DAILY_SEARCH_LIMIT,
   TASKS_TOTAL,
 } from '@/lib/sweep-state'
@@ -48,10 +47,9 @@ export async function GET() {
     return NextResponse.json({
       enabled:                isEnabled,
       api_key_configured:     !!process.env.GOOGLE_MAPS_API_KEY,
-      daily_goal:             DAILY_GOAL,
-      daily_search_limit:     DAILY_SEARCH_LIMIT,
+      daily_search_limit:     DAILY_SEARCH_LIMIT,   // informational only — not a blocker
       searches_used_today:    searchesToday,
-      searches_remaining:     Math.max(0, DAILY_SEARCH_LIMIT - searchesToday),
+      searches_remaining:     Math.max(0, DAILY_SEARCH_LIMIT - searchesToday), // informational
       new_leads_today:        sweep.new_leads_today,
       searches_today:         sweep.searches_today,
       task_index:             sweep.task_index,

@@ -20,7 +20,8 @@ export const TEXAS_SOURCE = 'texas_sales_tax_permits'
 export const TEXAS_API_BASE = 'https://data.texas.gov/resource/jrea-zgmq.json'
 export const TEXAS_DATASET_ID = 'jrea-zgmq'
 export const IMPORT_PAGE_SIZE = 1000
-export const IMPORT_MAX_RECORDS = 10_000
+// Raised from 10_000 — paging loop stops naturally when a page < PAGE_SIZE is returned
+export const IMPORT_MAX_RECORDS = 1_000_000
 
 export const ENRICHMENT_DAILY_CAP = 25
 

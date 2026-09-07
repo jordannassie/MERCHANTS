@@ -16,12 +16,10 @@ import { generateSweepTasks, type SweepTask } from '@/lib/google-categories'
 export const TASKS = generateSweepTasks()          // 315 deterministic tasks
 export const TASKS_TOTAL = TASKS.length            // 315
 
-/** New callable leads to add per day before stopping. */
-export const DAILY_GOAL       = 90
-/** Max Google searches per day (reserves 10 of quota for testing/other use). */
+/** Informational: max Google searches per day (display only — does NOT block the sweep). */
 export const DAILY_SEARCH_LIMIT = Number(process.env.GOOGLE_DAILY_SEARCH_LIMIT ?? 90)
-/** Max tasks to process per single server invocation (safety for Netlify timeouts). */
-export const MAX_TASKS_PER_BATCH = 5
+/** Max tasks to process per single Netlify invocation (keeps within the 26 s execution budget). */
+export const MAX_TASKS_PER_BATCH = 20
 /** Soft time budget per batch invocation (milliseconds). */
 export const BATCH_TIME_BUDGET_MS = 20_000   // 20 s — leaves buffer in 26 s Netlify limit
 /** Days before a phone-less result is eligible for re-check. */
@@ -157,10 +155,30 @@ export function getTask(taskIndex: number): SweepTask | null {
   return TASKS[taskIndex]
 }
 
-/** Compute next 12:00 UTC run time. */
+/**
+ * Compute the next scheduled run time.
+ * Sweep now runs hourly 14:00–23:00 UTC (9 AM–6 PM CDT).
+ * Returns the start of the next eligible UTC hour.
+ */
 export function nextRunAt(): string {
   const now = new Date()
-  const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0))
-  if (next <= now) next.setUTCDate(next.getUTCDate() + 1)
+  const utcHour = now.getUTCHours()
+  const utcMin  = now.getUTCMinutes()
+
+  // If we're inside the active window and before the top of the next hour, return top of next hour
+  if (utcHour >= 14 && utcHour < 23) {
+    // next run = top of next hour today
+    const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), utcHour + 1, 0, 0))
+    return next.toISOString()
+  }
+
+  // Before the window starts today
+  if (utcHour < 14 || (utcHour === 14 && utcMin === 0)) {
+    const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 14, 0, 0))
+    return next.toISOString()
+  }
+
+  // After the window (23:00+ UTC) — next run is 14:00 UTC tomorrow
+  const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 14, 0, 0))
   return next.toISOString()
 }
