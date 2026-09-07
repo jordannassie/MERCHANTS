@@ -70,7 +70,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const fetchResult = await db
     .from('leads')
     .select(
-      'id,display_name,outlet_name,status,permit_phone,primary_phone,sms_needs_reply,' +
+      'id,display_name,outlet_name,outlet_city,status,permit_phone,primary_phone,sms_needs_reply,' +
       'proposal_status,followup_step,followup_completed_at,followup_started_at,proposal_slug',
     )
     .eq('id', leadId)
@@ -142,8 +142,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     proposalUrl = getProposalUrl(lead.proposal_slug)
   }
 
+  // Fetch the message template for this step from system_settings
+  const templateKey = `sales_followup_message_${nextStep}`
+  const { data: templateRow } = await db
+    .from('system_settings')
+    .select('value')
+    .eq('key', templateKey)
+    .maybeSingle()
+  const template = templateRow?.value ?? null
+
   const businessName = lead.display_name || lead.outlet_name || 'your business'
-  const message = buildFollowupMessage(nextStep, businessName, proposalUrl)
+  const city = (lead as unknown as { outlet_city?: string | null }).outlet_city ?? null
+  const message = buildFollowupMessage(nextStep, businessName, proposalUrl, city, template)
   const sentAt = new Date().toISOString()
 
   try {

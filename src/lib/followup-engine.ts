@@ -69,15 +69,31 @@ export function checkStopConditions(
 
 /**
  * Returns the follow-up message for a given step (1-indexed).
+ * If `template` is provided (from system_settings), placeholders are replaced.
+ * Otherwise falls back to hardcoded defaults.
+ *
  * @param step 1 | 2 | 3
+ * @param businessName Lead's business name
+ * @param proposalUrl  Proposal URL (used in step 2 default and {PROPOSAL_URL} placeholder)
+ * @param city         Lead's city (used in {CITY} placeholder)
+ * @param template     Optional message template from system_settings
  */
 export function buildFollowupMessage(
   step: number,
   businessName: string,
   proposalUrl?: string | null,
+  city?: string | null,
+  template?: string | null,
 ): string {
-  const name = businessName?.trim() || 'your business'
+  if (template) {
+    return template
+      .replace(/\{BUSINESS_NAME\}/g, businessName?.trim() || 'your business')
+      .replace(/\{CITY\}/g, city?.trim() || 'your area')
+      .replace(/\{PROPOSAL_URL\}/g, proposalUrl ?? '')
+  }
 
+  // Hardcoded defaults
+  const name = businessName?.trim() || 'your business'
   if (step === 1) {
     return `Hi, just wanted to make sure you received the proposal I sent over for ${name}. I'm here if you have any questions.\n\nJordan`
   }
@@ -143,8 +159,20 @@ export async function processDueLeads(
 
   const now = new Date()
 
+  // Fetch message templates from system_settings (in parallel)
+  const [msg1Row, msg2Row, msg3Row] = await Promise.all([
+    db.from('system_settings').select('value').eq('key', 'sales_followup_message_1').maybeSingle(),
+    db.from('system_settings').select('value').eq('key', 'sales_followup_message_2').maybeSingle(),
+    db.from('system_settings').select('value').eq('key', 'sales_followup_message_3').maybeSingle(),
+  ])
+  const templates: Record<number, string | null> = {
+    1: msg1Row.data?.value ?? null,
+    2: msg2Row.data?.value ?? null,
+    3: msg3Row.data?.value ?? null,
+  }
+
   type DueLead = Pick<Lead,
-    | 'id' | 'display_name' | 'outlet_name' | 'status' | 'permit_phone' | 'primary_phone'
+    | 'id' | 'display_name' | 'outlet_name' | 'outlet_city' | 'status' | 'permit_phone' | 'primary_phone'
     | 'sms_needs_reply' | 'proposal_status' | 'followup_step' | 'followup_completed_at'
     | 'followup_started_at' | 'proposal_slug'
   >
@@ -154,7 +182,7 @@ export async function processDueLeads(
   let query: any = db
     .from('leads')
     .select(
-      'id,display_name,outlet_name,status,permit_phone,primary_phone,sms_needs_reply,' +
+      'id,display_name,outlet_name,outlet_city,status,permit_phone,primary_phone,sms_needs_reply,' +
       'proposal_status,followup_step,followup_completed_at,followup_started_at,proposal_slug',
     )
     .lte('next_follow_up_at', now.toISOString())
@@ -253,7 +281,8 @@ export async function processDueLeads(
     }
 
     const businessName = lead.display_name || lead.outlet_name || 'your business'
-    const message = buildFollowupMessage(nextStep, businessName, proposalUrl)
+    const city = (lead as unknown as { outlet_city?: string | null }).outlet_city ?? null
+    const message = buildFollowupMessage(nextStep, businessName, proposalUrl, city, templates[nextStep])
 
     const sentAt = new Date().toISOString()
 

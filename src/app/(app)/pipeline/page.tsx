@@ -13,22 +13,31 @@ interface PageProps {
 // NULL-safe non-chain filter
 const NON_CHAIN = 'category.is.null,category.neq.corporate_chain'
 
-// Active pipeline stages (kanban columns)
-const ACTIVE_STAGES = ['attempted', 'connected', 'agreement_requested', 'won'] as const
+// Active pipeline stages (kanban columns) — includes 'appointment' for legacy leads
+const ACTIVE_STAGES = ['attempted', 'connected', 'agreement_requested', 'appointment', 'won'] as const
 // Closed stages for closed view
 const CLOSED_STAGES = ['lost', 'do_not_contact'] as const
 
+// Stages known-safe for DB constraint (fallback if agreement_requested/appointment causes error)
+const SAFE_STAGES = ['attempted', 'connected', 'appointment', 'won', 'lost', 'do_not_contact'] as const
+
 const ALL_STAGES = [...ACTIVE_STAGES, ...CLOSED_STAGES] as const
 
+// Full select — includes migration 025 columns
 const SELECT_FULL =
   'id,display_name,outlet_name,taxpayer_name,outlet_city,priority,status,score,primary_phone,permit_phone,' +
   'next_follow_up_at,starred,main_note,main_note_updated_at,category,' +
   'proposal_status,proposal_view_count,sms_needs_reply,followup_step,agreement_requested_at'
 
+// Compat select — only pre-025 columns, guaranteed to exist in production
 const SELECT_COMPAT =
   'id,display_name,outlet_name,taxpayer_name,outlet_city,priority,status,score,primary_phone,permit_phone,' +
-  'next_follow_up_at,starred,category,' +
-  'proposal_status,sms_needs_reply,followup_step,agreement_requested_at'
+  'next_follow_up_at,starred,category,proposal_status'
+
+// Minimal safe select — absolute last resort
+const SAFE_SELECT =
+  'id,display_name,outlet_name,taxpayer_name,outlet_city,status,primary_phone,permit_phone,' +
+  'next_follow_up_at,category,proposal_status'
 
 const DEFAULT_STAGE = 'attempted'
 
@@ -43,11 +52,11 @@ export default async function PipelinePage({ searchParams }: PageProps) {
 
   const supabase = createServiceClient()
 
-  function makeQuery(selectCols: string, phoneFilter: boolean) {
+  function makeQuery(selectCols: string, phoneFilter: boolean, stages: readonly string[]) {
     let q = supabase
       .from('leads')
       .select(selectCols)
-      .in('status', [...ALL_STAGES])
+      .in('status', [...stages])
       .or(NON_CHAIN)
       .order('score', { ascending: false })
 
@@ -63,7 +72,7 @@ export default async function PipelinePage({ searchParams }: PageProps) {
     { count: totalCount },
     { count: callableCount },
   ] = await Promise.all([
-    makeQuery(SELECT_FULL, hasPhone),
+    makeQuery(SELECT_FULL, hasPhone, ALL_STAGES),
 
     supabase
       .from('leads')
@@ -80,15 +89,23 @@ export default async function PipelinePage({ searchParams }: PageProps) {
   ])
 
   let leadsData: Lead[]
-  if (leadsError) {
-    const { data: fallback } = await makeQuery(SELECT_COMPAT, hasPhone)
-    leadsData = (fallback ?? []) as unknown as Lead[]
+  if (!leadsError && rawLeads) {
+    leadsData = rawLeads as unknown as Lead[]
   } else {
-    leadsData = (rawLeads ?? []) as unknown as Lead[]
+    // First fallback: pre-025 columns with same stages
+    const { data: compat, error: compatError } = await makeQuery(SELECT_COMPAT, hasPhone, ALL_STAGES)
+    if (!compatError && compat) {
+      leadsData = compat as unknown as Lead[]
+    } else {
+      // Second fallback: minimal columns + SAFE_STAGES only
+      const { data: safe } = await makeQuery(SAFE_SELECT, hasPhone, SAFE_STAGES)
+      leadsData = (safe ?? []) as unknown as Lead[]
+    }
   }
 
-  // Group by status
-  const byStatus = ([...ALL_STAGES] as string[]).reduce<Record<string, Lead[]>>((acc, s) => {
+  // Group by status — include all possible stages (ACTIVE + CLOSED)
+  const ALL_GROUPING_STAGES = [...new Set([...ALL_STAGES, ...SAFE_STAGES])] as string[]
+  const byStatus = ALL_GROUPING_STAGES.reduce<Record<string, Lead[]>>((acc, s) => {
     acc[s] = leadsData.filter(l => l.status === s)
     return acc
   }, {})

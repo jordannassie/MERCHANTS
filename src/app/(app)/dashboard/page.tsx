@@ -10,6 +10,7 @@ import Link from 'next/link'
 import { createServiceClient } from '@/lib/supabase/service'
 import { getRegionCounties } from '@/lib/regions'
 import { SalesFollowupToggle } from '@/components/dashboard/SalesFollowupToggle'
+import { SmsSequencePanel } from '@/components/dashboard/SmsSequencePanel'
 
 export const metadata: Metadata = { title: 'Dashboard — Merchant Radar' }
 export const dynamic = 'force-dynamic'
@@ -27,24 +28,24 @@ function greeting(): string {
 // ── Status card config ────────────────────────────────────────────────────────
 
 const STATUS_CARDS = [
-  { key: 'new',           label: 'New Leads',       href: '/leads?status=new',         color: 'blue'    },
-  { key: 'callable',      label: 'Callable',         href: '/leads?status=new',         color: 'green'   },
-  { key: 'attempted',     label: 'Attempted',        href: '/leads?status=attempted',   color: 'orange'  },
-  { key: 'connected',     label: 'Connected',        href: '/leads?status=connected',   color: 'purple'  },
-  { key: 'follow_up',     label: 'Follow-up',        href: '/leads?status=follow_up',   color: 'yellow'  },
-  { key: 'appointment',   label: 'Appointments',     href: '/leads?status=appointment', color: 'indigo'  },
-  { key: 'won',           label: 'Won',              href: '/leads?status=won',         color: 'emerald' },
-  { key: 'lost_dnc',      label: 'Lost / DNC',       href: '/leads?status=lost',        color: 'gray'    },
+  { key: 'new',           label: 'New Leads',        href: '/leads?status=new',         color: 'blue'    },
+  { key: 'callable',      label: 'Callable',          href: '/leads?status=new',         color: 'green'   },
+  { key: 'attempted',     label: 'Contacted',         href: '/leads?status=attempted',   color: 'orange'  },
+  { key: 'connected',     label: 'Replied',           href: '/leads?status=connected',   color: 'purple'  },
+  { key: 'follow_up',     label: 'Follow-ups Due',    href: '/leads?status=follow_up',   color: 'yellow'  },
+  { key: 'appointment',   label: 'Agreement',         href: '/leads?status=appointment', color: 'indigo'  },
+  { key: 'won',           label: 'Won',               href: '/leads?status=won',         color: 'emerald' },
+  { key: 'lost_dnc',      label: 'Lost / DNC',        href: '/leads?status=lost',        color: 'gray'    },
 ] as const
 
 const PIPELINE_ROWS = [
-  { key: 'new',         label: 'New',         href: '/leads?status=new'         },
-  { key: 'attempted',   label: 'Attempted',   href: '/leads?status=attempted'   },
-  { key: 'connected',   label: 'Connected',   href: '/leads?status=connected'   },
-  { key: 'follow_up',   label: 'Follow-up',   href: '/leads?status=follow_up'   },
-  { key: 'appointment', label: 'Appointment', href: '/leads?status=appointment' },
-  { key: 'won',         label: 'Won',         href: '/leads?status=won'         },
-  { key: 'lost_dnc',    label: 'Lost / DNC',  href: '/leads?status=lost'        },
+  { key: 'new',         label: 'New',             href: '/leads?status=new'         },
+  { key: 'attempted',   label: 'Contacted',       href: '/leads?status=attempted'   },
+  { key: 'connected',   label: 'Replied',         href: '/leads?status=connected'   },
+  { key: 'follow_up',   label: 'Follow-ups Due',  href: '/leads?status=follow_up'   },
+  { key: 'appointment', label: 'Agreement',       href: '/leads?status=appointment' },
+  { key: 'won',         label: 'Won',             href: '/leads?status=won'         },
+  { key: 'lost_dnc',    label: 'Lost / DNC',      href: '/leads?status=lost'        },
 ] as const
 
 // Color classes per card color name
@@ -170,6 +171,9 @@ export default async function DashboardPage({
 
       {/* ── Sales Follow-up System Toggle ── */}
       <SalesFollowupToggle enabled={followupEnabled} />
+
+      {/* ── SMS Sequence Panel ── */}
+      <SmsSequencePanel />
 
       {/* ── Today's Work ── */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">

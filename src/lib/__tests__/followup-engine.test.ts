@@ -123,22 +123,41 @@ describe('checkStopConditions', () => {
 })
 
 describe('buildFollowupMessage', () => {
-  it('step 1 contains business name', () => {
+  it('step 1 contains business name (hardcoded default)', () => {
     const msg = buildFollowupMessage(1, 'SANTO TACO')
     expect(msg).toContain('SANTO TACO')
     expect(msg).toContain('Jordan')
   })
 
-  it('step 2 contains proposal URL', () => {
+  it('step 2 contains proposal URL (hardcoded default)', () => {
     const msg = buildFollowupMessage(2, 'SANTO TACO', 'https://process.direct/p/santo-taco')
     expect(msg).toContain('https://process.direct/p/santo-taco')
     expect(msg).toContain('Jordan')
   })
 
-  it('step 3 contains business name and closing phrase', () => {
+  it('step 3 contains business name and closing phrase (hardcoded default)', () => {
     const msg = buildFollowupMessage(3, 'ABC COFFEE')
     expect(msg).toContain('ABC COFFEE')
     expect(msg).toContain('last time')
+  })
+
+  it('uses template when provided, replacing {BUSINESS_NAME}', () => {
+    const tpl = 'Hello {BUSINESS_NAME}, just checking in!'
+    const msg = buildFollowupMessage(1, 'TACO PALACE', null, null, tpl)
+    expect(msg).toBe('Hello TACO PALACE, just checking in!')
+  })
+
+  it('uses template when provided, replacing {CITY} and {PROPOSAL_URL}', () => {
+    const tpl = 'Hey {BUSINESS_NAME} in {CITY}, see {PROPOSAL_URL}'
+    const msg = buildFollowupMessage(2, 'SHOP A', 'https://example.com/p/shop', 'Austin', tpl)
+    expect(msg).toBe('Hey SHOP A in Austin, see https://example.com/p/shop')
+  })
+
+  it('uses city and proposalUrl params without template', () => {
+    // With no template, city is not used in hardcoded defaults, just ensure no crash
+    const msg = buildFollowupMessage(1, 'SHOP B', null, 'Dallas')
+    expect(msg).toContain('SHOP B')
+    expect(msg).toContain('Jordan')
   })
 })
 
@@ -222,13 +241,23 @@ describe('processDueLeads', () => {
     const db = {
       from: vi.fn((table: string) => {
         if (table === 'system_settings') {
-          return {
+          // Key-aware mock: only 'sales_followup_enabled' returns the enabled state;
+          // message template keys return null so buildFollowupMessage uses hardcoded defaults.
+          let capturedKey: string | null = null
+          const obj: Record<string, unknown> = {
             select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: { value: enabled ? 'true' : 'false' }
+            eq: vi.fn((_field: string, value: string) => {
+              capturedKey = value
+              return obj
+            }),
+            maybeSingle: vi.fn(() => {
+              if (capturedKey === 'sales_followup_enabled') {
+                return Promise.resolve({ data: { value: enabled ? 'true' : 'false' } })
+              }
+              return Promise.resolve({ data: null })
             }),
           }
+          return obj
         }
         if (table === 'sms_messages') {
           return {

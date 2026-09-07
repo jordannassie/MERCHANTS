@@ -6,20 +6,21 @@ import type { Lead } from '@/lib/types'
 import { Phone } from 'lucide-react'
 import { PipelineColumn } from './PipelineColumn'
 
-// Active pipeline stages (Desktop Kanban)
-const DESKTOP_STAGES = ['attempted', 'connected', 'agreement_requested', 'won']
+// Active pipeline stages (Desktop Kanban) — 'appointment' maps to AGREEMENT column for legacy leads
+const DESKTOP_STAGES = ['attempted', 'connected', 'agreement_requested', 'appointment', 'won']
 
 // Closed stages
 const CLOSED_STAGES = ['lost', 'do_not_contact']
 
 // Mobile stage-tab bar
-const MOBILE_STAGES_ACTIVE = ['attempted', 'connected', 'agreement_requested', 'won']
+const MOBILE_STAGES_ACTIVE = ['attempted', 'connected', 'agreement_requested', 'appointment', 'won']
 const MOBILE_STAGES_CLOSED = ['lost', 'do_not_contact']
 
 const STAGE_LABELS: Record<string, string> = {
   attempted:            'CONTACTED',
   connected:            'REPLIED',
   agreement_requested:  'AGREEMENT',
+  appointment:          'AGREEMENT',
   won:                  'WON',
   lost:                 'Lost',
   do_not_contact:       'DNC',
