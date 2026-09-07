@@ -14,7 +14,6 @@ import {
   checkStopConditions,
   buildFollowupMessage,
   enrollLeadInSequence,
-  DAILY_LIMIT,
 } from '@/lib/followup-engine'
 import { sendSms, isValidUSPhone, normalizeUSPhone } from '@/lib/quo'
 import { getProposalUrl } from '@/lib/proposals'
@@ -25,13 +24,6 @@ async function isAuthenticated(): Promise<boolean> {
   const token = cookieStore.get(SESSION_COOKIE)?.value
   if (!token) return false
   return verifySessionToken(token)
-}
-
-function todayMidnightUTC(): string {
-  const now = new Date()
-  return new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-  ).toISOString()
 }
 
 function addDays(date: Date, days: number): Date {
@@ -108,20 +100,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json(
       { ok: false, error: 'This number has opted out of SMS messages' },
       { status: 422 },
-    )
-  }
-
-  // Check daily limit
-  const { count: sentToday } = await db
-    .from('sms_messages')
-    .select('*', { count: 'exact', head: true })
-    .eq('direction', 'outbound')
-    .gte('sent_at', todayMidnightUTC())
-
-  if ((sentToday ?? 0) >= DAILY_LIMIT) {
-    return NextResponse.json(
-      { ok: false, error: `Daily SMS limit of ${DAILY_LIMIT} reached.` },
-      { status: 429 },
     )
   }
 

@@ -4,15 +4,6 @@ import { sendSms, syncContact } from '@/lib/quo'
 import { isValidUSPhone, normalizeUSPhone } from '@/lib/source-utils'
 import { enrollLeadInSequence } from '@/lib/followup-engine'
 
-const DAILY_LIMIT = 50
-
-function todayMidnightUTC(): string {
-  const now = new Date()
-  return new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
-  ).toISOString()
-}
-
 export async function POST(req: NextRequest) {
   // 1. QUO_API_KEY must be set
   if (!process.env.QUO_API_KEY) {
@@ -71,25 +62,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'This number has opted out of SMS messages' }, { status: 422 })
   }
 
-  // 6. Check daily limit
-  const { count: sentToday } = await db
-    .from('sms_messages')
-    .select('*', { count: 'exact', head: true })
-    .eq('direction', 'outbound')
-    .gte('sent_at', todayMidnightUTC())
-
-  const dailyUsed = sentToday ?? 0
-  if (dailyUsed >= DAILY_LIMIT) {
-    return NextResponse.json(
-      { ok: false, error: `Daily SMS limit of ${DAILY_LIMIT} reached. Try again tomorrow.` },
-      { status: 429 }
-    )
-  }
-
-  // 7. Check if SMS is paused via env var
-  if (process.env.SMS_PAUSED === 'true') {
-    return NextResponse.json({ ok: false, error: 'SMS sending is currently paused' }, { status: 503 })
-  }
+  // (SMS_PAUSED env var removed — manual sends are never artificially blocked)
 
   // ── Send ──────────────────────────────────────────────────────────────────
   let messageId: string

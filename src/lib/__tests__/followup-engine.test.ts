@@ -386,12 +386,13 @@ describe('processDueLeads', () => {
     expect(mockSendSms).not.toHaveBeenCalled()
   })
 
-  it('returns dailyLimitReached when limit is already hit', async () => {
+  it('returns 0 sent when no due leads exist (no artificial daily cap)', async () => {
     mockSendSms.mockResolvedValue({ messageId: 'msg-1' })
-    const db = makeProcessDb({ enabled: true, sentToday: 50, dueLeads: [] })
+    const db = makeProcessDb({ enabled: true, sentToday: 999, dueLeads: [] })
     const result = await processDueLeads(db as unknown as Parameters<typeof processDueLeads>[0])
-    expect(result.dailyLimitReached).toBe(true)
+    // No artificial daily cap — engine processes all due leads regardless of sentToday
     expect(result.sent).toBe(0)
+    expect(mockSendSms).not.toHaveBeenCalled()
   })
 })
 

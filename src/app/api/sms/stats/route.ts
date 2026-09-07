@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 
-const DAILY_LIMIT = 50
-
 function todayMidnightUTC(): string {
   const now = new Date()
   return new Date(
@@ -59,20 +57,15 @@ export async function GET() {
       .eq('sms_needs_reply', true),
   ])
 
-  const sentCount = sent ?? 0
-  const dailyLimit = DAILY_LIMIT
-
   return NextResponse.json({
     today: {
-      sent:      sentCount,
+      sent:      sent ?? 0,
       delivered: delivered ?? 0,
       failed:    failed ?? 0,
       replies:   replies ?? 0,
       opted_out: optedOut ?? 0,
     },
     needs_reply_count: needsReply ?? 0,
-    daily_limit:       dailyLimit,
-    remaining_today:   Math.max(0, dailyLimit - sentCount),
     is_paused:         process.env.SMS_PAUSED === 'true',
   })
 }

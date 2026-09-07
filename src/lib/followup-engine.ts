@@ -11,16 +11,7 @@ import { normalizeUSPhone, isValidUSPhone } from '@/lib/quo'
 import { getProposalUrl } from '@/lib/proposals'
 import type { Lead } from '@/lib/types'
 
-export const DAILY_LIMIT = 50
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function todayMidnightUTC(): string {
-  const now = new Date()
-  return new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-  ).toISOString()
-}
 
 function addDays(date: Date, days: number): Date {
   const d = new Date(date)
@@ -121,7 +112,6 @@ export interface ProcessResult {
   sent: number
   skipped: number
   errors: number
-  dailyLimitReached: boolean
 }
 
 export async function processDueLeads(
@@ -133,27 +123,12 @@ export async function processDueLeads(
     sent: 0,
     skipped: 0,
     errors: 0,
-    dailyLimitReached: false,
   }
 
   // Check if automation is enabled
   const enabled = await isFollowupEnabled(db)
   if (!enabled) {
     console.log('[followup-engine] Sales follow-up is disabled — skipping')
-    return result
-  }
-
-  // Count outbound SMS sent today
-  const { count: sentToday } = await db
-    .from('sms_messages')
-    .select('*', { count: 'exact', head: true })
-    .eq('direction', 'outbound')
-    .gte('sent_at', todayMidnightUTC())
-
-  const dailyUsed = sentToday ?? 0
-  if (dailyUsed >= DAILY_LIMIT) {
-    result.dailyLimitReached = true
-    console.log(`[followup-engine] Daily limit of ${DAILY_LIMIT} already reached`)
     return result
   }
 
@@ -196,16 +171,9 @@ export async function processDueLeads(
     query = query.eq('id', options.leadId)
   }
 
-  const maxToProcess = Math.min(
-    options?.limit ?? DAILY_LIMIT,
-    DAILY_LIMIT - dailyUsed,
-  )
-  if (maxToProcess <= 0) {
-    result.dailyLimitReached = true
-    return result
+  if (options?.limit) {
+    query = query.limit(options.limit)
   }
-
-  query = query.limit(maxToProcess)
 
   // Filter sms_needs_reply server-side if Supabase filter isn't available
   const { data: dueLeads, error: fetchError } = await query as { data: DueLead[] | null; error: unknown }
@@ -324,12 +292,6 @@ export async function processDueLeads(
 
       result.sent++
       console.log(`[followup-engine] Sent step ${nextStep} to lead ${lead.id}`)
-
-      // Check if we've hit the daily limit
-      if (dailyUsed + result.sent >= DAILY_LIMIT) {
-        result.dailyLimitReached = true
-        break
-      }
     } catch (err) {
       console.error(`[followup-engine] Error sending to lead ${lead.id}:`, err)
       result.errors++

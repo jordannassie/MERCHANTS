@@ -358,8 +358,6 @@ async function SmsStatsCard() {
   let stats: {
     today: { sent: number; delivered: number; failed: number; replies: number; opted_out: number }
     needs_reply_count: number
-    daily_limit: number
-    remaining_today: number
     is_paused: boolean
   } | null = null
 
@@ -373,7 +371,7 @@ async function SmsStatsCard() {
 
   if (!stats) return null
 
-  const { today, needs_reply_count, daily_limit, remaining_today, is_paused } = stats
+  const { today, needs_reply_count, is_paused } = stats
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -387,7 +385,7 @@ async function SmsStatsCard() {
       </div>
 
       <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 mb-4">
-        <SmsStatTile emoji="📤" label="Sent" value={today.sent} sub={`/ ${daily_limit}`} />
+        <SmsStatTile emoji="📤" label="Sent" value={today.sent} />
         <SmsStatTile emoji="✅" label="Delivered" value={today.delivered} />
         <SmsStatTile emoji="❌" label="Failed" value={today.failed} alert={today.failed > 0} />
         <SmsStatTile emoji="💬" label="Replies" value={today.replies} />
@@ -395,21 +393,6 @@ async function SmsStatsCard() {
         <SmsStatTile emoji="🔔" label="Needs Reply" value={needs_reply_count} alert={needs_reply_count > 0} />
       </div>
 
-      {/* Daily limit bar */}
-      <div>
-        <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
-          <span>Daily limit</span>
-          <span>{today.sent} / {daily_limit} · {remaining_today} remaining</span>
-        </div>
-        <div className="w-full bg-gray-100 rounded-full h-1.5">
-          <div
-            className={`h-1.5 rounded-full transition-all ${
-              today.sent >= daily_limit ? 'bg-red-400' : today.sent > daily_limit * 0.8 ? 'bg-yellow-400' : 'bg-blue-500'
-            }`}
-            style={{ width: `${Math.min(100, Math.round((today.sent / daily_limit) * 100))}%` }}
-          />
-        </div>
-      </div>
     </div>
   )
 }

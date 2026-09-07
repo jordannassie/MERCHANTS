@@ -1,7 +1,7 @@
 /**
  * Netlify Scheduled Function — Sales Follow-up Automation
  *
- * Runs once per day at 15:00 UTC (10:00 AM CDT / 9:00 AM CST).
+ * Runs hourly from 14:00–23:00 UTC (≈9 AM–6 PM CDT).
  * Sends automated follow-up SMS messages to leads in the sequence.
  *
  * What it does:
@@ -11,9 +11,9 @@
  *   4. Updates lead state (followup_step, last_followup_sent_at, next_follow_up_at)
  *
  * Safety:
- *   - Respects DAILY_LIMIT = 50 outbound SMS per day
  *   - Checks suppression list before every send
- *   - Stops automatically on STOP/DNC, won/lost, agreement_requested/accepted
+ *   - Stops per-lead on STOP/DNC, won/lost, agreement_requested/accepted
+ *   - No artificial daily volume cap — provider (QUO) is the authority
  *   - Default is OFF — must be enabled in Dashboard
  *
  * Required env vars:
@@ -22,14 +22,14 @@
  *   SUPABASE_URL        — Supabase project URL
  *   SUPABASE_SERVICE_KEY — Supabase service role key
  *
- * Schedule: "0 15 * * *" = 15:00 UTC daily (10 AM CDT)
+ * Schedule: "0 14-23 * * *" = hourly 9 AM–6 PM CDT
  */
 
 import { schedule } from '@netlify/functions'
 import { createServiceClient } from '../../src/lib/supabase/service'
 import { processDueLeads } from '../../src/lib/followup-engine'
 
-const handler = schedule('0 15 * * *', async () => {
+const handler = schedule('0 14-23 * * *', async () => {
   console.log(`[sales-followup-cron] Starting at ${new Date().toISOString()}`)
 
   if (!process.env.QUO_API_KEY) {
@@ -43,13 +43,8 @@ const handler = schedule('0 15 * * *', async () => {
 
     console.log(
       `[sales-followup-cron] Complete: ` +
-      `processed=${result.processed} sent=${result.sent} skipped=${result.skipped} ` +
-      `errors=${result.errors} dailyLimitReached=${result.dailyLimitReached}`,
+      `processed=${result.processed} sent=${result.sent} skipped=${result.skipped} errors=${result.errors}`,
     )
-
-    if (result.dailyLimitReached) {
-      console.log('[sales-followup-cron] Daily SMS limit reached.')
-    }
 
     return { statusCode: 200 }
   } catch (err) {
