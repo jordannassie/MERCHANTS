@@ -382,7 +382,7 @@ export default function LandingClient() {
 
               {/* Jordan's promise */}
               <blockquote className="mb-5 border-l-4 border-blue-500 pl-4 text-slate-600 italic text-base leading-relaxed">
-                "Let us help you save money and get the right setup in place."
+                "Let us help you Save Money and get the right setup in place, for every Payment that goes through your Business."
                 <footer className="mt-1 text-xs not-italic font-semibold text-slate-400">— Jordan Nassie, Founder</footer>
               </blockquote>
 
