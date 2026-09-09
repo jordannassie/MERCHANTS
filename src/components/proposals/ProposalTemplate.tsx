@@ -338,7 +338,7 @@ export function ProposalTemplate({ data }: Props) {
                   You save about {fmtDollars(monthlySavings)}/mo
                 </span>
                 <span className="text-green-700 font-bold text-base whitespace-nowrap ml-4">
-                  {fmtDollars(yearlySavings)}/year
+                  {fmtDollars(yearlySavings)}/year Savings
                 </span>
               </div>
             </button>
