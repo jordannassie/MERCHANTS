@@ -234,11 +234,11 @@ export function ProposalTemplate({ data }: Props) {
             <p className="text-sm font-semibold text-gray-700 mb-3 text-center">
               About how much do you expect to process in card sales each month?
             </p>
-            <p className="text-3xl font-black text-blue-600 text-center mb-4">
+            <p className="text-4xl font-bold text-blue-600 text-center mb-4">
               {fmtDollars(cardSales)}
-              <span className="text-lg font-semibold text-blue-400"> / month</span>
+              <span className="text-xl font-semibold text-blue-400"> / month</span>
               {cardSales >= sliderMax && (
-                <span className="text-lg font-semibold text-blue-400">+</span>
+                <span className="text-xl font-semibold text-blue-400">+</span>
               )}
             </p>
             <div className="relative">
@@ -273,74 +273,73 @@ export function ProposalTemplate({ data }: Props) {
             <button
               type="button"
               onClick={() => setSelectedOption('wholesale')}
-              className={`w-full text-left border-2 rounded-2xl p-5 transition-all ${
+              className={`w-full text-left rounded-2xl p-5 transition-all ${
                 selectedOption === 'wholesale'
-                  ? 'border-blue-600 bg-blue-50/30 shadow-sm'
-                  : 'border-gray-200 bg-white hover:border-gray-300'
+                  ? 'border-2 border-blue-600 bg-blue-50'
+                  : 'border border-gray-200 bg-white hover:border-gray-300'
               }`}
             >
-              <div className="flex items-start gap-3">
-                {/* Radio indicator */}
-                <div
-                  className={`flex-shrink-0 w-6 h-6 rounded-full border-2 mt-0.5 flex items-center justify-center transition-all ${
-                    selectedOption === 'wholesale'
-                      ? 'border-blue-600 bg-blue-600'
-                      : 'border-gray-300 bg-white'
-                  }`}
-                >
-                  {selectedOption === 'wholesale' && (
-                    <Check size={13} className="text-white" strokeWidth={3} />
-                  )}
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  {/* Header row */}
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className="font-black text-gray-900 text-sm tracking-tight">
-                      OPTION 1 — LOWER-COST PROCESSING
-                    </span>
-                    <span className="bg-blue-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full tracking-wide">
-                      SAVE MONEY
-                    </span>
+              {/* Top row: indicator + label + badge */}
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`flex-shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
+                      selectedOption === 'wholesale'
+                        ? 'border-blue-600 bg-blue-600'
+                        : 'border-gray-300 bg-white'
+                    }`}
+                  >
+                    {selectedOption === 'wholesale' && (
+                      <Check size={14} className="text-white" strokeWidth={3} />
+                    )}
                   </div>
-
-                  <p className="text-xs text-gray-500 mb-3 leading-relaxed">
-                    Wholesale Cost + {fmtRate(markupRate)} — Compare our lower-cost processing
-                    option against a typical flat-rate processor.
-                  </p>
-
-                  {/* Live comparison table */}
-                  <div className="bg-white border border-gray-100 rounded-xl px-4 py-3 space-y-1.5">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">
-                        Typical processor at {fmtRate(compareRate)}:
-                      </span>
-                      <span className="font-semibold text-gray-700">
-                        {fmtDollars(competitorCost)}/mo
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">
-                        Process.Direct at {fmtRate(effectiveRate)}:
-                      </span>
-                      <span className="font-semibold text-gray-700">
-                        {fmtDollars(processCost)}/mo
-                      </span>
-                    </div>
-                    <div className="border-t border-gray-100 pt-1.5 flex justify-between text-sm">
-                      <span className="text-gray-700 font-medium">Estimated monthly savings:</span>
-                      <span className="font-black text-green-600">
-                        {fmtDollars(monthlySavings)}/mo
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-xs text-gray-400">
-                      <span>Estimated annual savings:</span>
-                      <span className="font-semibold text-green-500">
-                        {fmtDollars(yearlySavings)}/yr
-                      </span>
-                    </div>
-                  </div>
+                  <span className="text-xs font-semibold tracking-widest text-gray-500 uppercase">
+                    Option 1
+                  </span>
                 </div>
+                <span className="bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap">
+                  MOST POPULAR
+                </span>
+              </div>
+
+              {/* Headline */}
+              <div className="mb-4">
+                <h3 className="text-3xl md:text-4xl font-extrabold text-gray-900 leading-tight">
+                  Save Money
+                </h3>
+                <p className="text-lg font-semibold text-gray-700">
+                  Wholesale Cost + {fmtRate(markupRate)}
+                </p>
+              </div>
+
+              {/* Comparison rows */}
+              <div className="bg-white border border-gray-100 rounded-xl px-4 py-3 space-y-0 mb-2">
+                <div className="flex justify-between text-sm py-2">
+                  <span className="text-gray-500">
+                    Typical processor at {fmtRate(compareRate)}:
+                  </span>
+                  <span className="font-semibold text-gray-700">
+                    {fmtDollars(competitorCost)}/mo
+                  </span>
+                </div>
+                <div className="border-t border-gray-100 flex justify-between text-sm py-2">
+                  <span className="text-gray-500">
+                    Process.Direct est. at {fmtRate(effectiveRate)}:
+                  </span>
+                  <span className="font-semibold text-gray-700">
+                    {fmtDollars(processCost)}/mo
+                  </span>
+                </div>
+              </div>
+
+              {/* Savings row */}
+              <div className="bg-green-50 rounded-lg px-4 py-3 flex items-center justify-between">
+                <span className="text-green-700 font-bold text-xl">
+                  You save about {fmtDollars(monthlySavings)}/mo
+                </span>
+                <span className="text-green-700 font-bold text-base whitespace-nowrap ml-4">
+                  {fmtDollars(yearlySavings)}/year
+                </span>
               </div>
             </button>
 
@@ -348,48 +347,50 @@ export function ProposalTemplate({ data }: Props) {
             <button
               type="button"
               onClick={() => setSelectedOption('customer_pay')}
-              className={`w-full text-left border-2 rounded-2xl p-5 transition-all ${
+              className={`w-full text-left rounded-2xl p-5 transition-all ${
                 selectedOption === 'customer_pay'
-                  ? 'border-blue-600 bg-blue-50/30 shadow-sm'
-                  : 'border-gray-200 bg-white hover:border-gray-300'
+                  ? 'border-2 border-blue-600 bg-blue-50'
+                  : 'border border-gray-200 bg-white hover:border-gray-300'
               }`}
             >
-              <div className="flex items-start gap-3">
-                {/* Radio indicator */}
-                <div
-                  className={`flex-shrink-0 w-6 h-6 rounded-full border-2 mt-0.5 flex items-center justify-center transition-all ${
-                    selectedOption === 'customer_pay'
-                      ? 'border-blue-600 bg-blue-600'
-                      : 'border-gray-300 bg-white'
-                  }`}
-                >
-                  {selectedOption === 'customer_pay' && (
-                    <Check size={13} className="text-white" strokeWidth={3} />
-                  )}
+              {/* Top row: indicator + label + badge */}
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`flex-shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
+                      selectedOption === 'customer_pay'
+                        ? 'border-blue-600 bg-blue-600'
+                        : 'border-gray-300 bg-white'
+                    }`}
+                  >
+                    {selectedOption === 'customer_pay' && (
+                      <Check size={14} className="text-white" strokeWidth={3} />
+                    )}
+                  </div>
+                  <span className="text-xs font-semibold tracking-widest text-gray-500 uppercase">
+                    Option 2
+                  </span>
                 </div>
+                <span className="bg-green-600 text-white text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap">
+                  $0 PROCESSING
+                </span>
+              </div>
 
-                <div className="flex-1 min-w-0">
-                  {/* Header row */}
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className="font-black text-gray-900 text-sm tracking-tight">
-                      OPTION 2 — $0 MERCHANT PROCESSING
-                    </span>
-                    <span className="bg-green-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full tracking-wide">
-                      $0 PROCESSING
-                    </span>
-                  </div>
+              {/* Headline */}
+              <div className="mb-4">
+                <h3 className="text-3xl md:text-4xl font-extrabold text-gray-900 leading-tight">
+                  Pay $0 in processing
+                </h3>
+                <p className="text-lg font-semibold text-gray-700">
+                  Pass {fmtRate(customerPayPercent)} to the customer
+                </p>
+              </div>
 
-                  <p className="text-xs text-gray-500 mb-3 leading-relaxed">
-                    Pass {fmtRate(customerPayPercent)} to the customer — Use our customer-pay
-                    program to eliminate your merchant processing expense entirely.
-                  </p>
-
-                  <div className="bg-white border border-gray-100 rounded-xl px-4 py-3">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Merchant processing cost:</span>
-                      <span className="font-black text-green-600">$0</span>
-                    </div>
-                  </div>
+              {/* Cost row */}
+              <div className="bg-white border border-gray-100 rounded-xl px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-500">Your merchant processing cost:</span>
+                  <span className="text-2xl font-extrabold text-green-600">$0</span>
                 </div>
               </div>
             </button>
