@@ -647,6 +647,11 @@ export default function LandingClient() {
               Hawthorne Payments, LLC is a registered ISO of PNC Bank, N.A., Pittsburgh, PA
             </p>
           </div>
+
+          {/* Fine print */}
+          <p className="text-[10px] text-slate-400 leading-relaxed pt-2 border-t border-slate-100">
+            * Pricing and savings estimates may vary based on processing volume, card mix, transaction type, business type, and underwriting. Free terminal/POS equipment available with approved merchant account and eligible setup. Customer-pay / zero-cost processing programs are subject to program requirements and applicable laws and card-brand rules. Brand logos shown are associated with Global Payments infrastructure and do not imply endorsement of Process.Direct.
+          </p>
         </div>
       </footer>
 
