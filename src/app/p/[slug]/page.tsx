@@ -71,7 +71,7 @@ export default async function ProposalPage({ params }: PageProps) {
     wholesaleCost:       parseFloat(settingsMap['proposal_wholesale_cost_default']      ?? '1.60'),
     markupRate:          parseFloat(settingsMap['proposal_markup_rate_default']         ?? '0.75'),
     customerPayPercent:  parseFloat(settingsMap['proposal_customer_pay_percent_default'] ?? '4.0'),
-    sliderDefault:       parseInt(settingsMap['proposal_slider_default']                ?? '50000', 10),
+    sliderDefault:       parseInt(settingsMap['proposal_slider_default']                ?? '10000', 10),
     sliderMin:           parseInt(settingsMap['proposal_slider_min']                    ?? '5000',  10),
     sliderMax:           parseInt(settingsMap['proposal_slider_max']                    ?? '250000',10),
     sliderStep:          parseInt(settingsMap['proposal_slider_step']                   ?? '5000',  10),

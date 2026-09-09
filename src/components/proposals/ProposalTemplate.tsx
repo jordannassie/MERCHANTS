@@ -308,7 +308,7 @@ export function ProposalTemplate({ data }: Props) {
                   Save Money
                 </h3>
                 <p className="text-lg font-semibold text-gray-700">
-                  Wholesale Cost + {fmtRate(markupRate)}
+                  Wholesale Cost + {fmtRate(markupRate)}*
                 </p>
               </div>
 
@@ -379,10 +379,10 @@ export function ProposalTemplate({ data }: Props) {
               {/* Headline */}
               <div className="mb-4">
                 <h3 className="text-3xl md:text-4xl font-extrabold text-gray-900 leading-tight">
-                  Pay $0 in processing
+                  Pay $0 in processing*
                 </h3>
                 <p className="text-lg font-semibold text-gray-700">
-                  Pass {fmtRate(customerPayPercent)} to the customer
+                  Pass {fmtRate(customerPayPercent)} to the customer*
                 </p>
               </div>
 
@@ -411,7 +411,7 @@ export function ProposalTemplate({ data }: Props) {
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
                   <p className="text-xs font-semibold tracking-widest text-gray-400 uppercase">
-                    Free Terminal
+                    Free Terminal*
                   </p>
                   <span className="inline-block bg-green-500 text-white text-xs font-black px-2 py-0.5 rounded-full tracking-wide">
                     FREE
@@ -552,6 +552,10 @@ export function ProposalTemplate({ data }: Props) {
               email={email} setEmail={setEmail}
               phone={phone} setPhone={setPhone}
               selectedPlanName={selectedPlanName}
+              cardSales={cardSales}
+              monthlySavings={monthlySavings}
+              yearlySavings={yearlySavings}
+              selectedOption={selectedOption}
               onAccept={handleAccept}
             />
           </div>
@@ -568,6 +572,11 @@ export function ProposalTemplate({ data }: Props) {
               </p>
             </div>
           )}
+        </div>
+
+        {/* ── Fine print — absolute bottom ─────────────────────────────────── */}
+        <div className="w-full max-w-2xl mt-10 px-1 text-[10px] text-gray-400 leading-relaxed space-y-1.5">
+          <p>* Pricing and savings estimates may vary based on processing volume, card mix, transaction type, business type, and underwriting. Free terminal/POS equipment available with approved merchant account and eligible setup. Customer-pay / zero-cost processing programs are subject to program requirements and applicable laws and card-brand rules. Brand logos shown are associated with Global Payments infrastructure and do not imply endorsement of Process.Direct.</p>
         </div>
       </main>
 
@@ -619,6 +628,10 @@ export function ProposalTemplate({ data }: Props) {
               email={email} setEmail={setEmail}
               phone={phone} setPhone={setPhone}
               selectedPlanName={selectedPlanName}
+              cardSales={cardSales}
+              monthlySavings={monthlySavings}
+              yearlySavings={yearlySavings}
+              selectedOption={selectedOption}
               onAccept={async () => {
                 await handleAccept()
                 setSheetOpen(false)
@@ -636,7 +649,7 @@ export function ProposalTemplate({ data }: Props) {
 function CtaSection({
   accepted, loading, errors,
   name, setName, email, setEmail, phone, setPhone,
-  selectedPlanName,
+  selectedPlanName, cardSales, monthlySavings, yearlySavings, selectedOption,
   onAccept,
 }: {
   accepted:         boolean
@@ -646,8 +659,14 @@ function CtaSection({
   email:            string;  setEmail: (v: string) => void
   phone:            string;  setPhone: (v: string) => void
   selectedPlanName: string
+  cardSales:        number
+  monthlySavings:   number
+  yearlySavings:    number
+  selectedOption:   'wholesale' | 'customer_pay'
   onAccept:         () => void
 }) {
+  function fmtD(n: number) { return '$' + Math.round(n).toLocaleString() }
+
   if (accepted) {
     return (
       <div className="bg-green-50 border border-green-200 rounded-2xl px-6 py-8 text-center">
@@ -656,6 +675,7 @@ function CtaSection({
           Thanks! We&apos;ll send your Service Agreement so we can get your account set up.
         </p>
         <p className="text-xs text-gray-400 mt-2">Selected plan: {selectedPlanName}</p>
+        <p className="text-xs text-gray-400 mt-1">Expected card sales: {fmtD(cardSales)}/month</p>
       </div>
     )
   }
@@ -673,11 +693,17 @@ function CtaSection({
         Get a FREE Service Agreement Today
       </h2>
 
-      {/* Selected plan pill */}
-      <div className="flex justify-center">
+      {/* Selected plan pill + expected card sales */}
+      <div className="flex flex-col items-center gap-2">
         <span className="inline-flex items-center gap-1.5 bg-blue-100 text-blue-800 text-xs font-semibold px-3 py-1 rounded-full">
           <Check size={12} strokeWidth={3} />
           Selected plan: {selectedPlanName}
+        </span>
+        <span className="text-xs text-gray-500">
+          Expected card sales: <strong className="text-gray-700">{fmtD(cardSales)}/month</strong>
+          {selectedOption === 'wholesale' && monthlySavings > 0 && (
+            <> · <span className="text-green-600 font-semibold">Est. savings {fmtD(monthlySavings)}/mo · {fmtD(yearlySavings)}/yr</span></>
+          )}
         </span>
       </div>
 

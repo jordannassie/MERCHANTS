@@ -69,6 +69,9 @@ export async function POST(
       ...(contactPhone ? { proposal_contact_phone: contactPhone } : {}),
       ...(selectedOption ? { proposal_selected_option: selectedOption } : {}),
       ...(calcSnapshot  ? { proposal_calc_snapshot:   calcSnapshot  } : {}),
+      ...(calcSnapshot?.monthly_sales != null
+        ? { estimated_monthly_card_sales: Number(calcSnapshot.monthly_sales) }
+        : {}),
     })
     .eq('id', lead.id)
 

@@ -204,73 +204,74 @@ export function ProposalEditor({ lead, onUpdate }: Props) {
       {(lead.proposal_selected_option ||
         lead.estimated_monthly_card_sales ||
         lead.proposal_calc_snapshot) && (
-        <div className="border-t border-gray-100 pt-4 space-y-2">
+        <div className="border-t border-gray-100 pt-4 space-y-3">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
             Customer Response
           </p>
 
-          {lead.proposal_selected_option && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">Selected plan:</span>
-              <span
-                className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${
-                  lead.proposal_selected_option === 'wholesale'
-                    ? 'bg-blue-50 text-blue-700 border-blue-200'
-                    : 'bg-green-50 text-green-700 border-green-200'
-                }`}
-              >
-                {lead.proposal_selected_option === 'wholesale'
-                  ? 'Wholesale / Lower-cost Processing'
-                  : '$0 Merchant Processing'}
-              </span>
+          {/* 3-stat summary row */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Expected Monthly Processing */}
+            <div className="bg-gray-50 border border-gray-100 rounded-lg px-3 py-3">
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">
+                Expected Monthly Processing
+              </p>
+              <p className="text-lg font-black text-gray-900">
+                {lead.estimated_monthly_card_sales != null
+                  ? fmtMoney(lead.estimated_monthly_card_sales) + '/mo'
+                  : '—'}
+              </p>
             </div>
-          )}
 
-          {lead.estimated_monthly_card_sales != null && (
-            <div className="flex items-center gap-2 text-xs text-gray-500">
-              <span>Est. monthly card sales:</span>
-              <span className="font-semibold text-gray-700">
-                {fmtMoney(lead.estimated_monthly_card_sales)}/mo
-              </span>
+            {/* Selected Plan */}
+            <div className="bg-gray-50 border border-gray-100 rounded-lg px-3 py-3">
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">
+                Selected Plan
+              </p>
+              {lead.proposal_selected_option ? (
+                <span
+                  className={`inline-block text-xs font-bold px-2 py-0.5 rounded-full border ${
+                    lead.proposal_selected_option === 'wholesale'
+                      ? 'bg-blue-50 text-blue-700 border-blue-200'
+                      : 'bg-green-50 text-green-700 border-green-200'
+                  }`}
+                >
+                  {lead.proposal_selected_option === 'wholesale'
+                    ? 'Wholesale + 0.75%'
+                    : '$0 Merchant Processing'}
+                </span>
+              ) : (
+                <p className="text-sm text-gray-400 italic">Not yet selected</p>
+              )}
             </div>
-          )}
 
-          {lead.proposal_calc_snapshot && (
-            <div className="bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 space-y-1">
-              {(lead.proposal_calc_snapshot as Record<string, unknown>).monthly_savings != null && (
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-500">Monthly savings:</span>
-                  <span className="font-semibold text-green-600">
-                    {fmtMoney(
-                      (lead.proposal_calc_snapshot as Record<string, unknown>).monthly_savings
-                    )}
-                    /mo
-                  </span>
-                </div>
-              )}
-              {(lead.proposal_calc_snapshot as Record<string, unknown>).yearly_savings != null && (
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-500">Annual savings:</span>
-                  <span className="font-semibold text-green-600">
-                    {fmtMoney(
-                      (lead.proposal_calc_snapshot as Record<string, unknown>).yearly_savings
-                    )}
-                    /yr
-                  </span>
-                </div>
-              )}
-              {(lead.proposal_calc_snapshot as Record<string, unknown>).effective_rate != null && (
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-500">Rate quoted:</span>
-                  <span className="font-semibold text-gray-700">
-                    {Number(
-                      (lead.proposal_calc_snapshot as Record<string, unknown>).effective_rate
-                    ).toFixed(2)}
-                    %
-                  </span>
-                </div>
+            {/* Estimated Savings */}
+            <div className="bg-gray-50 border border-gray-100 rounded-lg px-3 py-3">
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">
+                Estimated Savings
+              </p>
+              {lead.proposal_calc_snapshot &&
+              (lead.proposal_calc_snapshot as Record<string, unknown>).monthly_savings != null ? (
+                <p className="text-sm font-bold text-green-600">
+                  {fmtMoney((lead.proposal_calc_snapshot as Record<string, unknown>).monthly_savings)}/mo
+                  {' · '}
+                  {fmtMoney((lead.proposal_calc_snapshot as Record<string, unknown>).yearly_savings)}/yr
+                </p>
+              ) : (
+                <p className="text-sm text-gray-400 italic">—</p>
               )}
             </div>
+          </div>
+
+          {/* Rate detail */}
+          {lead.proposal_calc_snapshot &&
+            (lead.proposal_calc_snapshot as Record<string, unknown>).effective_rate != null && (
+            <p className="text-xs text-gray-400">
+              Rate quoted:{' '}
+              <span className="font-semibold text-gray-600">
+                {Number((lead.proposal_calc_snapshot as Record<string, unknown>).effective_rate).toFixed(2)}%
+              </span>
+            </p>
           )}
         </div>
       )}
