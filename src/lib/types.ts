@@ -178,6 +178,11 @@ export interface Lead {
   proposal_view_count?:        number | null
   proposal_last_viewed_at?:    string | null
   agreement_requested_at?:     string | null
+  // Proposal card sales (migration 024)
+  estimated_monthly_card_sales?: number | null
+  // Proposal calculator (migration 027)
+  proposal_selected_option?:   'wholesale' | 'customer_pay' | null
+  proposal_calc_snapshot?:     Record<string, unknown> | null
   created_at: string
   updated_at: string
 }

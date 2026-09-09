@@ -10,10 +10,17 @@ interface Props {
 }
 
 const STATUS_BADGE: Record<string, string> = {
-  not_sent: 'bg-gray-100 text-gray-500 border-gray-200',
-  sent:     'bg-blue-50 text-blue-700 border-blue-200',
-  viewed:   'bg-amber-50 text-amber-700 border-amber-200',
-  accepted: 'bg-green-50 text-green-700 border-green-200',
+  not_sent:             'bg-gray-100 text-gray-500 border-gray-200',
+  sent:                 'bg-blue-50 text-blue-700 border-blue-200',
+  viewed:               'bg-amber-50 text-amber-700 border-amber-200',
+  agreement_requested:  'bg-purple-50 text-purple-700 border-purple-200',
+  accepted:             'bg-green-50 text-green-700 border-green-200',
+}
+
+function fmtMoney(n: unknown): string {
+  const num = Number(n)
+  if (!n || isNaN(num)) return '—'
+  return '$' + Math.round(num).toLocaleString()
 }
 
 export function ProposalEditor({ lead, onUpdate }: Props) {
@@ -29,10 +36,11 @@ export function ProposalEditor({ lead, onUpdate }: Props) {
   const slug       = lead.proposal_slug
   const proposalUrl = slug ? getProposalUrl(slug) : null
   const status     = lead.proposal_status ?? 'not_sent'
-  const statusLabel = status === 'not_sent' ? 'Not Sent'
-    : status === 'sent' ? 'Sent'
-    : status === 'viewed' ? 'Viewed'
-    : status === 'accepted' ? '✓ Accepted'
+  const statusLabel = status === 'not_sent'            ? 'Not Sent'
+    : status === 'sent'                                 ? 'Sent'
+    : status === 'viewed'                               ? 'Viewed'
+    : status === 'agreement_requested'                  ? '⏳ Agreement Requested'
+    : status === 'accepted'                             ? '✓ Accepted'
     : status
 
   async function handleSave() {
@@ -191,6 +199,81 @@ export function ProposalEditor({ lead, onUpdate }: Props) {
           </span>
         )}
       </div>
+
+      {/* ── Customer response — read-only ───────────────────────────────── */}
+      {(lead.proposal_selected_option ||
+        lead.estimated_monthly_card_sales ||
+        lead.proposal_calc_snapshot) && (
+        <div className="border-t border-gray-100 pt-4 space-y-2">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            Customer Response
+          </p>
+
+          {lead.proposal_selected_option && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">Selected plan:</span>
+              <span
+                className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${
+                  lead.proposal_selected_option === 'wholesale'
+                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                    : 'bg-green-50 text-green-700 border-green-200'
+                }`}
+              >
+                {lead.proposal_selected_option === 'wholesale'
+                  ? 'Wholesale / Lower-cost Processing'
+                  : '$0 Merchant Processing'}
+              </span>
+            </div>
+          )}
+
+          {lead.estimated_monthly_card_sales != null && (
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <span>Est. monthly card sales:</span>
+              <span className="font-semibold text-gray-700">
+                {fmtMoney(lead.estimated_monthly_card_sales)}/mo
+              </span>
+            </div>
+          )}
+
+          {lead.proposal_calc_snapshot && (
+            <div className="bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 space-y-1">
+              {(lead.proposal_calc_snapshot as Record<string, unknown>).monthly_savings != null && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-500">Monthly savings:</span>
+                  <span className="font-semibold text-green-600">
+                    {fmtMoney(
+                      (lead.proposal_calc_snapshot as Record<string, unknown>).monthly_savings
+                    )}
+                    /mo
+                  </span>
+                </div>
+              )}
+              {(lead.proposal_calc_snapshot as Record<string, unknown>).yearly_savings != null && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-500">Annual savings:</span>
+                  <span className="font-semibold text-green-600">
+                    {fmtMoney(
+                      (lead.proposal_calc_snapshot as Record<string, unknown>).yearly_savings
+                    )}
+                    /yr
+                  </span>
+                </div>
+              )}
+              {(lead.proposal_calc_snapshot as Record<string, unknown>).effective_rate != null && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-500">Rate quoted:</span>
+                  <span className="font-semibold text-gray-700">
+                    {Number(
+                      (lead.proposal_calc_snapshot as Record<string, unknown>).effective_rate
+                    ).toFixed(2)}
+                    %
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

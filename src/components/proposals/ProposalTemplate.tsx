@@ -2,46 +2,102 @@
 
 import { useState, useRef } from 'react'
 import Image from 'next/image'
-import { X, User, Mail, Phone as PhoneIcon } from 'lucide-react'
+import { X, User, Mail, Phone as PhoneIcon, Check } from 'lucide-react'
 
 const LOGO_URL =
   'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Blacklogo.png'
 
+// ─── Interfaces ───────────────────────────────────────────────────────────────
+
+export interface CalcSettings {
+  compareRate: number         // default 3.0 — competitor flat rate %
+  wholesaleCost: number       // default 1.60 — our wholesale base %
+  markupRate: number          // default 0.75 — our markup above wholesale %
+  customerPayPercent: number  // default 4.0 — surcharge % passed to customer
+  sliderDefault: number       // default 50000
+  sliderMin: number           // default 5000
+  sliderMax: number           // default 250000
+  sliderStep: number          // default 5000
+}
+
 export interface ProposalData {
-  businessName:              string
-  slug:                      string
-  savingsMonthly?:           number | null
-  transactionRate?:          string | null
-  equipment?:                string | null
-  contract?:                 string | null
-  status:                    string
-  accepted:                  boolean
+  businessName:               string
+  slug:                       string
+  savingsMonthly?:            number | null
+  transactionRate?:           string | null
+  equipment?:                 string | null
+  contract?:                  string | null
+  status:                     string
+  accepted:                   boolean
   estimatedMonthlyCardSales?: number | null
+  calcSettings:               CalcSettings
 }
 
 interface Props {
   data: ProposalData
 }
 
-export function ProposalTemplate({ data }: Props) {
-  const { businessName, slug, savingsMonthly, transactionRate, equipment, contract } = data
-  const [accepted,    setAccepted]    = useState(data.accepted)
-  const [loading,     setLoading]     = useState(false)
-  const [errors,      setErrors]      = useState<Record<string, string>>({})
-  const [sheetOpen,   setSheetOpen]   = useState(false)
+// ─── Component ────────────────────────────────────────────────────────────────
 
-  // Monthly card sales slider
-  const SLIDER_MIN  = 5_000
-  const SLIDER_MAX  = 250_000
-  const SLIDER_STEP = 5_000
+export function ProposalTemplate({ data }: Props) {
+  const { businessName, slug, equipment, calcSettings } = data
+  const {
+    compareRate,
+    wholesaleCost,
+    markupRate,
+    customerPayPercent,
+    sliderMin,
+    sliderMax,
+    sliderStep,
+    sliderDefault,
+  } = calcSettings
+
+  // UI state
+  const [accepted,   setAccepted]   = useState(data.accepted)
+  const [loading,    setLoading]    = useState(false)
+  const [errors,     setErrors]     = useState<Record<string, string>>({})
+  const [sheetOpen,  setSheetOpen]  = useState(false)
+
+  // Slider — initialise from DB value if valid, else from settings default
   const [cardSales, setCardSales] = useState<number>(
-    data.estimatedMonthlyCardSales && data.estimatedMonthlyCardSales >= SLIDER_MIN
+    data.estimatedMonthlyCardSales && data.estimatedMonthlyCardSales >= sliderMin
       ? data.estimatedMonthlyCardSales
-      : 50_000
+      : sliderDefault
   )
-  const [savingVolume, setSavingVolume] = useState(false)
+  const [savingVolume,       setSavingVolume]       = useState(false)
   const saveVolumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Option selection (default: wholesale)
+  const [selectedOption, setSelectedOption] = useState<'wholesale' | 'customer_pay'>('wholesale')
+
+  // Form fields
+  const [name,  setName]  = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
+
+  // ── Derived calculator values ────────────────────────────────────────────────
+  const effectiveRate    = wholesaleCost + markupRate                       // e.g. 2.35%
+  const competitorCost   = cardSales * (compareRate   / 100)                // e.g. $1,500
+  const processCost      = cardSales * (effectiveRate  / 100)               // e.g. $1,175
+  const monthlySavings   = competitorCost - processCost                     // e.g. $325
+  const yearlySavings    = monthlySavings * 12                              // e.g. $3,900
+
+  // ── Helpers ──────────────────────────────────────────────────────────────────
+  function fmtDollars(n: number) {
+    return '$' + Math.round(n).toLocaleString()
+  }
+
+  function fmtRate(r: number) {
+    // Show as e.g. "2.35%"
+    return r % 1 === 0 ? `${r}%` : `${r.toFixed(2).replace(/\.?0+$/, '')}%`
+  }
+
+  const selectedPlanName =
+    selectedOption === 'wholesale'
+      ? `Wholesale Cost + ${fmtRate(markupRate)}`
+      : '$0 Merchant Processing'
+
+  // ── Slider debounced save ────────────────────────────────────────────────────
   function handleCardSalesChange(val: number) {
     setCardSales(val)
     if (saveVolumeTimeoutRef.current) clearTimeout(saveVolumeTimeoutRef.current)
@@ -59,17 +115,7 @@ export function ProposalTemplate({ data }: Props) {
     }, 800)
   }
 
-  function fmtDollars(n: number) {
-    return '$' + n.toLocaleString()
-  }
-
-  // Form fields
-  const [name,  setName]  = useState('')
-  const [email, setEmail] = useState('')
-  const [phone, setPhone] = useState('')
-
-  const savingsYear = savingsMonthly ? savingsMonthly * 12 : null
-
+  // ── Form validation ──────────────────────────────────────────────────────────
   function validate() {
     const errs: Record<string, string> = {}
     if (!name.trim())  errs.name  = 'Name is required.'
@@ -80,16 +126,38 @@ export function ProposalTemplate({ data }: Props) {
     return errs
   }
 
+  // ── Submit ───────────────────────────────────────────────────────────────────
   async function handleAccept() {
     const errs = validate()
     if (Object.keys(errs).length) { setErrors(errs); return }
     setErrors({})
     setLoading(true)
+
+    const calcSnapshot = {
+      monthly_sales:               cardSales,
+      compare_rate:                compareRate,
+      wholesale_cost:              wholesaleCost,
+      markup_rate:                 markupRate,
+      effective_rate:              effectiveRate,
+      customer_pay_percent:        customerPayPercent,
+      monthly_cost_competitor:     Math.round(competitorCost),
+      monthly_cost_process_direct: Math.round(processCost),
+      monthly_savings:             Math.round(monthlySavings),
+      yearly_savings:              Math.round(yearlySavings),
+      selected_option:             selectedOption,
+    }
+
     try {
       const res  = await fetch(`/api/proposals/${slug}/accept`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ name: name.trim(), email: email.trim(), phone: phone.trim() }),
+        body:    JSON.stringify({
+          name:           name.trim(),
+          email:          email.trim(),
+          phone:          phone.trim(),
+          selectedOption,
+          calcSnapshot,
+        }),
       })
       const json = await res.json()
       if (json.ok) {
@@ -104,9 +172,14 @@ export function ProposalTemplate({ data }: Props) {
     }
   }
 
+  // ── Slider fill % ────────────────────────────────────────────────────────────
+  const sliderFill = ((cardSales - sliderMin) / (sliderMax - sliderMin)) * 100
+
+  // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-white flex flex-col">
-      {/* Nav */}
+
+      {/* ── Nav ─────────────────────────────────────────────────────────────── */}
       <nav className="px-6 py-4 border-b border-gray-100">
         <a href="https://process.direct" aria-label="Process.Direct home">
           <Image
@@ -120,10 +193,11 @@ export function ProposalTemplate({ data }: Props) {
         </a>
       </nav>
 
-      {/* Main content */}
+      {/* ── Main ────────────────────────────────────────────────────────────── */}
       <main className="flex-1 flex flex-col items-center px-4 py-10 pb-32 md:pb-16">
         <div className="w-full max-w-2xl">
-          {/* Hero */}
+
+          {/* ── Section 1 + 2: Hero ─────────────────────────────────────────── */}
           <div className="text-center mb-8">
             {/* Document icon */}
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-50 mb-5">
@@ -149,109 +223,182 @@ export function ProposalTemplate({ data }: Props) {
               {businessName.toUpperCase()}
             </h1>
             <p className="text-gray-500 text-base max-w-lg mx-auto leading-relaxed">
-              We put together a simple payment-processing proposal designed to help{' '}
+              We built a simple payment proposal to help{' '}
               <strong className="text-gray-700">{businessName}</strong> save money, simplify
-              setup, and get the right payment solution in place.
+              setup, and choose the right payment solution.
             </p>
           </div>
 
-          {/* Monthly card sales slider */}
+          {/* ── Section 3: Monthly sales slider ─────────────────────────────── */}
           <div className="bg-blue-50/50 border border-blue-100 rounded-2xl px-6 py-6 mb-6">
             <p className="text-sm font-semibold text-gray-700 mb-3 text-center">
               About how much do you expect to process in card sales each month?
             </p>
             <p className="text-3xl font-black text-blue-600 text-center mb-4">
-              {fmtDollars(cardSales)}<span className="text-lg font-semibold text-blue-400"> / month</span>
-              {cardSales >= SLIDER_MAX && <span className="text-lg font-semibold text-blue-400">+</span>}
+              {fmtDollars(cardSales)}
+              <span className="text-lg font-semibold text-blue-400"> / month</span>
+              {cardSales >= sliderMax && (
+                <span className="text-lg font-semibold text-blue-400">+</span>
+              )}
             </p>
             <div className="relative">
               <input
                 type="range"
-                min={SLIDER_MIN}
-                max={SLIDER_MAX}
-                step={SLIDER_STEP}
+                min={sliderMin}
+                max={sliderMax}
+                step={sliderStep}
                 value={cardSales}
                 onChange={e => handleCardSalesChange(Number(e.target.value))}
                 className="w-full h-2 rounded-full appearance-none cursor-pointer accent-blue-600"
-                style={{ background: `linear-gradient(to right, #2563eb ${((cardSales - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * 100}%, #dbeafe ${((cardSales - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * 100}%)` }}
+                style={{
+                  background: `linear-gradient(to right, #2563eb ${sliderFill}%, #dbeafe ${sliderFill}%)`,
+                }}
               />
             </div>
             <div className="flex justify-between mt-2 text-xs text-gray-400 font-medium">
               <span>$5K</span>
-              <span>{savingVolume ? <span className="text-blue-400 italic">Saving…</span> : null}</span>
+              <span>
+                {savingVolume ? (
+                  <span className="text-blue-400 italic">Saving…</span>
+                ) : null}
+              </span>
               <span>$250K+</span>
             </div>
           </div>
 
-          {/* 2×2 Card grid */}
+          {/* ── Section 4: Two pricing option cards ─────────────────────────── */}
+          <div className="space-y-4 mb-6">
+
+            {/* Option 1 — Wholesale / Lower-cost processing */}
+            <button
+              type="button"
+              onClick={() => setSelectedOption('wholesale')}
+              className={`w-full text-left border-2 rounded-2xl p-5 transition-all ${
+                selectedOption === 'wholesale'
+                  ? 'border-blue-600 bg-blue-50/30 shadow-sm'
+                  : 'border-gray-200 bg-white hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                {/* Radio indicator */}
+                <div
+                  className={`flex-shrink-0 w-6 h-6 rounded-full border-2 mt-0.5 flex items-center justify-center transition-all ${
+                    selectedOption === 'wholesale'
+                      ? 'border-blue-600 bg-blue-600'
+                      : 'border-gray-300 bg-white'
+                  }`}
+                >
+                  {selectedOption === 'wholesale' && (
+                    <Check size={13} className="text-white" strokeWidth={3} />
+                  )}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  {/* Header row */}
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className="font-black text-gray-900 text-sm tracking-tight">
+                      OPTION 1 — LOWER-COST PROCESSING
+                    </span>
+                    <span className="bg-blue-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full tracking-wide">
+                      SAVE MONEY
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-gray-500 mb-3 leading-relaxed">
+                    Wholesale Cost + {fmtRate(markupRate)} — Compare our lower-cost processing
+                    option against a typical flat-rate processor.
+                  </p>
+
+                  {/* Live comparison table */}
+                  <div className="bg-white border border-gray-100 rounded-xl px-4 py-3 space-y-1.5">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">
+                        Typical processor at {fmtRate(compareRate)}:
+                      </span>
+                      <span className="font-semibold text-gray-700">
+                        {fmtDollars(competitorCost)}/mo
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">
+                        Process.Direct at {fmtRate(effectiveRate)}:
+                      </span>
+                      <span className="font-semibold text-gray-700">
+                        {fmtDollars(processCost)}/mo
+                      </span>
+                    </div>
+                    <div className="border-t border-gray-100 pt-1.5 flex justify-between text-sm">
+                      <span className="text-gray-700 font-medium">Estimated monthly savings:</span>
+                      <span className="font-black text-green-600">
+                        {fmtDollars(monthlySavings)}/mo
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-400">
+                      <span>Estimated annual savings:</span>
+                      <span className="font-semibold text-green-500">
+                        {fmtDollars(yearlySavings)}/yr
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </button>
+
+            {/* Option 2 — Customer-pay / $0 processing */}
+            <button
+              type="button"
+              onClick={() => setSelectedOption('customer_pay')}
+              className={`w-full text-left border-2 rounded-2xl p-5 transition-all ${
+                selectedOption === 'customer_pay'
+                  ? 'border-blue-600 bg-blue-50/30 shadow-sm'
+                  : 'border-gray-200 bg-white hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                {/* Radio indicator */}
+                <div
+                  className={`flex-shrink-0 w-6 h-6 rounded-full border-2 mt-0.5 flex items-center justify-center transition-all ${
+                    selectedOption === 'customer_pay'
+                      ? 'border-blue-600 bg-blue-600'
+                      : 'border-gray-300 bg-white'
+                  }`}
+                >
+                  {selectedOption === 'customer_pay' && (
+                    <Check size={13} className="text-white" strokeWidth={3} />
+                  )}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  {/* Header row */}
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className="font-black text-gray-900 text-sm tracking-tight">
+                      OPTION 2 — $0 MERCHANT PROCESSING
+                    </span>
+                    <span className="bg-green-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full tracking-wide">
+                      $0 PROCESSING
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-gray-500 mb-3 leading-relaxed">
+                    Pass {fmtRate(customerPayPercent)} to the customer — Use our customer-pay
+                    program to eliminate your merchant processing expense entirely.
+                  </p>
+
+                  <div className="bg-white border border-gray-100 rounded-xl px-4 py-3">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Merchant processing cost:</span>
+                      <span className="font-black text-green-600">$0</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </button>
+          </div>
+
+          {/* ── Section 5: Feature cards ─────────────────────────────────────── */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-            {/* Estimated savings */}
-            <div className="border border-gray-200 rounded-xl p-5 flex items-start gap-4">
-              <div className="flex-shrink-0 w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-                <svg
-                  className="w-5 h-5 text-blue-600"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z"
-                  />
-                </svg>
-              </div>
-              <div>
-                <p className="text-xs font-semibold tracking-widest text-gray-400 uppercase mb-1">
-                  Estimated Savings
-                </p>
-                {savingsMonthly ? (
-                  <>
-                    <p className="text-2xl font-black text-blue-600">
-                      ${savingsMonthly.toLocaleString()}/month
-                    </p>
-                    <p className="text-sm text-gray-500 mt-0.5">
-                      ${savingsYear!.toLocaleString()} per year
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-lg font-bold text-gray-800">Calculated after rate review</p>
-                )}
-              </div>
-            </div>
 
-            {/* Transaction fee */}
-            <div className="border border-gray-200 rounded-xl p-5 flex items-start gap-4">
-              <div className="flex-shrink-0 w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-                <svg
-                  className="w-5 h-5 text-blue-600"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z"
-                  />
-                </svg>
-              </div>
-              <div>
-                <p className="text-xs font-semibold tracking-widest text-gray-400 uppercase mb-1">
-                  Transaction Fee
-                </p>
-                <p className="text-2xl font-black text-gray-900">
-                  {transactionRate || 'Custom pricing'}
-                </p>
-                {transactionRate && (
-                  <p className="text-sm text-gray-500 mt-0.5">per transaction</p>
-                )}
-              </div>
-            </div>
-
-            {/* Equipment */}
+            {/* Free Terminal */}
             <div className="border border-gray-200 rounded-xl p-5 flex items-start gap-4">
               <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-gray-50 flex items-center justify-center">
                 <img
@@ -263,7 +410,7 @@ export function ProposalTemplate({ data }: Props) {
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
                   <p className="text-xs font-semibold tracking-widest text-gray-400 uppercase">
-                    Equipment
+                    Free Terminal
                   </p>
                   <span className="inline-block bg-green-500 text-white text-xs font-black px-2 py-0.5 rounded-full tracking-wide">
                     FREE
@@ -272,11 +419,13 @@ export function ProposalTemplate({ data }: Props) {
                 <p className="text-lg font-bold text-gray-900">
                   {equipment || 'POS System'}
                 </p>
-                <p className="text-sm text-green-600 font-semibold mt-0.5">Included at no cost</p>
+                <p className="text-sm text-green-600 font-semibold mt-0.5">
+                  Included at no cost
+                </p>
               </div>
             </div>
 
-            {/* Local Rep */}
+            {/* Local Support */}
             <div className="border border-gray-200 rounded-xl p-5 flex items-start gap-4">
               <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-gray-50 flex items-center justify-center">
                 <img
@@ -287,17 +436,17 @@ export function ProposalTemplate({ data }: Props) {
               </div>
               <div>
                 <p className="text-xs font-semibold tracking-widest text-gray-400 uppercase mb-1">
-                  Local Rep
+                  Local Support
                 </p>
-                <p className="text-lg font-bold text-gray-900">
-                  24/7 Support
+                <p className="text-lg font-bold text-gray-900">24/7 Support</p>
+                <p className="text-sm text-blue-600 font-semibold mt-0.5">
+                  Local rep available to help anytime
                 </p>
-                <p className="text-sm text-blue-600 font-semibold mt-0.5">Always here to help</p>
               </div>
             </div>
           </div>
 
-          {/* Video */}
+          {/* ── Video ───────────────────────────────────────────────────────── */}
           <div className="rounded-2xl overflow-hidden shadow-md mb-6">
             <video
               src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/video/pointofsaleherovideo.mp4"
@@ -309,7 +458,7 @@ export function ProposalTemplate({ data }: Props) {
             />
           </div>
 
-          {/* QuickBooks strip */}
+          {/* ── QuickBooks strip ─────────────────────────────────────────────── */}
           <div className="border border-gray-100 rounded-2xl px-5 py-4 mb-6">
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Image
@@ -326,7 +475,7 @@ export function ProposalTemplate({ data }: Props) {
             </div>
           </div>
 
-          {/* Accepted cards */}
+          {/* ── Accepted card brands ─────────────────────────────────────────── */}
           <div className="flex justify-center mb-6">
             <Image
               src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Cards.png"
@@ -337,13 +486,14 @@ export function ProposalTemplate({ data }: Props) {
             />
           </div>
 
-          {/* Brand logos */}
+          {/* ── Section 6: Brand logos ───────────────────────────────────────── */}
           <div className="mb-6">
             <p className="text-center text-xs font-semibold tracking-widest text-gray-400 uppercase mb-3">
               Payment Infrastructure Trusted at Scale
             </p>
             <p className="text-center text-sm text-gray-400 max-w-lg mx-auto mb-5 leading-relaxed">
-              Process.Direct provides payment solutions through Global Payments infrastructure — technology trusted by businesses from local merchants to major national brands.
+              Process.Direct provides payment solutions through Global Payments infrastructure —
+              technology trusted by businesses from local merchants to major national brands.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-6 md:gap-10">
               {[
@@ -367,7 +517,7 @@ export function ProposalTemplate({ data }: Props) {
             </div>
           </div>
 
-          {/* Trust bar */}
+          {/* ── Trust bar ────────────────────────────────────────────────────── */}
           <div className="border border-gray-100 rounded-xl px-4 py-3 mb-6">
             <div className="flex items-center justify-around flex-wrap gap-3">
               {['No pressure', 'No jargon', 'Free initial review', 'USA-based'].map(item => (
@@ -391,7 +541,7 @@ export function ProposalTemplate({ data }: Props) {
             </div>
           </div>
 
-          {/* CTA form — desktop only inline */}
+          {/* ── Section 7: CTA form — desktop only inline ───────────────────── */}
           <div className="hidden md:block">
             <CtaSection
               accepted={accepted}
@@ -400,6 +550,7 @@ export function ProposalTemplate({ data }: Props) {
               name={name}   setName={setName}
               email={email} setEmail={setEmail}
               phone={phone} setPhone={setPhone}
+              selectedPlanName={selectedPlanName}
               onAccept={handleAccept}
             />
           </div>
@@ -409,14 +560,17 @@ export function ProposalTemplate({ data }: Props) {
             <div className="md:hidden bg-green-50 border border-green-200 rounded-2xl px-6 py-8 text-center">
               <span className="text-2xl font-black text-green-600 block mb-2">✓ Request Sent</span>
               <p className="text-gray-500 text-sm max-w-sm mx-auto">
-                Thanks! We'll reach out and send your Service Agreement shortly.
+                Thanks! We&apos;ll reach out and send your Service Agreement shortly.
+              </p>
+              <p className="text-xs text-gray-400 mt-2">
+                Selected plan: {selectedPlanName}
               </p>
             </div>
           )}
         </div>
       </main>
 
-      {/* ── Mobile sticky CTA button ─────────────────────────────────────── */}
+      {/* ── Mobile sticky CTA button ─────────────────────────────────────────── */}
       {!accepted && (
         <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 px-4 py-4 bg-white border-t border-gray-100 shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
           <button
@@ -431,7 +585,7 @@ export function ProposalTemplate({ data }: Props) {
         </div>
       )}
 
-      {/* ── Mobile bottom sheet ──────────────────────────────────────────── */}
+      {/* ── Mobile bottom sheet ──────────────────────────────────────────────── */}
       {sheetOpen && (
         <>
           {/* Backdrop */}
@@ -445,12 +599,16 @@ export function ProposalTemplate({ data }: Props) {
             <div className="flex items-center justify-between mb-4">
               <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto absolute left-1/2 -translate-x-1/2 top-3" />
               <p className="text-sm font-semibold text-gray-800">Get Your Service Agreement</p>
-              <button onClick={() => setSheetOpen(false)} className="text-gray-400 hover:text-gray-600 p-1">
+              <button
+                onClick={() => setSheetOpen(false)}
+                className="text-gray-400 hover:text-gray-600 p-1"
+              >
                 <X size={18} />
               </button>
             </div>
             <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-              Fill in your details and we'll send your Service Agreement and give you a call to get everything set up.
+              Fill in your details and we&apos;ll send your Service Agreement and give you a call to
+              get everything set up.
             </p>
             <CtaSection
               accepted={accepted}
@@ -459,6 +617,7 @@ export function ProposalTemplate({ data }: Props) {
               name={name}   setName={setName}
               email={email} setEmail={setEmail}
               phone={phone} setPhone={setPhone}
+              selectedPlanName={selectedPlanName}
               onAccept={async () => {
                 await handleAccept()
                 setSheetOpen(false)
@@ -471,26 +630,31 @@ export function ProposalTemplate({ data }: Props) {
   )
 }
 
+// ─── CTA section (shared desktop + bottom-sheet) ──────────────────────────────
+
 function CtaSection({
   accepted, loading, errors,
   name, setName, email, setEmail, phone, setPhone,
+  selectedPlanName,
   onAccept,
 }: {
-  accepted:  boolean
-  loading:   boolean
-  errors:    Record<string, string>
-  name:      string;  setName:  (v: string) => void
-  email:     string;  setEmail: (v: string) => void
-  phone:     string;  setPhone: (v: string) => void
-  onAccept:  () => void
+  accepted:         boolean
+  loading:          boolean
+  errors:           Record<string, string>
+  name:             string;  setName:  (v: string) => void
+  email:            string;  setEmail: (v: string) => void
+  phone:            string;  setPhone: (v: string) => void
+  selectedPlanName: string
+  onAccept:         () => void
 }) {
   if (accepted) {
     return (
       <div className="bg-green-50 border border-green-200 rounded-2xl px-6 py-8 text-center">
         <span className="text-3xl font-black text-green-600 block mb-2">✓ Proposal Accepted</span>
         <p className="text-gray-500 text-sm max-w-sm mx-auto">
-                Thanks! We'll send your Service Agreement so we can get your account set up.
+          Thanks! We&apos;ll send your Service Agreement so we can get your account set up.
         </p>
+        <p className="text-xs text-gray-400 mt-2">Selected plan: {selectedPlanName}</p>
       </div>
     )
   }
@@ -499,11 +663,23 @@ function CtaSection({
     `flex items-center gap-2 bg-white rounded-xl border px-3 py-3 transition focus-within:ring-2 focus-within:ring-blue-500 ${
       errors[field] ? 'border-red-400' : 'border-gray-200'
     }`
-  const inputCls = 'flex-1 text-sm text-gray-900 placeholder-gray-400 bg-transparent focus:outline-none'
+  const inputCls =
+    'flex-1 text-sm text-gray-900 placeholder-gray-400 bg-transparent focus:outline-none'
 
   return (
     <div className="bg-blue-50/60 border border-blue-100 rounded-2xl px-5 py-6 space-y-4">
-      <h2 className="text-2xl font-black text-gray-900 text-center tracking-tight">Get a FREE Service Agreement Today</h2>
+      <h2 className="text-2xl font-black text-gray-900 text-center tracking-tight">
+        Get a FREE Service Agreement Today
+      </h2>
+
+      {/* Selected plan pill */}
+      <div className="flex justify-center">
+        <span className="inline-flex items-center gap-1.5 bg-blue-100 text-blue-800 text-xs font-semibold px-3 py-1 rounded-full">
+          <Check size={12} strokeWidth={3} />
+          Selected plan: {selectedPlanName}
+        </span>
+      </div>
+
       {/* Name + Email row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
@@ -550,7 +726,9 @@ function CtaSection({
       </div>
 
       {/* Form-level error */}
-      {errors.form && <p className="text-center text-sm text-red-600">{errors.form}</p>}
+      {errors.form && (
+        <p className="text-center text-sm text-red-600">{errors.form}</p>
+      )}
 
       {/* Submit button */}
       <button

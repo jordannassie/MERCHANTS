@@ -10,15 +10,26 @@ export async function POST(
   const { slug } = await params
   const db = createServiceClient()
 
-  // Parse body (name, email, phone)
-  let contactName = ''
+  // Parse body
+  let contactName  = ''
   let contactEmail = ''
   let contactPhone = ''
+  let selectedOption: string | null = null
+  let calcSnapshot: Record<string, unknown> | null = null
+
   try {
     const body = await req.json()
-    contactName  = (body.name  ?? '').toString().trim()
-    contactEmail = (body.email ?? '').toString().trim()
-    contactPhone = (body.phone ?? '').toString().trim()
+    contactName   = (body.name  ?? '').toString().trim()
+    contactEmail  = (body.email ?? '').toString().trim()
+    contactPhone  = (body.phone ?? '').toString().trim()
+    // New fields — optional for backward compat
+    selectedOption =
+      body.selectedOption === 'wholesale' || body.selectedOption === 'customer_pay'
+        ? body.selectedOption
+        : null
+    calcSnapshot = body.calcSnapshot && typeof body.calcSnapshot === 'object'
+      ? body.calcSnapshot as Record<string, unknown>
+      : null
   } catch {
     // body optional — tolerate missing JSON
   }
@@ -56,6 +67,8 @@ export async function POST(
       ...(contactName  ? { proposal_contact_name:  contactName  } : {}),
       ...(contactEmail ? { proposal_contact_email: contactEmail } : {}),
       ...(contactPhone ? { proposal_contact_phone: contactPhone } : {}),
+      ...(selectedOption ? { proposal_selected_option: selectedOption } : {}),
+      ...(calcSnapshot  ? { proposal_calc_snapshot:   calcSnapshot  } : {}),
     })
     .eq('id', lead.id)
 
@@ -67,7 +80,7 @@ export async function POST(
   // Send confirmation SMS if phone available and QUO configured
   if (process.env.QUO_API_KEY && contactPhone && isValidUSPhone(contactPhone)) {
     const businessName = lead.display_name || lead.outlet_name || 'there'
-    const firstName = contactName?.split(' ')[0] || businessName
+    const firstName    = contactName?.split(' ')[0] || businessName
     const confirmationMessage =
       `Thanks, ${firstName}. I received your request for the Service Agreement. I'll get everything prepared and reach out shortly to help get you set up.\n\nJordan\nProcess.Direct`
 
