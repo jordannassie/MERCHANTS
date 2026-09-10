@@ -145,13 +145,16 @@ async function handleMessageReceived(
         { onConflict: 'normalized_phone' }
       )
 
-      // Update lead — also stop automation
+      // Update lead — mark DNC, record opt-out details, stop automation
       await db.from('leads').update({
-        status:                 'do_not_contact',
-        sms_status:             'opted_out',
-        sms_needs_reply:        false,
-        next_follow_up_at:      null,
-        followup_completed_at:  now,
+        status:               'do_not_contact',
+        opted_out_at:         now,
+        opt_out_source:       'stop_reply',
+        opt_out_reason:       'STOP reply via SMS',
+        sms_status:           'opted_out',
+        sms_needs_reply:      false,
+        next_follow_up_at:    null,
+        followup_completed_at: now,
       }).eq('id', leadId)
     } else {
       // Non-STOP reply — needs reply; stop automation; advance status if early-stage

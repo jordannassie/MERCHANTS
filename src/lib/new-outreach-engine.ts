@@ -144,6 +144,7 @@ export async function getEligibleNewLeads(
     .eq('status', 'new')
     .or('permit_phone.not.is.null,primary_phone.not.is.null')
     .is('followup_started_at', null)
+    .is('opted_out_at', null)  // Defense-in-depth: skip any lead with an opt-out timestamp
     .order('first_sales_date', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false })
 
@@ -171,6 +172,7 @@ export async function countEligibleNewLeads(db: SupabaseClient): Promise<number>
     .eq('status', 'new')
     .or('permit_phone.not.is.null,primary_phone.not.is.null')
     .is('followup_started_at', null)
+    .is('opted_out_at', null)
 
   if (error) {
     console.error('[new-outreach-engine] countEligibleNewLeads error:', error)
@@ -189,7 +191,12 @@ export async function sendInitialOutreach(
   const phone = lead.permit_phone ?? lead.primary_phone
   const sentAt = new Date().toISOString()
 
-  // 1. Validate phone
+  // 1. DNC guard — belt-and-suspenders in case this is called outside the batch
+  if (lead.status === 'do_not_contact') {
+    return { ok: false, error: 'do_not_contact' }
+  }
+
+  // 2. Validate phone
   if (!phone || !isValidUSPhone(phone)) {
     return { ok: false, error: 'no_valid_phone' }
   }
@@ -217,68 +224,86 @@ export async function sendInitialOutreach(
   // 5. Build message
   const message = buildOutreachMessage(businessName, proposalUrl, lead.outlet_city ?? null)
 
-  // 6. Send SMS
+  // 6. Attempt to send SMS via QUO — isolated try-catch so ONLY send failures
+  //    prevent the status update. Any later DB error cannot mask a real send.
+  let messageId: string
   try {
-    const { messageId } = await sendSms(phone, message)
-
-    // 7a. Insert sms_messages record
-    await db.from('sms_messages').insert({
-      lead_id: lead.id,
-      quo_message_id: messageId,
-      direction: 'outbound',
-      to_number: `+1${normalizedPhone}`,
-      from_number: process.env.QUO_FROM_NUMBER ?? '',
-      content: message,
-      status: 'submitted',
-      sent_at: sentAt,
-    })
-
-    // 7b. Update lead status
-    const proposalUpdates: Record<string, unknown> = {
-      status: 'attempted',
-      sms_status: 'submitted',
-      sms_last_sent_at: sentAt,
-    }
-    // Only set proposal_status/sent_at if not already viewed/accepted
-    if (
-      lead.proposal_status == null ||
-      lead.proposal_status === 'not_sent'
-    ) {
-      proposalUpdates.proposal_status = 'sent'
-      proposalUpdates.proposal_sent_at = sentAt
-    }
-
-    await db.from('leads').update(proposalUpdates).eq('id', lead.id)
-
-    // 7c. Enroll in follow-up sequence (fire-and-forget)
-    enrollLeadInSequence(db, lead.id, sentAt).catch(err =>
-      console.error('[new-outreach-engine] enrollLeadInSequence failed for lead', lead.id, err),
-    )
-
-    // 7d. Fire-and-forget contact sync
-    const contactName = lead.display_name || lead.outlet_name || lead.taxpayer_name || 'Business'
-    syncContact({ leadId: lead.id, name: contactName, phone })
-      .catch(err => console.error('[new-outreach-engine] syncContact failed for lead', lead.id, err))
-
-    return { ok: true, messageId }
+    const result = await sendSms(phone, message)
+    messageId = result.messageId
   } catch (err) {
     const errMsg = String(err)
     console.error('[new-outreach-engine] sendSms failed for lead', lead.id, err)
 
-    // 8. On failure: insert failed sms_message, do NOT change lead status
-    await db.from('sms_messages').insert({
-      lead_id: lead.id,
-      direction: 'outbound',
-      to_number: `+1${normalizedPhone}`,
-      from_number: process.env.QUO_FROM_NUMBER ?? '',
-      content: message,
-      status: 'failed',
-      error_message: errMsg,
-      sent_at: sentAt,
-    })
+    // Record failure — do NOT change lead status (message was never delivered)
+    db.from('sms_messages')
+      .insert({
+        lead_id:      lead.id,
+        direction:    'outbound',
+        to_number:    `+1${normalizedPhone}`,
+        from_number:  process.env.QUO_FROM_NUMBER ?? '',
+        content:      message,
+        status:       'failed',
+        error_message: errMsg,
+        sent_at:      sentAt,
+      })
+      .then(({ error }) => {
+        if (error) console.error('[new-outreach-engine] Failed to record sendSms failure for lead', lead.id, error)
+      })
 
     return { ok: false, error: errMsg }
   }
+
+  // ── QUO confirmed the send — update lead status IMMEDIATELY ─────────────
+  // This block runs only after sendSms returns a messageId (QUO accepted the message).
+  // It is intentionally outside the sendSms try-catch so that no DB error below
+  // can prevent the status update.
+
+  // 7a. Update lead status — critical path
+  const proposalUpdates: Record<string, unknown> = {
+    status:          'attempted',
+    sms_status:      'submitted',
+    sms_last_sent_at: sentAt,
+  }
+  // Only set proposal_status/sent_at if not already viewed/accepted
+  if (
+    lead.proposal_status == null ||
+    lead.proposal_status === 'not_sent'
+  ) {
+    proposalUpdates.proposal_status = 'sent'
+    proposalUpdates.proposal_sent_at = sentAt
+  }
+
+  const { error: updateError } = await db.from('leads').update(proposalUpdates).eq('id', lead.id)
+  if (updateError) {
+    console.error('[new-outreach-engine] Failed to update lead status for lead', lead.id, updateError)
+  }
+
+  // 7b. Record in sms_messages — best-effort, failure does NOT affect lead status
+  const { error: msgError } = await db.from('sms_messages').insert({
+    lead_id:        lead.id,
+    quo_message_id: messageId,
+    direction:      'outbound',
+    to_number:      `+1${normalizedPhone}`,
+    from_number:    process.env.QUO_FROM_NUMBER ?? '',
+    content:        message,
+    status:         'submitted',
+    sent_at:        sentAt,
+  })
+  if (msgError) {
+    console.error('[new-outreach-engine] Failed to record sms_message for lead', lead.id, msgError)
+  }
+
+  // 7c. Enroll in follow-up sequence (fire-and-forget)
+  enrollLeadInSequence(db, lead.id, sentAt).catch(err =>
+    console.error('[new-outreach-engine] enrollLeadInSequence failed for lead', lead.id, err),
+  )
+
+  // 7d. Fire-and-forget contact sync
+  const contactName = lead.display_name || lead.outlet_name || lead.taxpayer_name || 'Business'
+  syncContact({ leadId: lead.id, name: contactName, phone })
+    .catch(err => console.error('[new-outreach-engine] syncContact failed for lead', lead.id, err))
+
+  return { ok: true, messageId }
 }
 
 // ── 6. processBatch ───────────────────────────────────────────────────────────
@@ -308,7 +333,11 @@ export async function processBatch(
     const outcome = await sendInitialOutreach(db, lead)
     if (outcome.ok) {
       result.sent++
-    } else if (outcome.error === 'suppressed' || outcome.error === 'no_valid_phone') {
+    } else if (
+      outcome.error === 'suppressed' ||
+      outcome.error === 'no_valid_phone' ||
+      outcome.error === 'do_not_contact'
+    ) {
       result.skipped++
     } else {
       result.failed++

@@ -38,6 +38,7 @@ export function buildOutreachMessage(
       `We created a payment processing proposal for you, if it looks good, we can get you set up this week to start accepting payments, and get you a FREE POS system too.`,
       `I'm here if you have any questions.`,
       SIGNATURE,
+      OPT_OUT,
       proposalUrl,
     ].join('\n\n')
   }

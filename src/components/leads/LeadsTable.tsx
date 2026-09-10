@@ -38,6 +38,7 @@ export function LeadsTable({ leads }: Props) {
   const [slugCreating, setSlugCreating] = useState<Record<string, boolean>>({})
   const [toasts, setToasts]             = useState<Array<{ id: string; text: string; kind: 'success' | 'error' }>>([])
   const [smsModal, setSmsModal]         = useState<{ lead: Lead; phone: string } | null>(null)
+  const [dncPending, setDncPending]     = useState<Record<string, boolean>>({})
 
   // Auto-generate slugs for leads that don't have one yet
   useEffect(() => {
@@ -174,6 +175,30 @@ export function LeadsTable({ leads }: Props) {
     )
   }
 
+  async function handleMarkDnc(lead: Lead) {
+    if (!window.confirm(`Mark "${lead.display_name || lead.outlet_name || 'this lead'}" as Do Not Contact? This cannot be easily undone.`)) return
+    setDncPending(s => ({ ...s, [lead.id]: true }))
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/opt-out`, { method: 'POST' })
+      if (res.ok) {
+        addToast(lead.id, 'Marked as DNC', 'success')
+        setLeadsList(prev =>
+          prev.map(p =>
+            p.id === lead.id
+              ? { ...p, status: 'do_not_contact', sms_status: 'opted_out', next_follow_up_at: null }
+              : p
+          )
+        )
+      } else {
+        addToast(lead.id, 'Failed to mark DNC', 'error')
+      }
+    } catch {
+      addToast(lead.id, 'Failed to mark DNC', 'error')
+    } finally {
+      setDncPending(s => ({ ...s, [lead.id]: false }))
+    }
+  }
+
   if (leadsList.length === 0) {
     return (
       <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
@@ -218,6 +243,11 @@ export function LeadsTable({ leads }: Props) {
                     >
                       {name}
                     </Link>
+                    {lead.status === 'do_not_contact' && (
+                      <span className="inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full border bg-red-50 border-red-300 text-red-700 tracking-wide">
+                        🚫 DNC
+                      </span>
+                    )}
                     {needsReply && (
                       <span className="inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full border bg-orange-50 border-orange-200 text-orange-700 tracking-wide">
                         💬 Needs Reply
@@ -356,6 +386,18 @@ export function LeadsTable({ leads }: Props) {
                   >
                     {smsCopied[lead.id] ? '✓ Copied!' : 'Copy Message'}
                   </button>
+
+                  {/* Mark DNC — only show when not already DNC */}
+                  {lead.status !== 'do_not_contact' && (
+                    <button
+                      onClick={() => handleMarkDnc(lead)}
+                      disabled={dncPending[lead.id]}
+                      title="Mark as Do Not Contact"
+                      className="text-xs px-2.5 py-1.5 border border-red-200 rounded-lg text-red-600 hover:bg-red-50 hover:border-red-300 transition-colors disabled:opacity-50"
+                    >
+                      {dncPending[lead.id] ? '…' : '🚫 DNC'}
+                    </button>
+                  )}
 
                   {/* Pipeline dropdown — same row, pushed right */}
                   <div className="ml-auto">
