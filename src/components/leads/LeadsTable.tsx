@@ -416,6 +416,12 @@ export function LeadsTable({ leads }: Props) {
                 ) : slugCreating[lead.id] ? (
                   <span className="text-xs text-gray-400 italic">Creating proposal link…</span>
                 ) : null}
+
+                {/* Proposal engagement indicator */}
+                <ProposalEngagementBadge
+                  status={lead.proposal_status}
+                  viewCount={lead.proposal_view_count}
+                />
               </div>
             </div>
           )
@@ -451,6 +457,37 @@ export function LeadsTable({ leads }: Props) {
       )}
     </>
   )
+}
+
+function ProposalEngagementBadge({
+  status,
+  viewCount,
+}: {
+  status?: string | null
+  viewCount?: number | null
+}) {
+  if (status === 'agreement_requested' || status === 'accepted') {
+    return (
+      <span className="inline-block mt-1.5 text-xs font-medium text-green-700">
+        ✍️ Agreement requested
+      </span>
+    )
+  }
+  if ((viewCount ?? 0) >= 3) {
+    return (
+      <span className="inline-block mt-1.5 text-xs font-medium text-orange-600">
+        🔥 Viewed {viewCount}x
+      </span>
+    )
+  }
+  if ((viewCount ?? 0) > 0) {
+    return (
+      <span className="inline-block mt-1.5 text-xs font-medium text-blue-600">
+        👁 Viewed {viewCount}x
+      </span>
+    )
+  }
+  return null
 }
 
 function ProposalStatusBadge({ status }: { status?: string | null }) {

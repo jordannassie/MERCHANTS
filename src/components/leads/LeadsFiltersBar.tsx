@@ -80,6 +80,7 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
       // hideCorporateChains is opt-in now (default false = show all leads)
       // Only write the param when hiding chains is explicitly enabled
       if ((next.hideCorporateChains as boolean) === true) params.set('showChains', 'false')
+      if (next.proposalActivity) params.set('proposalActivity', next.proposalActivity as string)
       if (next.sort && next.sort !== 'score') params.set('sort', next.sort as string)
       if (next.order && next.order !== 'desc') params.set('order', next.order as string)
 
@@ -274,6 +275,39 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
                 {label}
               </button>
             ))}
+          </div>
+
+          {/* Proposal Activity + Sort */}
+          <div className="flex flex-wrap gap-2 items-center">
+            <span className="text-xs text-gray-500">Proposal:</span>
+            <select
+              value={filters.proposalActivity || ''}
+              onChange={e => set({ proposalActivity: e.target.value })}
+              className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              aria-label="Filter by proposal activity"
+            >
+              <option value="">All</option>
+              <option value="viewed">👁 Viewed</option>
+              <option value="not_viewed">Not Viewed</option>
+              <option value="viewed_multiple">🔥 Viewed 3+x</option>
+              <option value="agreement">✍️ Agreement Requested</option>
+            </select>
+
+            <span className="text-xs text-gray-500 ml-2">Sort:</span>
+            <select
+              value={filters.sort || 'score'}
+              onChange={e => set({ sort: e.target.value })}
+              className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              aria-label="Sort leads"
+            >
+              <option value="score">Score</option>
+              <option value="permit_issue_date">Permit Date</option>
+              <option value="first_sales_date">First Sales Date</option>
+              <option value="next_follow_up_at">Follow-up Date</option>
+              <option value="created_at">Date Added</option>
+              <option value="proposal_last_viewed_at">Last Proposal View</option>
+              <option value="proposal_view_count">Most Proposal Views</option>
+            </select>
           </div>
 
           <div>

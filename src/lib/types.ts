@@ -321,11 +321,13 @@ export interface LeadsFilters {
   needsReview?: boolean
   /** When true, corporate-chain leads (category = 'corporate_chain') are hidden. Default: true. */
   hideCorporateChains?: boolean
+  /** Proposal engagement filter */
+  proposalActivity?: 'viewed' | 'not_viewed' | 'viewed_multiple' | 'agreement' | ''
   sort?: LeadSortField
   order?: 'asc' | 'desc'
   page?: number
 }
 
-export type LeadSortField = 'score' | 'permit_issue_date' | 'first_sales_date' | 'next_follow_up_at' | 'created_at'
+export type LeadSortField = 'score' | 'permit_issue_date' | 'first_sales_date' | 'next_follow_up_at' | 'created_at' | 'proposal_view_count' | 'proposal_last_viewed_at'
 
 export const LEADS_PER_PAGE = 25

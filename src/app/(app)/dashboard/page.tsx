@@ -12,6 +12,8 @@ import { getRegionCounties } from '@/lib/regions'
 import { SalesFollowupToggle } from '@/components/dashboard/SalesFollowupToggle'
 import { SmsSequencePanel } from '@/components/dashboard/SmsSequencePanel'
 import { NewOutreachCard } from '@/components/dashboard/NewOutreachCard'
+import { ProposalEngagementCard } from '@/components/dashboard/ProposalEngagementCard'
+import type { ProposalEngagementData } from '@/components/dashboard/ProposalEngagementCard'
 import { getNewOutreachSettings, countEligibleNewLeads } from '@/lib/new-outreach-engine'
 
 export const metadata: Metadata = { title: 'Dashboard — Merchant Radar' }
@@ -116,6 +118,71 @@ export default async function DashboardPage({
       .not('sms_needs_reply', 'eq', true)
       .not('proposal_status', 'in', '(agreement_requested,accepted)'),
   ])
+
+  // ── Proposal Engagement — Today + All-Time ───────────────────────────────
+  const todayMidnightISO = (() => {
+    const d = new Date()
+    d.setUTCHours(0, 0, 0, 0)
+    return d.toISOString()
+  })()
+
+  const [
+    { count: peSmsSentToday },
+    { count: peViewersToday },
+    { count: peAgreementsToday },
+    peViewsDataToday,
+    { count: peSmsSentAll },
+    { count: peViewersAll },
+    { count: peAgreementsAll },
+    peViewsDataAll,
+  ] = await Promise.all([
+    // Today: SMS sent today
+    db.from('leads').select('*', { count: 'exact', head: true })
+      .gte('sms_last_sent_at', todayMidnightISO),
+    // Today: leads that got SMS today AND have viewed the proposal
+    db.from('leads').select('*', { count: 'exact', head: true })
+      .gte('sms_last_sent_at', todayMidnightISO)
+      .gt('proposal_view_count', 0),
+    // Today: agreements for leads that got SMS today
+    db.from('leads').select('*', { count: 'exact', head: true })
+      .gte('sms_last_sent_at', todayMidnightISO)
+      .in('proposal_status', ['agreement_requested', 'accepted']),
+    // Today: view counts for total views (leads sent today)
+    db.from('leads').select('proposal_view_count')
+      .gte('sms_last_sent_at', todayMidnightISO)
+      .gt('proposal_view_count', 0),
+    // All-time: total leads with any SMS sent
+    db.from('leads').select('*', { count: 'exact', head: true })
+      .not('sms_last_sent_at', 'is', null),
+    // All-time: leads where proposal_view_count > 0
+    db.from('leads').select('*', { count: 'exact', head: true })
+      .gt('proposal_view_count', 0),
+    // All-time: agreements
+    db.from('leads').select('*', { count: 'exact', head: true })
+      .in('proposal_status', ['agreement_requested', 'accepted']),
+    // All-time: view counts (only viewed leads to keep payload small)
+    db.from('leads').select('proposal_view_count')
+      .gt('proposal_view_count', 0),
+  ])
+
+  // Sum proposal_view_count in JS (dataset is small: only leads with views)
+  const sumViews = (rows: Array<{ proposal_view_count: number | null }> | null) =>
+    (rows ?? []).reduce((acc, r) => acc + (r.proposal_view_count ?? 0), 0)
+
+  const proposalEngagement: { today: ProposalEngagementData; allTime: ProposalEngagementData } = {
+    today: {
+      uniqueViewers: peViewersToday ?? 0,
+      totalViews:    sumViews(peViewsDataToday.data as Array<{ proposal_view_count: number | null }> | null),
+      smsSent:       peSmsSentToday ?? 0,
+      agreements:    peAgreementsToday ?? 0,
+    },
+    allTime: {
+      uniqueViewers: peViewersAll ?? 0,
+      totalViews:    sumViews(peViewsDataAll.data as Array<{ proposal_view_count: number | null }> | null),
+      smsSent:       peSmsSentAll ?? 0,
+      agreements:    peAgreementsAll ?? 0,
+    },
+  }
 
   // ── COUNT queries — all parallel, no rows fetched ─────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -261,6 +328,12 @@ export default async function DashboardPage({
           </Link>
         </div>
       </div>
+
+      {/* ── Proposal Engagement ── */}
+      <ProposalEngagementCard
+        today={proposalEngagement.today}
+        allTime={proposalEngagement.allTime}
+      />
 
       {/* ── Region tabs ── */}
       <div className="flex flex-wrap gap-1.5">

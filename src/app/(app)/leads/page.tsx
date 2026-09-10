@@ -64,6 +64,7 @@ export default async function LeadsPage({ searchParams }: PageProps) {
     hideCorporateChains,
     sort:              (sp.sort as LeadsFilters['sort']) || 'score',
     order:             (sp.order as 'asc' | 'desc') || 'desc',
+    proposalActivity:  (sp.proposalActivity as LeadsFilters['proposalActivity']) || '',
     page,
   }
 
@@ -139,11 +140,24 @@ export default async function LeadsPage({ searchParams }: PageProps) {
   if (filters.needsReview)     query = query.eq('enrichment_status', 'pending')
   if (filters.hideCorporateChains) query = query.or(NON_CHAIN)
 
+  // Proposal activity filter
+  if (filters.proposalActivity === 'viewed') {
+    query = query.gt('proposal_view_count', 0)
+  } else if (filters.proposalActivity === 'not_viewed') {
+    query = query.or('proposal_view_count.eq.0,proposal_view_count.is.null')
+  } else if (filters.proposalActivity === 'viewed_multiple') {
+    query = query.gte('proposal_view_count', 3)
+  } else if (filters.proposalActivity === 'agreement') {
+    query = query.in('proposal_status', ['accepted', 'agreement_requested'])
+  }
+
   const sortCol =
-    filters.sort === 'score'              ? 'score'
-    : filters.sort === 'permit_issue_date'  ? 'permit_issue_date'
-    : filters.sort === 'first_sales_date'   ? 'first_sales_date'
-    : filters.sort === 'next_follow_up_at'  ? 'next_follow_up_at'
+    filters.sort === 'score'                   ? 'score'
+    : filters.sort === 'permit_issue_date'       ? 'permit_issue_date'
+    : filters.sort === 'first_sales_date'        ? 'first_sales_date'
+    : filters.sort === 'next_follow_up_at'       ? 'next_follow_up_at'
+    : filters.sort === 'proposal_view_count'     ? 'proposal_view_count'
+    : filters.sort === 'proposal_last_viewed_at' ? 'proposal_last_viewed_at'
     : 'created_at'
   query = query.order(sortCol, { ascending: filters.order === 'asc', nullsFirst: false })
   if (sortCol === 'score') {
