@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
 
   const { data: job } = await supabase
     .from('enrichment_jobs')
-    .select('*')
+    .select('id,lead_id,status,proposed_data,ai_score_adjustment,accepted_fields,completed_at')
     .eq('id', jobId)
     .single()
 

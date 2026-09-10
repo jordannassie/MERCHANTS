@@ -6,7 +6,7 @@ export async function GET() {
   const db = createServiceClient()
   const { data, error } = await db
     .from('support_requests')
-    .select('*')
+    .select('id,first_name,last_name,phone,email,comments,inquiry_type,industry,created_at')
     .order('created_at', { ascending: false })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)

@@ -27,7 +27,7 @@ export async function PATCH(
     .from('leads')
     .update(safe)
     .eq('id', id)
-    .select('*')
+    .select('id,display_name,primary_phone,primary_email,website,owner_name,contact_title,category,est_monthly_processing,google_maps_url,updated_at')
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

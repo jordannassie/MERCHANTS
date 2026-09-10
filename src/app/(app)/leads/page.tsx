@@ -85,7 +85,15 @@ export default async function LeadsPage({ searchParams }: PageProps) {
   }
 
   // ── Build Supabase query ──────────────────────────────────────────────────
-  let query = supabase.from('leads').select('*', { count: 'exact' })
+  // Explicit minimal column list — excludes raw_record and other large JSON blobs
+  const LEADS_SELECT =
+    'id,display_name,outlet_name,taxpayer_name,outlet_city,outlet_state,outlet_county_code,' +
+    'primary_phone,permit_phone,status,sms_status,sms_needs_reply,sms_last_sent_at,' +
+    'lead_source_label,proposal_slug,proposal_status,proposal_view_count,proposal_last_viewed_at,' +
+    'followup_step,next_follow_up_at,score,created_at,updated_at,' +
+    'opted_out_at,agreement_requested_at,permit_issue_date,first_sales_date,google_maps_url,starred'
+
+  let query = supabase.from('leads').select(LEADS_SELECT, { count: 'exact' })
 
   // Region pre-filter (skip when county is already explicit or region = All Texas)
   if (!filters.county && regionCounties.length > 0) {
@@ -190,6 +198,10 @@ export default async function LeadsPage({ searchParams }: PageProps) {
     const { data: leads, count } = await query.range(from, to)
     leadsData  = leads ?? []
     totalCount = count ?? 0
+  }
+
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[leads page] rows: ${leadsData?.length}, approx bytes: ${JSON.stringify(leadsData).length}`)
   }
 
   const totalPages = Math.ceil(totalCount / LEADS_PER_PAGE)

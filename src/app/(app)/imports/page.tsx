@@ -15,7 +15,7 @@ export default async function ImportsPage() {
   const db = createServiceClient()
 
   const [{ data: territories }, { data: importRuns }] = await Promise.all([
-    db.from('territories').select('*').eq('is_active', true).limit(1),
+    db.from('territories').select('id,name,county_codes,days_to_import,is_active,region,created_at,updated_at').eq('is_active', true).limit(1),
     db.from('import_runs')
       .select('*, territory:territories(name)')
       .order('started_at', { ascending: false })

@@ -14,7 +14,7 @@ export default async function SettingsPage() {
   const supabase = createServiceClient()
 
   const [{ data: territories }, { data: importRuns }] = await Promise.all([
-    supabase.from('territories').select('*').eq('is_active', true).order('created_at'),
+    supabase.from('territories').select('id,name,county_codes,days_to_import,is_active,region,created_at,updated_at').eq('is_active', true).order('created_at'),
     supabase.from('import_runs').select('*, territory:territories(name)').order('started_at', { ascending: false }).limit(20),
   ])
 

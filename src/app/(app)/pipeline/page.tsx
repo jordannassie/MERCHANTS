@@ -59,6 +59,7 @@ export default async function PipelinePage({ searchParams }: PageProps) {
       .in('status', [...stages])
       .or(NON_CHAIN)
       .order('score', { ascending: false })
+      .limit(200)
 
     if (phoneFilter) {
       q = q.or('permit_phone.not.is.null,primary_phone.not.is.null')

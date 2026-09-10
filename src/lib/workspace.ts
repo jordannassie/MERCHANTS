@@ -20,7 +20,7 @@ export async function ensureWorkspaceTerritory() {
 
   const { data: existing } = await supabase
     .from('territories')
-    .select('*')
+    .select('id,name,county_codes,days_to_import,is_active,region,created_at,updated_at')
     .eq('is_active', true)
     .limit(1)
     .maybeSingle()
@@ -48,7 +48,7 @@ export async function ensureWorkspaceTerritory() {
       is_active: true,
       region: 'All Texas',
     })
-    .select()
+    .select('id,name,county_codes,days_to_import,is_active,region,created_at,updated_at')
     .single()
 
   if (error) {

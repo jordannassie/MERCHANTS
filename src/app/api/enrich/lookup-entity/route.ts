@@ -91,7 +91,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     try {
       const { data: cached } = await db
         .from('entity_records')
-        .select('*')
+        .select('id,lead_id,taxpayer_id,legal_entity_name,dba_name,entity_type,state_of_formation,sos_file_number,sos_registration_status,registered_agent_name,registered_office_street,registered_office_city,registered_office_state,registered_office_zip,officers,individual_first_name,individual_last_name,individual_full_name,primary_contact_name,primary_contact_title,primary_contact_role,entity_source_url,entity_confidence,registered_agent_is_commercial,researched_at,created_at,updated_at')
         .eq('lead_id', leadId)
         .order('researched_at', { ascending: false })
         .limit(1)
