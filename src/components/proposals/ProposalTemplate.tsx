@@ -182,7 +182,7 @@ export function ProposalTemplate({ data }: Props) {
     <div className="min-h-screen bg-white flex flex-col">
 
       {/* ── Nav ─────────────────────────────────────────────────────────────── */}
-      <nav className="px-6 py-4 border-b border-gray-100">
+      <nav className="px-6 py-4 border-b border-gray-100 flex justify-center">
         <a href="https://process.direct" aria-label="Process.Direct home">
           <Image
             src={LOGO_URL}
