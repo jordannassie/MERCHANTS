@@ -15,12 +15,10 @@ import { DecisionCards } from './DecisionCards'
 
   const NAV_LINKS = [
     { label: 'Savings', href: '#why' },
-    { label: 'About', href: '#about' },
     { label: 'Contact', href: '#contact' },
   ]
 
 const LOGO_URL = 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Blacklogo.png'
-const JORDAN_PHOTO = 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/Jordanimage.png'
 const IMG_CLOVER = 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/Clover-Restaurant-Devices-1-900x464.webp'
 const IMG_TYPES = 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/different-type-cover_image.jpg'
 const IMG_DEVICE = 'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/H479a5103a8714372ada840a8ca05057dr.png_300x300.avif'
@@ -350,48 +348,6 @@ export default function LandingClient() {
                 className="object-cover object-center"
                 sizes="(max-width: 768px) 100vw, 50vw"
               />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── BIO: Jordan Nassie ─────────────────────────────────────────────── */}
-      <section id="about" className="bg-white py-20 md:py-28">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row items-center gap-12">
-            {/* Photo: Jordan */}
-            <div className="shrink-0 flex items-center justify-center">
-              <div className="relative w-56 h-56 md:w-64 md:h-64 rounded-2xl overflow-hidden shadow-xl ring-4 ring-blue-50">
-                <Image
-                  src={JORDAN_PHOTO}
-                  alt="Jordan Nassie"
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 768px) 224px, 256px"
-                />
-              </div>
-            </div>
-
-            <div className="flex-1 text-center md:text-left">
-              <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-4">
-                <Shield size={12} /> Founder, Process.Direct
-              </div>
-              <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 mb-3">
-                Jordan
-              </h2>
-
-              {/* Jordan's promise */}
-              <blockquote className="mb-5 border-l-4 border-blue-500 pl-4 text-slate-600 italic text-base leading-relaxed">
-                "Let us help you Save Money and get the right setup in place, for every Payment that goes through your Business."
-                <footer className="mt-1 text-xs not-italic font-semibold text-slate-400">— Jordan, Founder</footer>
-              </blockquote>
-
-              <p className="text-slate-500 text-lg leading-relaxed mb-6">
-                Jordan founded Process.Direct to give businesses a smarter, simpler path to payment processing — without the pushy sales tactics or hidden fees. We have local teams who can support you wherever you are. Let us help you cut unnecessary costs, get the right equipment, and stay supported long after you're set up.
-              </p>
-
-              <div className="flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
-              </div>
             </div>
           </div>
         </div>
