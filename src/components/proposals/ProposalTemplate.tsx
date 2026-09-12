@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import Image from 'next/image'
-import { X, User, Mail, Phone as PhoneIcon, Check, CreditCard, MonitorSmartphone } from 'lucide-react'
+import { X, User, Mail, Phone as PhoneIcon, Check, CreditCard } from 'lucide-react'
 import {
   PAYMENT_ACCEPTANCE_OPTIONS,
   type PaymentAcceptance,
@@ -398,18 +398,30 @@ export function ProposalTemplate({ data }: Props) {
 
             {/* Payments your way */}
             <div className="border border-gray-200 rounded-xl p-5 flex items-start gap-4">
-              <div className="flex-shrink-0 w-16 h-16 rounded-xl bg-blue-50 flex items-center justify-center">
-                <MonitorSmartphone className="w-8 h-8 text-blue-600" strokeWidth={1.75} />
+              <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-gray-50 flex items-center justify-center">
+                <img
+                  src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/a920pro-pci-7-secondary-display.webp"
+                  alt="Payment terminal"
+                  className="w-full h-full object-contain"
+                />
               </div>
               <div className="flex-1">
-                <p className="text-xs font-semibold tracking-widest text-gray-400 uppercase mb-1">
-                  Payments Your Way
-                </p>
+                <div className="flex items-center gap-2 mb-1">
+                  <p className="text-xs font-semibold tracking-widest text-gray-400 uppercase">
+                    Free Terminal Available
+                  </p>
+                  <span className="inline-block bg-green-500 text-white text-xs font-black px-2 py-0.5 rounded-full tracking-wide">
+                    FREE
+                  </span>
+                </div>
                 <p className="text-lg font-bold text-gray-900">
                   In-Person POS + Online Payments
                 </p>
                 <p className="text-sm text-slate-500 mt-0.5">
                   Accept cards at the counter, on your website, by payment link, or invoice.
+                </p>
+                <p className="text-xs text-slate-400 mt-1">
+                  Free terminal available with eligible approved merchant setup.
                 </p>
               </div>
             </div>
