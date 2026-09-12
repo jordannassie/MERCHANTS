@@ -135,7 +135,7 @@ export function LeadsTable({ leads }: Props) {
     }
     const currentStatus =
       typeof window !== 'undefined'
-        ? new URLSearchParams(window.location.search).get('status') || 'new'
+        ? new URLSearchParams(window.location.search).get('status') || 'all'
         : 'new'
     if (newStatus !== currentStatus && currentStatus !== 'all') {
       setLeadsList(prev => {

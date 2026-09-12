@@ -4,7 +4,8 @@ import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { Lead, Contact, Activity, EntityRecord } from '@/lib/types'
-import { fmtDate, fmtDateTime, fmtRelative, fmtPhone, STATUS_COLORS, PRIORITY_COLORS, safeUrl, buildMapsUrl } from '@/lib/utils'
+import { fmtDate, fmtDateTime, fmtDateTimeCT, fmtRelative, fmtPhone, STATUS_COLORS, PRIORITY_COLORS, safeUrl, buildMapsUrl } from '@/lib/utils'
+import { getProposalUrl } from '@/lib/proposals'
 import { DFW_COUNTIES } from '@/lib/constants'
 import { naicsLabel, resolveNaics, NAICS_TIER_COLORS } from '@/lib/naics'
 import { Button } from '@/components/ui/Button'
@@ -21,15 +22,29 @@ import { updateLeadCRM, starLead, updateLeadStatus } from '@/lib/actions/leads'
 import { ContactPanel } from './ContactPanel'
 import { ProposalEditor } from '@/components/proposals/ProposalEditor'
 
+export interface SmsMessageRow {
+  id: string
+  direction: string
+  to_number?: string | null
+  from_number?: string | null
+  content?: string | null
+  status?: string | null
+  sent_at?: string | null
+  delivered_at?: string | null
+  error_message?: string | null
+  quo_message_id?: string | null
+}
+
 interface Props {
   lead: Lead
   contacts: Contact[]
   activities: (Activity & { contact?: { full_name: string } | null })[]
   placeCache?: Record<string, unknown> | null
   entityRecord?: EntityRecord | null
+  smsMessages?: SmsMessageRow[]
 }
 
-export function LeadDetailClient({ lead: initialLead, contacts: initialContacts, activities: initialActivities, placeCache, entityRecord }: Props) {
+export function LeadDetailClient({ lead: initialLead, contacts: initialContacts, activities: initialActivities, placeCache, entityRecord, smsMessages = [] }: Props) {
   const router = useRouter()
   const [isPending] = useTransition()
   const [lead, setLead] = useState(initialLead)
@@ -111,6 +126,11 @@ export function LeadDetailClient({ lead: initialLead, contacts: initialContacts,
             <div className="flex flex-wrap items-center gap-2 mt-2">
               <span className={`px-2 py-0.5 rounded text-xs font-medium ${PRIORITY_COLORS[lead.priority]}`}>{lead.priority}</span>
               <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[lead.status]}`}>{lead.status.replace('_', ' ')}</span>
+              {lead.lead_source_label && (
+                <span className="px-2 py-0.5 rounded text-xs font-medium bg-slate-50 text-slate-700 border border-slate-200">
+                  {lead.lead_source_label === 'both' ? 'State + Google' : lead.lead_source_label === 'google' ? 'Google' : 'State'}
+                </span>
+              )}
               <span className="text-xs text-gray-500">Score: <strong>{lead.score}</strong></span>
             </div>
           </div>
@@ -184,6 +204,84 @@ export function LeadDetailClient({ lead: initialLead, contacts: initialContacts,
               </span>
             ))}
           </div>
+        )}
+      </div>
+
+      {/* Outreach / proposal snapshot */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
+        <h2 className="font-medium text-gray-900 mb-3">Outreach &amp; proposal</h2>
+        <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+          <div className="flex gap-2">
+            <dt className="text-gray-500 w-36 shrink-0">Pipeline</dt>
+            <dd className="text-gray-900 capitalize">{lead.status.replace(/_/g, ' ')}</dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="text-gray-500 w-36 shrink-0">Latest SMS status</dt>
+            <dd className="text-gray-900">{lead.sms_status ?? '—'}</dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="text-gray-500 w-36 shrink-0">Initial SMS</dt>
+            <dd className="text-gray-900">{fmtDateTimeCT(lead.followup_started_at ?? lead.sms_last_sent_at)}</dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="text-gray-500 w-36 shrink-0">Last contacted</dt>
+            <dd className="text-gray-900">{fmtDateTimeCT(lead.last_contacted_at ?? lead.sms_last_sent_at)}</dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="text-gray-500 w-36 shrink-0">Follow-up due</dt>
+            <dd className="text-gray-900">{fmtDateTimeCT(lead.next_follow_up_at)}</dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="text-gray-500 w-36 shrink-0">Proposal status</dt>
+            <dd className="text-gray-900">{lead.proposal_status ?? 'not_sent'}</dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="text-gray-500 w-36 shrink-0">Proposal views</dt>
+            <dd className="text-gray-900">{lead.proposal_view_count ?? 0}</dd>
+          </div>
+          <div className="flex gap-2 min-w-0">
+            <dt className="text-gray-500 w-36 shrink-0">Proposal link</dt>
+            <dd className="text-gray-900 truncate">
+              {lead.proposal_slug ? (
+                <a
+                  href={getProposalUrl(lead.proposal_slug)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:underline"
+                >
+                  process.direct/p/{lead.proposal_slug}
+                </a>
+              ) : '—'}
+            </dd>
+          </div>
+        </dl>
+      </div>
+
+      {/* SMS history */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
+        <h2 className="font-medium text-gray-900 mb-3">SMS history</h2>
+        {smsMessages.length === 0 ? (
+          <p className="text-sm text-gray-400">No SMS records on file for this lead.</p>
+        ) : (
+          <ul className="divide-y divide-gray-50">
+            {smsMessages.map(msg => (
+              <li key={msg.id} className="py-3 first:pt-0 last:pb-0">
+                <div className="flex items-center gap-2 flex-wrap text-xs text-gray-500">
+                  <span className={`font-semibold ${msg.direction === 'inbound' ? 'text-orange-700' : 'text-blue-700'}`}>
+                    {msg.direction === 'inbound' ? 'Inbound' : 'Outbound'}
+                  </span>
+                  <span>{msg.status ?? 'unknown'}</span>
+                  <span className="ml-auto">{fmtDateTimeCT(msg.sent_at)}</span>
+                </div>
+                {msg.content && (
+                  <p className="text-sm text-gray-800 whitespace-pre-line mt-1">{msg.content}</p>
+                )}
+                {msg.to_number && (
+                  <p className="text-xs text-gray-400 mt-1">To {msg.to_number}</p>
+                )}
+              </li>
+            ))}
+          </ul>
         )}
       </div>
 

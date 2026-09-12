@@ -1,7 +1,11 @@
-import { notFound } from 'next/navigation'
+import Link from 'next/link'
 import { createServiceClient } from '@/lib/supabase/service'
 import type { Lead, Contact, Activity, EntityRecord } from '@/lib/types'
 import { LeadDetailClient } from '@/components/leads/LeadDetailClient'
+import {
+  LEAD_DETAIL_COLUMNS,
+  withColumnFallback,
+} from '@/lib/supabase/resilient-select'
 
 interface PageProps { params: Promise<{ id: string }> }
 
@@ -11,39 +15,22 @@ export default async function LeadDetailPage({ params }: PageProps) {
   const { id } = await params
   const supabase = createServiceClient()
 
-  // Explicit column list — excludes raw_record (large TABC JSON blob)
-  const LEAD_DETAIL_SELECT =
-    'id,territory_id,source,taxpayer_number,outlet_number,taxpayer_name,' +
-    'taxpayer_address,taxpayer_city,taxpayer_state,taxpayer_zip,taxpayer_county_code,taxpayer_organization_type,' +
-    'outlet_name,outlet_address,outlet_city,outlet_state,outlet_zip,outlet_county_code,' +
-    'naics_code,inside_outside_city,category,' +
-    'permit_issue_date,first_sales_date,first_imported_at,last_seen_at,' +
-    'display_name,score,priority,score_reasons,status,starred,' +
-    'primary_phone,primary_email,website,owner_name,contact_title,' +
-    'google_maps_url,enrichment_status,enriched_at,enrichment_error,' +
-    'last_contacted_at,next_follow_up_at,est_monthly_processing,' +
-    'google_place_id,international_phone,business_status,google_primary_type,' +
-    'contact_match_confidence,contact_source,contact_source_urls,' +
-    'permit_phone,permit_phone_source,permit_phone_imported_at,' +
-    'main_note,main_note_updated_at,lead_source_label,' +
-    'quo_contact_id,sms_status,sms_last_sent_at,sms_needs_reply,' +
-    'proposal_slug,proposal_savings_monthly,proposal_transaction_rate,' +
-    'proposal_equipment,proposal_contract,proposal_status,proposal_sent_at,' +
-    'proposal_viewed_at,proposal_accepted_at,proposal_contact_name,' +
-    'proposal_contact_email,proposal_contact_phone,' +
-    'followup_step,followup_started_at,followup_completed_at,last_followup_sent_at,' +
-    'proposal_view_count,proposal_last_viewed_at,agreement_requested_at,' +
-    'estimated_monthly_card_sales,proposal_selected_option,proposal_calc_snapshot,' +
-    'opted_out_at,opt_out_reason,opt_out_source,created_at,updated_at'
-
   const [
-    { data: lead },
+    leadResult,
     { data: contacts },
     { data: activities },
     { data: enrichmentJobs },
     entityResult,
+    smsResult,
   ] = await Promise.all([
-    supabase.from('leads').select(LEAD_DETAIL_SELECT).eq('id', id).single(),
+    withColumnFallback(LEAD_DETAIL_COLUMNS, async columns => {
+      const { data, error } = await supabase
+        .from('leads')
+        .select(columns.join(','))
+        .eq('id', id)
+        .maybeSingle()
+      return { data, error }
+    }),
     supabase
       .from('contacts')
       .select('*')
@@ -63,7 +50,6 @@ export default async function LeadDetailPage({ params }: PageProps) {
       .eq('status', 'completed')
       .order('completed_at', { ascending: false })
       .limit(1),
-    // entity_records added by migration 008 — gracefully handle missing table
     (async () => {
       try {
         return await supabase
@@ -77,11 +63,52 @@ export default async function LeadDetailPage({ params }: PageProps) {
         return { data: null, error: null }
       }
     })(),
+    (async () => {
+      const { data, error } = await supabase
+        .from('sms_messages')
+        .select('id,direction,to_number,from_number,content,status,sent_at,delivered_at,error_message,quo_message_id')
+        .eq('lead_id', id)
+        .order('sent_at', { ascending: false })
+        .limit(50)
+      if (error) {
+        console.error('[lead-detail] sms_messages query failed:', error.message)
+        return []
+      }
+      return data ?? []
+    })(),
   ])
 
-  if (!lead) notFound()
+  if (leadResult.error) {
+    console.error('[lead-detail] Supabase error for', id, {
+      error: leadResult.error,
+      stripped: leadResult.stripped,
+    })
+    return (
+      <LeadQueryError
+        title="Lead details could not load"
+        message={leadResult.error}
+        stripped={leadResult.stripped}
+        leadId={id}
+      />
+    )
+  }
 
-  // Extract Google Places data from the most recent completed enrichment job
+  if (!leadResult.data) {
+    return (
+      <LeadQueryError
+        title="Lead not found"
+        message={`No lead exists with id ${id}.`}
+        stripped={leadResult.stripped}
+        leadId={id}
+        notFound
+      />
+    )
+  }
+
+  if (leadResult.stripped.length > 0) {
+    console.warn('[lead-detail] Loaded with missing columns stripped:', leadResult.stripped)
+  }
+
   const placeCache = enrichmentJobs?.[0]?.raw_response?.source === 'google_places'
     ? (enrichmentJobs[0].raw_response as Record<string, unknown>)
     : null
@@ -90,7 +117,7 @@ export default async function LeadDetailPage({ params }: PageProps) {
 
   return (
     <LeadDetailClient
-      lead={lead as unknown as Lead}
+      lead={leadResult.data as unknown as Lead}
       contacts={(contacts ?? []) as Contact[]}
       activities={
         (activities ?? []) as (Activity & {
@@ -99,6 +126,50 @@ export default async function LeadDetailPage({ params }: PageProps) {
       }
       placeCache={placeCache}
       entityRecord={entityRecord}
+      smsMessages={smsResult}
     />
+  )
+}
+
+function LeadQueryError({
+  title,
+  message,
+  stripped,
+  leadId,
+  notFound,
+}: {
+  title: string
+  message: string
+  stripped: string[]
+  leadId: string
+  notFound?: boolean
+}) {
+  return (
+    <div className="max-w-xl mx-auto px-4 md:px-8 py-16">
+      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-3">
+        <h1 className="text-lg font-semibold text-gray-900">{title}</h1>
+        {!notFound && (
+          <p className="text-sm text-gray-600">
+            The database query failed. This is usually a missing column or
+            unapplied migration — not a deleted lead.
+          </p>
+        )}
+        <p className="text-sm font-mono bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-gray-700 break-words">
+          {message}
+        </p>
+        {stripped.length > 0 && (
+          <p className="text-xs text-gray-500">
+            Stripped missing columns: {stripped.join(', ')}
+          </p>
+        )}
+        <p className="text-xs text-gray-400">Lead ID: {leadId}</p>
+        <Link
+          href="/leads?status=all"
+          className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800"
+        >
+          ← Back to Leads
+        </Link>
+      </div>
+    </div>
   )
 }

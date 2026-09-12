@@ -3,30 +3,31 @@
 import { useRouter, usePathname } from 'next/navigation'
 import { useCallback, useState, useRef } from 'react'
 import type { LeadsFilters } from '@/lib/types'
-import { LEAD_STATUSES } from '@/lib/constants'
 import { X, Search } from 'lucide-react'
 
 interface Props {
   filters: LeadsFilters
   counties: { code: string; name: string }[]
+  statusCounts?: Record<string, number>
+  activeStatus?: string
 }
 
 // Pipeline status buttons — order and labels shown in the filter bar
 const STATUS_BUTTONS = [
+  { value: 'all',            label: 'All' },
   { value: 'new',            label: 'New' },
-  { value: 'attempted',      label: 'Attempted' },
-  { value: 'connected',      label: 'Connected' },
+  { value: 'attempted',      label: 'Contacted' },
+  { value: 'connected',      label: 'Replied' },
   { value: 'follow_up',      label: 'Follow-up' },
-  { value: 'appointment',    label: 'Appointment' },
+  { value: 'appointment',    label: 'Agreement' },
   { value: 'won',            label: 'Won' },
   { value: 'lost',           label: 'Lost' },
   { value: 'do_not_contact', label: 'Do Not Contact' },
-  { value: 'all',            label: 'All' },
 ] as const
 
 const REGIONS = ['DFW', 'Houston', 'Austin', 'San Antonio', 'All Texas'] as const
 
-export function LeadsFiltersBar({ filters, counties }: Props) {
+export function LeadsFiltersBar({ filters, counties, statusCounts, activeStatus: activeStatusProp }: Props) {
   const router  = useRouter()
   const pathname = usePathname()
 
@@ -43,8 +44,8 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
     setSearchValue(urlSearch)
   }
 
-  // The active status from URL — 'new' is the default when param is absent
-  const activeStatus = (filters.status as string) || 'new'
+  // The active status from URL — 'all' is the default when param is absent
+  const activeStatus = activeStatusProp || (filters.status as string) || 'all'
 
   // ── Build URLSearchParams from current filters + any overrides ────────────
   const buildParams = useCallback(
@@ -57,8 +58,8 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
       if (next.search)     params.set('search', next.search as string)
 
       // Status: always write it explicitly so the URL is the single source of truth
-      const st = (next.status ?? 'new') as string
-      params.set('status', st)
+      const st = (next.status ?? 'all') as string
+      params.set('status', st === '' ? 'all' : st)
 
       if (next.priority)          params.set('priority', next.priority as string)
       if (next.county)            params.set('county', next.county as string)
@@ -71,7 +72,7 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
       if (next.neverContacted)    params.set('neverContacted', 'true')
       if (next.followUpDue)       params.set('followUpDue', 'true')
       if (next.starred)           params.set('starred', 'true')
-      if ((next.hasPhone as boolean) === false) params.set('hasPhone', 'false')
+      if ((next.hasPhone as boolean) === true) params.set('hasPhone', 'true')
       if (next.missingPhone)      params.set('missingPhone', 'true')
       if (next.hasWebsite)        params.set('hasWebsite', 'true')
       if (next.missingWebsite)    params.set('missingWebsite', 'true')
@@ -117,7 +118,7 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
   const clearSearch = () => {
     clearTimeout(debounceRef.current)
     setSearchValue('')
-    set({ search: '', status: 'new' })
+    set({ search: '', status: 'all' })
   }
 
   return (
@@ -199,6 +200,11 @@ export function LeadsFiltersBar({ filters, counties }: Props) {
                 }`}
               >
                 {label}
+                {statusCounts && statusCounts[value] != null && (
+                  <span className={`ml-1.5 text-[11px] ${isActive ? 'text-blue-100' : 'text-gray-400'}`}>
+                    {statusCounts[value].toLocaleString()}
+                  </span>
+                )}
               </button>
             )
           })}

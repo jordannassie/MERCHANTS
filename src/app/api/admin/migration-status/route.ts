@@ -1,66 +1,54 @@
 /**
  * GET /api/admin/migration-status
  * Reports which migration columns are present in production.
- * No auth required — single-workspace internal tool.
  */
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
+import { probeMigrations } from '@/lib/migrations/pending-apply'
 
 export async function GET() {
   const db = createServiceClient()
 
-  // Check for 007 columns via a probe SELECT (returns 200 if column exists, 400 if not)
   async function colExists(table: string, col: string): Promise<boolean> {
     const { error } = await db.from(table).select(col).limit(0)
     return !error
   }
 
-  // Check for migration_007_applied() RPC function
-  async function rpc007Applied(): Promise<boolean> {
-    const { data, error } = await db.rpc('migration_007_applied')
-    return !error && data === true
-  }
-
   const [
     googlePlaceId,
-    internationalPhone,
-    contactMatchConfidence,
-    contactSource,
-    contactsLinkedinUrl,
-    contactsConfidence,
-    m007Applied,
+    enrichmentError,
+    leadSourceLabel,
+    smsStatus,
+    optedOutAt,
+    followupStep,
+    proposalSlug,
+    probe,
   ] = await Promise.all([
     colExists('leads', 'google_place_id'),
-    colExists('leads', 'international_phone'),
-    colExists('leads', 'contact_match_confidence'),
-    colExists('leads', 'contact_source'),
-    colExists('contacts', 'linkedin_url'),
-    colExists('contacts', 'confidence'),
-    rpc007Applied(),
+    colExists('leads', 'enrichment_error'),
+    colExists('leads', 'lead_source_label'),
+    colExists('leads', 'sms_status'),
+    colExists('leads', 'opted_out_at'),
+    colExists('leads', 'followup_step'),
+    colExists('leads', 'proposal_slug'),
+    probeMigrations(db),
   ])
-
-  const migration007 = googlePlaceId && internationalPhone && contactMatchConfidence && contactSource
-  const migration007Contacts = contactsLinkedinUrl && contactsConfidence
 
   return NextResponse.json({
     migrations: {
-      '005_global_workspace': true, // implied if API works at all
-      '007_enrichment_columns': migration007 && migration007Contacts,
+      '007_enrichment_columns': googlePlaceId && enrichmentError,
+      '017_google_maps_source': leadSourceLabel,
+      '019_sms_integration': smsStatus,
+      '022_proposal_fields': proposalSlug,
+      '025_sales_followup_system': followupStep,
+      '028_dnc_optin': optedOutAt,
     },
-    columns: {
-      leads: {
-        google_place_id: googlePlaceId,
-        international_phone: internationalPhone,
-        contact_match_confidence: contactMatchConfidence,
-        contact_source: contactSource,
-      },
-      contacts: {
-        linkedin_url: contactsLinkedinUrl,
-        confidence: contactsConfidence,
-      },
-    },
-    rpc_function_exists: m007Applied,
+    columns: probe.columns,
+    applied: probe.applied,
+    missing: probe.missing,
+    detail_404_cause: !enrichmentError
+      ? 'column leads.enrichment_error does not exist'
+      : null,
     manual_sql_url: 'https://supabase.com/dashboard/project/phhczohqidgrvcmszets/sql/new',
-    migration_file: 'supabase/migrations/007_enrichment_columns.sql',
   })
 }

@@ -5,6 +5,7 @@ import { ImportHistory } from '@/components/settings/ImportHistory'
 import { ImportButton } from '@/components/ImportButton'
 import { SiftImportCard } from '@/components/settings/SiftImportCard'
 import { CpaApiKeyCard } from '@/components/settings/CpaApiKeyCard'
+import { ApplyMigrationsCard } from '@/components/settings/ApplyMigrationsCard'
 import type { Territory, ImportRun } from '@/lib/types'
 
 export const metadata: Metadata = { title: 'Settings — Merchant Radar' }
@@ -23,6 +24,8 @@ export default async function SettingsPage() {
   return (
     <div className="px-4 md:px-8 py-6 max-w-2xl mx-auto space-y-6">
       <h1 className="text-xl font-semibold text-gray-900">Settings</h1>
+
+      <ApplyMigrationsCard />
 
       {/* Data Coverage (informational, locked) */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">

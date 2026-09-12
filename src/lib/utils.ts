@@ -19,6 +19,23 @@ export function fmtDateTime(iso: string | null | undefined): string {
   try { return format(new Date(iso), 'MMM d, yyyy h:mm a') } catch { return '—' }
 }
 
+/** Admin timestamps labeled Central Time. */
+export function fmtDateTimeCT(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  try {
+    return new Date(iso).toLocaleString('en-US', {
+      timeZone: 'America/Chicago',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    }) + ' CT'
+  } catch {
+    return '—'
+  }
+}
+
 export function fmtRelative(iso: string | null | undefined): string {
   if (!iso) return '—'
   try { return formatDistanceToNow(new Date(iso), { addSuffix: true }) } catch { return '—' }

@@ -209,6 +209,70 @@ async function main() {
   } else {
     console.log('[migrate] ✓ 022 proposal fields present')
   }
+
+  // ── 023: Proposal contact fields ─────────────────────────────────────────
+  const col023 = await columnExists('leads', 'proposal_contact_name')
+  if (!col023) {
+    const sql023 = readMigration('023_proposal_contact_fields.sql')
+    if (sql023) await applyMigration('023_proposal_contact_fields.sql', sql023)
+  } else {
+    console.log('[migrate] ✓ 023 proposal contact fields present')
+  }
+
+  // ── 024: Estimated monthly card sales ────────────────────────────────────
+  const col024 = await columnExists('leads', 'estimated_monthly_card_sales')
+  if (!col024) {
+    const sql024 = readMigration('024_proposal_card_sales.sql')
+    if (sql024) await applyMigration('024_proposal_card_sales.sql', sql024)
+  } else {
+    console.log('[migrate] ✓ 024 estimated_monthly_card_sales present')
+  }
+
+  // ── 025: Sales follow-up system ──────────────────────────────────────────
+  const col025 = await columnExists('leads', 'followup_step')
+  if (!col025) {
+    const sql025 = readMigration('025_sales_followup_system.sql')
+    if (sql025) await applyMigration('025_sales_followup_system.sql', sql025)
+  } else {
+    console.log('[migrate] ✓ 025 follow-up columns present')
+  }
+
+  // ── 026: New outreach settings seeds ─────────────────────────────────────
+  const sql026 = readMigration('026_new_outreach_system.sql')
+  if (sql026) await applyMigration('026_new_outreach_system.sql', sql026)
+
+  // ── 027: Proposal calculator ─────────────────────────────────────────────
+  const col027 = await columnExists('leads', 'proposal_selected_option')
+  if (!col027) {
+    const sql027 = readMigration('027_proposal_calculator.sql')
+    if (sql027) await applyMigration('027_proposal_calculator.sql', sql027)
+  } else {
+    console.log('[migrate] ✓ 027 proposal calculator present')
+  }
+
+  // ── 014 / 015: industry + gtp fields ─────────────────────────────────────
+  const col015 = await columnExists('leads', 'industry')
+  if (!col015) {
+    const sql014 = readMigration('014_add_industry.sql')
+    const sql015 = readMigration('015_add_lead_fields.sql')
+    if (sql014) await applyMigration('014_add_industry.sql', sql014)
+    if (sql015) await applyMigration('015_add_lead_fields.sql', sql015)
+  } else {
+    console.log('[migrate] ✓ 015 industry fields present')
+  }
+
+  // ── 028: DNC / opt-out ───────────────────────────────────────────────────
+  const col028 = await columnExists('leads', 'opted_out_at')
+  if (!col028) {
+    const sql028 = readMigration('028_dnc_optin.sql')
+    if (sql028) await applyMigration('028_dnc_optin.sql', sql028)
+  } else {
+    console.log('[migrate] ✓ 028 opt-out columns present')
+  }
+
+  // ── 029: Performance indexes ─────────────────────────────────────────────
+  const sql029 = readMigration('029_perf_indexes.sql')
+  if (sql029) await applyMigration('029_perf_indexes.sql', sql029)
 }
 
 async function applyMigration(filename, sql) {
