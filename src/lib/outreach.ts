@@ -14,18 +14,26 @@ export const STOP_LINE = 'Reply STOP to opt out.'
  * STOP is immediately before the proposal URL. Nothing follows the URL.
  */
 export const INITIAL_SMS_TEMPLATE =
-  `Hi, this is Jordan from Process.Direct. I noticed {BUSINESS_NAME} is getting set up in {CITY} — congrats on starting your new business 🎉
+  `Hi, this is Jordan from Process Direct.
 
-We created a payment processing proposal for you. If it looks good, we can get you set up this week to start accepting payments, and get you a FREE POS system too.
+Congrats on getting {BUSINESS_NAME} set up in {CITY} 🎉
 
-I'm here if you have any questions.
+Are you taking payments yet — in person, online, or both?
 
-Best,
-Jordan
+We put together a payment-processing proposal for you. If it looks good, I can help get you set up this week, including a FREE POS system for your businesses.
 
+Best, Jordan
 ${STOP_LINE}
-
 {PROPOSAL_URL}`
+
+function isCurrentInitialTemplate(stored: string): boolean {
+  return (
+    stored.includes('Are you taking payments yet') &&
+    stored.includes('{BUSINESS_NAME}') &&
+    stored.includes('{CITY}') &&
+    isInitialSmsCompliant(stored, '{PROPOSAL_URL}')
+  )
+}
 
 export interface InitialOutreachVars {
   businessName: string
@@ -119,7 +127,7 @@ export async function getInitialOutreachTemplate(
     .maybeSingle()
 
   const stored = typeof data?.value === 'string' ? data.value.trim() : ''
-  return stored || INITIAL_SMS_TEMPLATE
+  return stored && isCurrentInitialTemplate(stored) ? stored : INITIAL_SMS_TEMPLATE
 }
 
 /**

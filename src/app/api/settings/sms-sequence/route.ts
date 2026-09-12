@@ -13,6 +13,7 @@ import { verifySessionToken, SESSION_COOKIE } from '@/lib/session'
 import {
   INITIAL_OUTREACH_SETTING_KEY,
   INITIAL_SMS_TEMPLATE,
+  getInitialOutreachTemplate,
   isInitialSmsCompliant,
 } from '@/lib/outreach'
 
@@ -56,11 +57,12 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
     rowMap[row.key] = row.value
   }
 
-  if (!rowMap[KEY_MAP.initial]) {
+  const initial = await getInitialOutreachTemplate(db)
+  if (rowMap[KEY_MAP.initial] !== initial) {
     await db.from('system_settings').upsert(
       {
         key: KEY_MAP.initial,
-        value: DEFAULT_MESSAGES.initial,
+        value: initial,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'key' },
@@ -68,7 +70,7 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
   }
 
   return NextResponse.json({
-    initial:  rowMap[KEY_MAP.initial]  ?? DEFAULT_MESSAGES.initial,
+    initial,
     message1: rowMap[KEY_MAP.message1] ?? DEFAULT_MESSAGES.message1,
     message2: rowMap[KEY_MAP.message2] ?? DEFAULT_MESSAGES.message2,
     message3: rowMap[KEY_MAP.message3] ?? DEFAULT_MESSAGES.message3,

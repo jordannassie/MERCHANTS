@@ -9,17 +9,16 @@ import {
 
 const URL = 'https://process.direct/p/santo-taco'
 
-const EXPECTED = `Hi, this is Jordan from Process.Direct. I noticed SANTO TACO is getting set up in Austin — congrats on starting your new business 🎉
+const EXPECTED = `Hi, this is Jordan from Process Direct.
 
-We created a payment processing proposal for you. If it looks good, we can get you set up this week to start accepting payments, and get you a FREE POS system too.
+Congrats on getting SANTO TACO set up in Austin 🎉
 
-I'm here if you have any questions.
+Are you taking payments yet — in person, online, or both?
 
-Best,
-Jordan
+We put together a payment-processing proposal for you. If it looks good, I can help get you set up this week, including a FREE POS system for your businesses.
 
+Best, Jordan
 Reply STOP to opt out.
-
 https://process.direct/p/santo-taco`
 
 describe('buildInitialOutreachMessage', () => {
@@ -37,11 +36,13 @@ describe('buildInitialOutreachMessage', () => {
     expect(message.indexOf(URL)).toBe(message.lastIndexOf(URL))
   })
 
-  it('uses Process.Direct and the period before If it looks good', () => {
+  it('uses the new Initial SMS wording', () => {
     const message = buildInitialOutreachMessage('SANTO TACO', URL, 'Austin')
-    expect(message).toContain('Process.Direct')
-    expect(message).toContain('proposal for you. If it looks good')
-    expect(message).not.toContain('Process Direct')
+    expect(message).toContain('Hi, this is Jordan from Process Direct.')
+    expect(message).toContain('Congrats on getting SANTO TACO set up in Austin 🎉')
+    expect(message).toContain('Are you taking payments yet — in person, online, or both?')
+    expect(message).toContain('FREE POS system for your businesses')
+    expect(message).toContain('Best, Jordan')
   })
 
   it('is compliant', () => {
@@ -50,7 +51,7 @@ describe('buildInitialOutreachMessage', () => {
   })
 
   it('rejects a message that omits STOP', () => {
-    const bad = EXPECTED.replace(`${STOP_LINE}\n\n`, '')
+    const bad = EXPECTED.replace(`${STOP_LINE}\n`, '')
     expect(isInitialSmsCompliant(bad, URL)).toBe(false)
   })
 
