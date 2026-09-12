@@ -201,20 +201,13 @@ export function ProposalTemplate({ data }: Props) {
 
           {/* ── Section 1 + 2: Hero ─────────────────────────────────────────── */}
           <div className="text-center mb-8">
-            {/* Home-page contactless / tap icon */}
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-50 mb-5">
-              <Image
-                src={TAP_ICON_URL}
-                alt="Tap"
-                width={32}
-                height={32}
-                className="w-8 h-8 object-contain"
-              />
-            </div>
-
-            <p className="text-xs font-semibold tracking-widest text-gray-400 uppercase mb-2">
-              Your Custom Proposal
-            </p>
+            <Image
+              src={TAP_ICON_URL}
+              alt="Tap"
+              width={252}
+              height={72}
+              className="mx-auto h-[72px] w-auto object-contain mb-3"
+            />
             <h1 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tight mb-4">
               {businessName.toUpperCase()}
             </h1>
