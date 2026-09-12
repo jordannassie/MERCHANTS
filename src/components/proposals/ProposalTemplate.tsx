@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import Image from 'next/image'
-import { X, User, Mail, Phone as PhoneIcon, Check } from 'lucide-react'
+import { X, User, Mail, Phone as PhoneIcon, Check, CreditCard } from 'lucide-react'
 
 const LOGO_URL =
   'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Blacklogo.png'
@@ -543,7 +543,9 @@ export function ProposalTemplate({ data }: Props) {
           </div>
 
           {/* ── Section 7: CTA form — desktop only inline ───────────────────── */}
-          <div className="hidden md:block">
+          <div className="hidden md:block pt-8">
+            <div className="relative">
+            <CreditCardBadge />
             <CtaSection
               accepted={accepted}
               loading={loading}
@@ -558,6 +560,7 @@ export function ProposalTemplate({ data }: Props) {
               selectedOption={selectedOption}
               onAccept={handleAccept}
             />
+            </div>
           </div>
 
           {/* Mobile: show success inline if already accepted */}
@@ -598,48 +601,58 @@ export function ProposalTemplate({ data }: Props) {
       {/* ── Mobile bottom sheet ──────────────────────────────────────────────── */}
       {sheetOpen && (
         <>
-          {/* Backdrop */}
           <div
-            className="md:hidden fixed inset-0 z-40 bg-black/40"
+            className="md:hidden fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
             onClick={() => setSheetOpen(false)}
           />
-          {/* Sheet */}
-          <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl shadow-2xl px-5 pt-5 pb-10">
-            {/* Handle + close */}
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto absolute left-1/2 -translate-x-1/2 top-3" />
-              <p className="text-sm font-semibold text-gray-800">Get Your Service Agreement</p>
-              <button
-                onClick={() => setSheetOpen(false)}
-                className="text-gray-400 hover:text-gray-600 p-1"
+          <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 px-0">
+            <div className="relative">
+              <CreditCardBadge />
+              <div
+                className="relative bg-[#F5FAFF] border-t border-x border-blue-100 rounded-t-[22px] shadow-2xl px-5 pt-11 pb-[max(1.25rem,env(safe-area-inset-bottom))]"
               >
-                <X size={18} />
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setSheetOpen(false)}
+                  className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 p-1.5"
+                  aria-label="Close"
+                >
+                  <X size={18} />
+                </button>
+                <CtaSection
+                  accepted={accepted}
+                  loading={loading}
+                  errors={errors}
+                  name={name}   setName={setName}
+                  email={email} setEmail={setEmail}
+                  phone={phone} setPhone={setPhone}
+                  selectedPlanName={selectedPlanName}
+                  cardSales={cardSales}
+                  monthlySavings={monthlySavings}
+                  yearlySavings={yearlySavings}
+                  selectedOption={selectedOption}
+                  chrome={false}
+                  onAccept={async () => {
+                    await handleAccept()
+                    setSheetOpen(false)
+                  }}
+                />
+              </div>
             </div>
-            <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-              Fill in your details and we&apos;ll send your Service Agreement and give you a call to
-              get everything set up.
-            </p>
-            <CtaSection
-              accepted={accepted}
-              loading={loading}
-              errors={errors}
-              name={name}   setName={setName}
-              email={email} setEmail={setEmail}
-              phone={phone} setPhone={setPhone}
-              selectedPlanName={selectedPlanName}
-              cardSales={cardSales}
-              monthlySavings={monthlySavings}
-              yearlySavings={yearlySavings}
-              selectedOption={selectedOption}
-              onAccept={async () => {
-                await handleAccept()
-                setSheetOpen(false)
-              }}
-            />
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+function CreditCardBadge() {
+  return (
+    <div
+      className="absolute left-1/2 -translate-x-1/2 -top-7 md:-top-8 z-10 flex items-center justify-center w-14 h-14 md:w-16 md:h-16 rounded-full bg-[#EAF4FF] border border-blue-200 shadow-[0_4px_14px_rgba(37,99,235,0.12)]"
+      aria-hidden
+    >
+      <CreditCard className="w-6 h-6 md:w-7 md:h-7 text-blue-600" strokeWidth={1.75} />
     </div>
   )
 }
@@ -649,8 +662,9 @@ export function ProposalTemplate({ data }: Props) {
 function CtaSection({
   accepted, loading, errors,
   name, setName, email, setEmail, phone, setPhone,
-  selectedPlanName, cardSales, monthlySavings, yearlySavings, selectedOption,
+  selectedPlanName, cardSales, monthlySavings, yearlySavings, selectedOption: _selectedOption,
   onAccept,
+  chrome = true,
 }: {
   accepted:         boolean
   loading:          boolean
@@ -664,12 +678,13 @@ function CtaSection({
   yearlySavings:    number
   selectedOption:   'wholesale' | 'customer_pay'
   onAccept:         () => void
+  chrome?:          boolean
 }) {
   function fmtD(n: number) { return '$' + Math.round(n).toLocaleString() }
 
   if (accepted) {
     return (
-      <div className="bg-green-50 border border-green-200 rounded-2xl px-6 py-8 text-center">
+      <div className="bg-green-50 border border-green-200 rounded-[20px] px-6 py-8 text-center">
         <span className="text-3xl font-black text-green-600 block mb-2">✓ Proposal Accepted</span>
         <p className="text-gray-500 text-sm max-w-sm mx-auto">
           Thanks! We&apos;ll send your Service Agreement so we can get your account set up.
@@ -681,87 +696,95 @@ function CtaSection({
   }
 
   const wrapCls = (field: string) =>
-    `flex items-center gap-2 bg-white rounded-xl border px-3 py-3 transition focus-within:ring-2 focus-within:ring-blue-500 ${
+    `flex items-center gap-2.5 bg-white rounded-full border px-4 py-3 transition focus-within:ring-2 focus-within:ring-blue-500 ${
       errors[field] ? 'border-red-400' : 'border-gray-200'
     }`
   const inputCls =
     'flex-1 text-sm text-gray-900 placeholder-gray-400 bg-transparent focus:outline-none'
 
   return (
-    <div className="bg-blue-50/60 border border-blue-100 rounded-2xl px-5 py-6 space-y-4">
-      <h2 className="text-2xl font-black text-gray-900 text-center tracking-tight">
+    <div
+      className={
+        chrome
+          ? 'bg-[#F5FAFF] border border-blue-100 rounded-[20px] px-5 md:px-6 pt-8 pb-6 space-y-3.5'
+          : 'space-y-3.5'
+      }
+    >
+      <h2 className="text-[22px] md:text-[26px] font-extrabold text-[#0B1B33] text-center tracking-tight leading-tight">
         Get a FREE Service Agreement Today
       </h2>
 
-      {/* Selected plan pill + expected card sales */}
-      <div className="flex flex-col items-center gap-2">
-        <span className="inline-flex items-center gap-1.5 bg-blue-100 text-blue-800 text-xs font-semibold px-3 py-1 rounded-full">
-          <Check size={12} strokeWidth={3} />
+      <div className="flex flex-col items-center gap-1.5">
+        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
+          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-100 text-blue-600">
+            <Check size={10} strokeWidth={3} />
+          </span>
           Selected plan: {selectedPlanName}
         </span>
-        <span className="text-xs text-gray-500">
-          Expected card sales: <strong className="text-gray-700">{fmtD(cardSales)}/month</strong>
-          {selectedOption === 'wholesale' && monthlySavings > 0 && (
-            <> · <span className="text-green-600 font-semibold">Est. savings {fmtD(monthlySavings)}/mo · {fmtD(yearlySavings)}/yr</span></>
-          )}
-        </span>
+        <p className="text-[11px] md:text-xs text-slate-400 text-center leading-relaxed">
+          Expected card sales: {fmtD(cardSales)}/month
+          {' · '}
+          <span className="text-green-600 font-medium">
+            Est. savings {fmtD(monthlySavings)}/mo · {fmtD(yearlySavings)}/yr
+          </span>
+        </p>
       </div>
 
-      {/* Name + Email row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
           <div className={wrapCls('name')}>
-            <User size={15} className="text-blue-400 shrink-0" />
+            <User size={16} className="text-slate-400 shrink-0" />
             <input
               type="text"
               placeholder="Name"
               value={name}
               onChange={e => setName(e.target.value)}
               className={inputCls}
+              autoComplete="name"
             />
           </div>
-          {errors.name && <p className="mt-1 text-xs text-red-500">{errors.name}</p>}
+          {errors.name && <p className="mt-1 text-xs text-red-500 px-2">{errors.name}</p>}
         </div>
         <div>
           <div className={wrapCls('email')}>
-            <Mail size={15} className="text-blue-400 shrink-0" />
+            <Mail size={16} className="text-slate-400 shrink-0" />
             <input
               type="email"
               placeholder="Email"
               value={email}
               onChange={e => setEmail(e.target.value)}
               className={inputCls}
+              autoComplete="email"
             />
           </div>
-          {errors.email && <p className="mt-1 text-xs text-red-500">{errors.email}</p>}
+          {errors.email && <p className="mt-1 text-xs text-red-500 px-2">{errors.email}</p>}
         </div>
       </div>
 
-      {/* Phone row */}
       <div>
         <div className={wrapCls('phone')}>
-          <PhoneIcon size={15} className="text-blue-400 shrink-0" />
+          <PhoneIcon size={16} className="text-slate-400 shrink-0" />
           <input
             type="tel"
             placeholder="Phone"
             value={phone}
             onChange={e => setPhone(e.target.value)}
             className={inputCls}
+            autoComplete="tel"
           />
         </div>
-        {errors.phone && <p className="mt-1 text-xs text-red-500">{errors.phone}</p>}
+        {errors.phone && <p className="mt-1 text-xs text-red-500 px-2">{errors.phone}</p>}
       </div>
 
-      {/* Form-level error */}
       {errors.form && (
         <p className="text-center text-sm text-red-600">{errors.form}</p>
       )}
 
-      {/* Submit button */}
       <button
+        type="button"
         onClick={onAccept}
         disabled={loading}
-        className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold text-base py-4 rounded-xl transition-colors"
+        className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold text-base py-3.5 rounded-xl transition-colors"
       >
         {loading ? (
           <>
@@ -773,7 +796,7 @@ function CtaSection({
         )}
       </button>
 
-      <p className="text-center text-xs text-gray-400">
+      <p className="text-center text-[11px] text-slate-400">
         🔒 Your information is secure and will only be used to process this proposal.
       </p>
     </div>
