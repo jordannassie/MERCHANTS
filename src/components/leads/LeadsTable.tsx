@@ -7,8 +7,10 @@ import { fmtDate, fmtPhone } from '@/lib/utils'
 import { Phone } from 'lucide-react'
 import { LEAD_STATUSES, COUNTY_NAMES } from '@/lib/constants'
 import type { LeadStatus } from '@/lib/types'
-import { buildOutreachMessage } from '@/lib/outreach'
-import { getProposalUrl } from '@/lib/proposals'
+import { buildInitialOutreachMessage } from '@/lib/outreach'
+import { getProposalUrl, slugifyBusinessName } from '@/lib/proposals'
+import { useInitialSmsTemplate } from '@/components/sms/useInitialSmsTemplate'
+import { InitialSmsPreview } from '@/components/sms/InitialSmsPreview'
 import { SendTextModal } from '@/components/leads/SendTextModal'
 import { isValidUSPhone } from '@/lib/source-utils'
 
@@ -31,6 +33,7 @@ function relativeTime(iso: string | null | undefined): string | null {
 }
 
 export function LeadsTable({ leads }: Props) {
+  const initialTemplate = useInitialSmsTemplate()
   const [leadsList, setLeadsList]       = useState<Lead[]>(leads)
   const [phoneCopied, setPhoneCopied]   = useState<Record<string, boolean>>({})
   const [smsCopied, setSmsCopied]       = useState<Record<string, boolean>>({})
@@ -219,8 +222,9 @@ export function LeadsTable({ leads }: Props) {
           const phone = lead.permit_phone ?? lead.primary_phone
           const normalized = phone ? phone.replace(/\D/g, '') : ''
           const businessName  = lead.display_name || lead.outlet_name
-          const proposalUrl   = lead.proposal_slug ? getProposalUrl(lead.proposal_slug) : null
-          const sms           = buildOutreachMessage(businessName, proposalUrl, city || null)
+          const proposalSlug  = lead.proposal_slug || slugifyBusinessName(businessName || lead.id.slice(0, 8))
+          const proposalUrl   = getProposalUrl(proposalSlug)
+          const sms           = buildInitialOutreachMessage(businessName, proposalUrl, city || null, initialTemplate)
 
           const canSendSms    = !!phone && isValidUSPhone(phone) && lead.status !== 'do_not_contact' && lead.sms_status !== 'opted_out'
           const isOptedOut    = lead.sms_status === 'opted_out' || lead.status === 'do_not_contact'
@@ -363,9 +367,7 @@ export function LeadsTable({ leads }: Props) {
               {/* SMS message — always visible */}
               <div>
                 <div className="text-xs text-gray-400 mb-1">Message</div>
-                <div className="bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-sm leading-relaxed text-slate-800 whitespace-pre-line">
-                  {sms}
-                </div>
+                <InitialSmsPreview message={sms} />
                 <div className="mt-2 flex items-center gap-3 flex-wrap">
                   <button
                     onClick={async () => {

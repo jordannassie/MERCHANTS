@@ -3,6 +3,8 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { sendSms, syncContact } from '@/lib/quo'
 import { isValidUSPhone, normalizeUSPhone } from '@/lib/source-utils'
 import { enrollLeadInSequence } from '@/lib/followup-engine'
+import { isInitialSmsCompliant } from '@/lib/outreach'
+import { renderInitialSmsForLead } from '@/lib/initial-sms'
 
 export async function POST(req: NextRequest) {
   // 1. QUO_API_KEY must be set
@@ -10,7 +12,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'SMS is not configured' }, { status: 503 })
   }
 
-  let body: { leadId?: string; content?: string }
+  let body: { leadId?: string; content?: string; useInitialTemplate?: boolean }
   try {
     body = await req.json()
   } catch {
@@ -18,12 +20,9 @@ export async function POST(req: NextRequest) {
   }
 
   // 2. leadId required
-  const { leadId, content } = body
+  const { leadId } = body
   if (!leadId) {
     return NextResponse.json({ ok: false, error: 'leadId is required' }, { status: 400 })
-  }
-  if (!content?.trim()) {
-    return NextResponse.json({ ok: false, error: 'content is required' }, { status: 400 })
   }
 
   const db = createServiceClient()
@@ -31,7 +30,7 @@ export async function POST(req: NextRequest) {
   // 3. Fetch lead — must exist and have a valid phone
   const { data: lead, error: leadError } = await db
     .from('leads')
-    .select('id, status, display_name, outlet_name, permit_phone, primary_phone, sms_status')
+    .select('id, status, display_name, outlet_name, taxpayer_name, outlet_city, permit_phone, primary_phone, sms_status')
     .eq('id', leadId)
     .single()
 
@@ -62,14 +61,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'This number has opted out of SMS messages' }, { status: 422 })
   }
 
-  // (SMS_PAUSED env var removed — manual sends are never artificially blocked)
+  // Initial SMS always comes from the central template so QUO matches preview.
+  // Client-supplied content is ignored — SMS #1 has one source of truth.
+  const rendered = await renderInitialSmsForLead(db, lead)
+  const content = rendered.message
+
+  if (!isInitialSmsCompliant(content, rendered.proposalUrl)) {
+    return NextResponse.json(
+      { ok: false, error: 'Initial SMS must include “Reply STOP to opt out.” immediately before the proposal URL.' },
+      { status: 422 },
+    )
+  }
 
   // ── Send ──────────────────────────────────────────────────────────────────
   let messageId: string
   const sentAt = new Date().toISOString()
 
   try {
-    const result = await sendSms(phone, content.trim())
+    const result = await sendSms(phone, content)
     messageId = result.messageId
   } catch (err) {
     const safeError = 'SMS sending failed — please try again'
@@ -81,7 +90,7 @@ export async function POST(req: NextRequest) {
       direction: 'outbound',
       to_number: `+1${normalizedPhone}`,
       from_number: process.env.QUO_FROM_NUMBER ?? '',
-      content: content.trim(),
+      content,
       status: 'failed',
       error_message: safeError,
       sent_at: sentAt,
@@ -90,14 +99,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: safeError }, { status: 502 })
   }
 
-  // Insert sms_messages record
+  // Insert sms_messages record — same string submitted to QUO
   await db.from('sms_messages').insert({
     lead_id: leadId,
     quo_message_id: messageId,
     direction: 'outbound',
     to_number: `+1${normalizedPhone}`,
     from_number: process.env.QUO_FROM_NUMBER ?? '',
-    content: content.trim(),
+    content,
     status: 'submitted',
     sent_at: sentAt,
   })

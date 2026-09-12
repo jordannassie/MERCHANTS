@@ -29,6 +29,11 @@ vi.mock('../proposals', () => ({
   getProposalUrl: vi.fn((slug: string) => `https://process.direct/p/${slug}`),
 }))
 
+vi.mock('@/lib/proposals', () => ({
+  ensureProposalSlug: vi.fn().mockResolvedValue('test-biz'),
+  getProposalUrl: vi.fn((slug: string) => `https://process.direct/p/${slug}`),
+}))
+
 vi.mock('../followup-engine', () => ({
   enrollLeadInSequence: vi.fn().mockResolvedValue(undefined),
 }))
@@ -412,6 +417,11 @@ describe('processBatch', () => {
     expect(result.sent).toBe(1)
     expect(result.failed).toBe(0)
     expect(mockSendSms).toHaveBeenCalledOnce()
+    const sentContent = mockSendSms.mock.calls[0]?.[1] as string
+    expect(sentContent).toContain('Reply STOP to opt out.')
+    const sentLines = sentContent.split('\n').map(l => l.trim()).filter(Boolean)
+    expect(sentLines[sentLines.length - 2]).toBe('Reply STOP to opt out.')
+    expect(sentLines[sentLines.length - 1]).toBe('https://process.direct/p/test-biz')
 
     // Verify enrollLeadInSequence was called
     const { enrollLeadInSequence } = await import('../followup-engine')

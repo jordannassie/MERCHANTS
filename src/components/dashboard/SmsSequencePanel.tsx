@@ -2,18 +2,18 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
-
-// Initial outreach message (Day 0 — always manual, read-only)
-const INITIAL_MESSAGE =
-  `Hi, this is Jordan from Process Direct. I noticed {BUSINESS_NAME} is getting set up in {CITY} — congrats on starting your new business 🎉\n\nWe created a payment processing proposal for you, if it looks good, we can get you set up this week to start accepting payments, and get you a FREE POS system too.\n\nI'm here if you have any questions.\n\nBest,\nJordan\n\n{PROPOSAL_URL}`
+import { buildInitialOutreachMessage, INITIAL_SMS_TEMPLATE } from '@/lib/outreach'
+import { InitialSmsPreview } from '@/components/sms/InitialSmsPreview'
 
 interface Messages {
+  initial: string
   message1: string
   message2: string
   message3: string
 }
 
 const DEFAULT_MESSAGES: Messages = {
+  initial: INITIAL_SMS_TEMPLATE,
   message1:
     "Hi, just wanted to make sure you received the proposal I sent over for {BUSINESS_NAME}. I'm here if you have any questions.\n\nJordan",
   message2:
@@ -83,14 +83,30 @@ export function SmsSequencePanel() {
 
       {!loading && (
         <>
-          {/* INITIAL SMS — read-only */}
           <SequenceStep
             day="Day 0"
-            mode="Manual"
+            mode="Editable"
             title="INITIAL SMS"
-            value={INITIAL_MESSAGE}
-            readOnly
+            value={messages.initial}
+            rows={14}
+            onChange={v => setMessages(m => ({ ...m, initial: v }))}
           />
+          <p className="text-[11px] text-gray-500 -mt-3">
+            Required: <code className="bg-gray-100 px-1 rounded">Reply STOP to opt out.</code> immediately before{' '}
+            <code className="bg-gray-100 px-1 rounded">{'{PROPOSAL_URL}'}</code>, which must be the last line.
+            This is the exact template used by every Initial SMS preview and QUO send.
+          </p>
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-gray-500">Rendered example (same builder as QUO)</p>
+            <InitialSmsPreview
+              message={buildInitialOutreachMessage(
+                'SANTO TACO',
+                'https://process.direct/p/santo-taco',
+                'Austin',
+                messages.initial,
+              )}
+            />
+          </div>
 
           {/* Follow-up 1 */}
           <SequenceStep
@@ -171,7 +187,7 @@ export function SmsSequencePanel() {
             📋 SMS Sequence
           </h2>
           <p className="text-xs text-gray-400 mt-0.5">
-            View and edit the 3 automated follow-up messages
+            Edit Initial SMS and the 3 automated follow-up messages
           </p>
         </div>
         {open
@@ -192,13 +208,15 @@ function SequenceStep({
   title,
   value,
   readOnly,
+  rows = 5,
   onChange,
 }: {
   day: string
-  mode: 'Manual' | 'Automatic'
+  mode: 'Editable' | 'Automatic'
   title: string
   value: string
   readOnly?: boolean
+  rows?: number
   onChange?: (v: string) => void
 }) {
   return (
@@ -221,7 +239,7 @@ function SequenceStep({
         value={value}
         readOnly={readOnly}
         onChange={e => onChange?.(e.target.value)}
-        rows={5}
+        rows={rows}
         className={`w-full rounded-lg border text-xs font-mono p-3 resize-y leading-relaxed focus:outline-none focus:ring-1 focus:ring-blue-400 ${
           readOnly
             ? 'bg-gray-50 border-gray-100 text-gray-400 cursor-default'

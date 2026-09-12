@@ -1,6 +1,6 @@
 /**
- * GET  /api/settings/sms-sequence — returns { message1, message2, message3 }
- * POST /api/settings/sms-sequence — body { message1?, message2?, message3? } → upserts system_settings
+ * GET  /api/settings/sms-sequence — returns { initial, message1, message2, message3 }
+ * POST /api/settings/sms-sequence — upserts system_settings including Initial SMS
  * PATCH is an alias for POST.
  *
  * Auth: requires mr_admin session cookie.
@@ -10,8 +10,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServiceClient } from '@/lib/supabase/service'
 import { verifySessionToken, SESSION_COOKIE } from '@/lib/session'
+import {
+  INITIAL_OUTREACH_SETTING_KEY,
+  INITIAL_SMS_TEMPLATE,
+  isInitialSmsCompliant,
+} from '@/lib/outreach'
 
-const DEFAULT_MESSAGES: Record<'message1' | 'message2' | 'message3', string> = {
+const DEFAULT_MESSAGES: Record<'initial' | 'message1' | 'message2' | 'message3', string> = {
+  initial: INITIAL_SMS_TEMPLATE,
   message1:
     'Hi, just wanted to make sure you received the proposal I sent over for {BUSINESS_NAME}. I\'m here if you have any questions.\n\nJordan',
   message2:
@@ -21,6 +27,7 @@ const DEFAULT_MESSAGES: Record<'message1' | 'message2' | 'message3', string> = {
 }
 
 const KEY_MAP = {
+  initial:  INITIAL_OUTREACH_SETTING_KEY,
   message1: 'sales_followup_message_1',
   message2: 'sales_followup_message_2',
   message3: 'sales_followup_message_3',
@@ -49,7 +56,19 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
     rowMap[row.key] = row.value
   }
 
+  if (!rowMap[KEY_MAP.initial]) {
+    await db.from('system_settings').upsert(
+      {
+        key: KEY_MAP.initial,
+        value: DEFAULT_MESSAGES.initial,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'key' },
+    )
+  }
+
   return NextResponse.json({
+    initial:  rowMap[KEY_MAP.initial]  ?? DEFAULT_MESSAGES.initial,
     message1: rowMap[KEY_MAP.message1] ?? DEFAULT_MESSAGES.message1,
     message2: rowMap[KEY_MAP.message2] ?? DEFAULT_MESSAGES.message2,
     message3: rowMap[KEY_MAP.message3] ?? DEFAULT_MESSAGES.message3,
@@ -61,7 +80,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
   }
 
-  let body: { message1?: string; message2?: string; message3?: string }
+  let body: { initial?: string; message1?: string; message2?: string; message3?: string }
   try {
     body = await req.json()
   } catch {
@@ -70,6 +89,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const db = createServiceClient()
   const now = new Date().toISOString()
+
+  if (typeof body.initial === 'string') {
+    if (!isInitialSmsCompliant(body.initial, '{PROPOSAL_URL}')) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            'Initial SMS must include “Reply STOP to opt out.” immediately before {PROPOSAL_URL}, and {PROPOSAL_URL} must be the last line.',
+        },
+        { status: 400 },
+      )
+    }
+  }
 
   const upserts: Array<{ key: string; value: string; updated_at: string }> = []
 

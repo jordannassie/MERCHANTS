@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { buildOutreachMessage } from '@/lib/outreach'
-import { getProposalUrl } from '@/lib/proposals'
+import { useState, useEffect } from 'react'
+import { InitialSmsPreview } from '@/components/sms/InitialSmsPreview'
+import { STOP_LINE } from '@/lib/outreach'
 
 interface Props {
   lead: {
@@ -18,7 +18,6 @@ interface Props {
   onSent: (result: { messageId: string }) => void
 }
 
-/** Format a 10-digit string as (XXX) XXX-XXXX */
 function formatPhone(phone: string): string {
   const digits = phone.replace(/\D/g, '')
   const d = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits
@@ -27,22 +26,40 @@ function formatPhone(phone: string): string {
 }
 
 export function SendTextModal({ lead, onClose, onSent }: Props) {
-  const businessName = lead.display_name || lead.outlet_name || null
-  const proposalUrl  = lead.proposal_slug ? getProposalUrl(lead.proposal_slug) : null
-  const defaultMessage = buildOutreachMessage(businessName, proposalUrl, lead.outlet_city ?? null)
+  const [message, setMessage]     = useState('')
+  const [proposalUrl, setProposalUrl] = useState('')
+  const [loadingPreview, setLoadingPreview] = useState(true)
+  const [previewError, setPreviewError] = useState<string | null>(null)
+  const [compliant, setCompliant] = useState(false)
+  const [confirmed, setConfirmed] = useState(false)
+  const [loading, setLoading]     = useState(false)
+  const [error, setError]         = useState<string | null>(null)
+  const [success, setSuccess]     = useState(false)
 
-  const [content, setContent]   = useState(defaultMessage)
-  const [loading, setLoading]   = useState(false)
-  const [error, setError]       = useState<string | null>(null)
-  const [success, setSuccess]   = useState(false)
-  const textareaRef             = useRef<HTMLTextAreaElement>(null)
-
-  // Focus textarea on open
   useEffect(() => {
-    textareaRef.current?.focus()
-  }, [])
+    let cancelled = false
+    setLoadingPreview(true)
+    fetch(`/api/sms/preview?leadId=${encodeURIComponent(lead.id)}`)
+      .then(res => res.json())
+      .then(data => {
+        if (cancelled) return
+        if (!data.ok) {
+          setPreviewError(data.error ?? 'Could not build the Initial SMS preview')
+          return
+        }
+        setMessage(data.message)
+        setProposalUrl(data.proposalUrl ?? '')
+        setCompliant(data.compliant === true)
+      })
+      .catch(() => {
+        if (!cancelled) setPreviewError('Could not build the Initial SMS preview')
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingPreview(false)
+      })
+    return () => { cancelled = true }
+  }, [lead.id])
 
-  // Close on Escape
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (e.key === 'Escape' && !loading) onClose()
@@ -51,12 +68,13 @@ export function SendTextModal({ lead, onClose, onSent }: Props) {
     return () => window.removeEventListener('keydown', handleKey)
   }, [loading, onClose])
 
-  const charCount   = content.length
-  const segments    = Math.max(1, Math.ceil(charCount / 160))
-  const segCost     = (segments * 0.01).toFixed(2)
+  const hasStop = message.includes(STOP_LINE)
+  const lastLine = message.split('\n').map(l => l.trim()).filter(Boolean).pop() ?? ''
+  const urlIsLast = lastLine === proposalUrl || lastLine.startsWith('http')
+  const canSend = !loadingPreview && !previewError && compliant && confirmed && !!message && !loading && !success
 
   async function handleSend() {
-    if (!content.trim()) return
+    if (!canSend) return
     setLoading(true)
     setError(null)
 
@@ -64,7 +82,7 @@ export function SendTextModal({ lead, onClose, onSent }: Props) {
       const res = await fetch('/api/sms/send', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ leadId: lead.id, content: content.trim() }),
+        body:    JSON.stringify({ leadId: lead.id, useInitialTemplate: true }),
       })
       const json = await res.json()
 
@@ -84,16 +102,13 @@ export function SendTextModal({ lead, onClose, onSent }: Props) {
   }
 
   return (
-    /* Backdrop */
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4"
       onClick={(e) => { if (e.target === e.currentTarget && !loading) onClose() }}
     >
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
-
-        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-lg font-semibold text-gray-900">Send Text Message</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Send Initial SMS</h2>
           <button
             onClick={onClose}
             disabled={loading}
@@ -105,8 +120,6 @@ export function SendTextModal({ lead, onClose, onSent }: Props) {
         </div>
 
         <div className="px-6 py-5 space-y-4">
-
-          {/* Recipient */}
           <div>
             <div className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">To</div>
             <div className="flex items-center gap-2">
@@ -118,37 +131,46 @@ export function SendTextModal({ lead, onClose, onSent }: Props) {
             </div>
           </div>
 
-          {/* From */}
           <div>
-            <div className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">From</div>
-            <div className="text-sm text-gray-600 font-mono">(949) 736-1560</div>
-          </div>
-
-          {/* Message */}
-          <div>
-            <div className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Message</div>
-            <textarea
-              ref={textareaRef}
-              value={content}
-              onChange={(e) => { setContent(e.target.value); setError(null) }}
-              disabled={loading || success}
-              rows={9}
-              className="w-full text-sm text-gray-800 border border-gray-200 rounded-xl px-3 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 leading-relaxed"
-            />
-            <div className="flex items-center justify-between mt-1 text-xs text-gray-400">
-              <span>{charCount} characters</span>
-              <span>{segments} segment{segments !== 1 ? 's' : ''} (est. ~${segCost})</span>
+            <div className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">
+              Exact message that will be sent to QUO
             </div>
+            {loadingPreview ? (
+              <p className="text-sm text-gray-400 py-6 text-center">Building preview…</p>
+            ) : previewError ? (
+              <p className="text-sm text-red-600">{previewError}</p>
+            ) : (
+              <InitialSmsPreview message={message} />
+            )}
           </div>
 
-          {/* Error */}
+          {!loadingPreview && !previewError && (
+            <div className="text-xs space-y-1">
+              <p className={hasStop ? 'text-green-700 font-medium' : 'text-red-600 font-medium'}>
+                {hasStop ? '✓ Includes “Reply STOP to opt out.”' : '✗ Missing STOP line'}
+              </p>
+              <p className={urlIsLast ? 'text-green-700 font-medium' : 'text-red-600 font-medium'}>
+                {urlIsLast ? '✓ Proposal URL is the last line' : '✗ Proposal URL is not the last line'}
+              </p>
+            </div>
+          )}
+
+          <label className="flex items-start gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={confirmed}
+              onChange={e => setConfirmed(e.target.checked)}
+              disabled={loadingPreview || !!previewError || !compliant}
+              className="mt-0.5"
+            />
+            I reviewed this exact message. The STOP line and proposal URL match what QUO will send.
+          </label>
+
           {error && (
             <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
               ⚠ {error}
             </div>
           )}
-
-          {/* Success */}
           {success && (
             <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 font-medium">
               ✓ Sent successfully
@@ -156,7 +178,6 @@ export function SendTextModal({ lead, onClose, onSent }: Props) {
           )}
         </div>
 
-        {/* Footer */}
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50">
           <button
             onClick={onClose}
@@ -167,7 +188,7 @@ export function SendTextModal({ lead, onClose, onSent }: Props) {
           </button>
           <button
             onClick={handleSend}
-            disabled={loading || success || !content.trim()}
+            disabled={!canSend}
             className="px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors flex items-center gap-2"
           >
             {loading ? (
@@ -176,11 +197,10 @@ export function SendTextModal({ lead, onClose, onSent }: Props) {
                 Sending…
               </>
             ) : (
-              '📱 Confirm & Send'
+              '📱 Send this exact message'
             )}
           </button>
         </div>
-
       </div>
     </div>
   )

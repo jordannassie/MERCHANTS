@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { InitialSmsPreview } from '@/components/sms/InitialSmsPreview'
+import { STOP_LINE } from '@/lib/outreach'
 
 interface Props {
   enabled: boolean
@@ -35,6 +37,16 @@ export function NewOutreachCard({
   const [sending, setSending]               = useState(false)
   const [batchResult, setBatchResult]       = useState<BatchResult | null>(null)
   const [saveError, setSaveError]           = useState<string | null>(null)
+  const [preview, setPreview] = useState<{
+    message: string
+    displayName?: string
+    city?: string | null
+    proposalUrl?: string
+    compliant?: boolean
+  } | null>(null)
+  const [previewError, setPreviewError] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewConfirmed, setPreviewConfirmed] = useState(false)
 
   // Debounced auto-save for number/time inputs
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -272,7 +284,27 @@ export function NewOutreachCard({
         {/* Action button */}
         <div className="border-t border-gray-100 pt-4">
           <button
-            onClick={() => { setBatchResult(null); setShowConfirmModal(true) }}
+            onClick={async () => {
+              setBatchResult(null)
+              setPreview(null)
+              setPreviewError(null)
+              setPreviewConfirmed(false)
+              setShowConfirmModal(true)
+              setPreviewLoading(true)
+              try {
+                const res = await fetch('/api/new-outreach/preview')
+                const data = await res.json()
+                if (!res.ok || !data.ok) {
+                  setPreviewError(data.error ?? 'Could not preview the Initial SMS')
+                } else {
+                  setPreview(data)
+                }
+              } catch {
+                setPreviewError('Could not preview the Initial SMS')
+              } finally {
+                setPreviewLoading(false)
+              }
+            }}
             disabled={sending}
             className="w-full sm:w-auto px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
@@ -284,15 +316,49 @@ export function NewOutreachCard({
       {/* Confirmation modal */}
       {showConfirmModal && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <h3 className="text-base font-semibold text-gray-900">
-              Send initial SMS to {batchSize.toLocaleString()} NEW leads?
+              Review the exact Initial SMS before sending
             </h3>
             <p className="text-sm text-gray-600">
-              The first proposal SMS will be sent to up to{' '}
-              <strong>{batchSize.toLocaleString()}</strong> eligible NEW leads, freshest first.
-              Each successful send will enroll the lead in the automated follow-up sequence.
+              Up to <strong>{batchSize.toLocaleString()}</strong> NEW leads will get this same
+              template, personalized with their business name, city, and proposal URL.
             </p>
+            {previewLoading && (
+              <p className="text-sm text-gray-400">Loading a real lead preview…</p>
+            )}
+            {previewError && (
+              <p className="text-sm text-red-600">{previewError}</p>
+            )}
+            {preview && (
+              <div className="space-y-2">
+                <p className="text-xs text-gray-500">
+                  Preview for <strong>{preview.displayName ?? 'next eligible lead'}</strong>
+                  {preview.city ? ` · ${preview.city}` : ''}
+                </p>
+                <InitialSmsPreview message={preview.message} />
+                <p className={`text-xs font-medium ${preview.message.includes(STOP_LINE) ? 'text-green-700' : 'text-red-600'}`}>
+                  {preview.message.includes(STOP_LINE)
+                    ? '✓ Includes “Reply STOP to opt out.”'
+                    : '✗ Missing STOP line — batch send is blocked'}
+                </p>
+                <p className={`text-xs font-medium ${preview.compliant ? 'text-green-700' : 'text-red-600'}`}>
+                  {preview.compliant
+                    ? '✓ Proposal URL is the last line'
+                    : '✗ Message is not compliant — batch send is blocked'}
+                </p>
+                <label className="flex items-start gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={previewConfirmed}
+                    onChange={e => setPreviewConfirmed(e.target.checked)}
+                    disabled={!preview.compliant}
+                    className="mt-0.5"
+                  />
+                  I reviewed this exact message. QUO will receive the same STOP line and final proposal URL.
+                </label>
+              </div>
+            )}
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => setShowConfirmModal(false)}
@@ -302,7 +368,7 @@ export function NewOutreachCard({
               </button>
               <button
                 onClick={sendBatch}
-                disabled={sending}
+                disabled={sending || !preview?.compliant || !previewConfirmed}
                 className="flex-1 px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
                 {sending ? 'Sending…' : `Send ${batchSize.toLocaleString()}`}

@@ -1,13 +1,17 @@
 /**
  * New Outreach Engine — sends the initial proposal SMS to eligible NEW leads.
- * Reuses: buildOutreachMessage, ensureProposalSlug, sendSms, enrollLeadInSequence.
+ * Reuses: renderInitialSmsForLead, sendSms, enrollLeadInSequence.
  *
  * Server-side ONLY. Never import from 'use client' components.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { buildOutreachMessage } from '@/lib/outreach'
-import { ensureProposalSlug, getProposalUrl } from '@/lib/proposals'
+import { renderInitialSmsForLead } from '@/lib/initial-sms'
+import {
+  buildInitialOutreachMessage,
+  getInitialOutreachTemplate,
+  isInitialSmsCompliant,
+} from '@/lib/outreach'
 import { enrollLeadInSequence } from '@/lib/followup-engine'
 import { sendSms, syncContact, isValidUSPhone, normalizeUSPhone } from '@/lib/quo'
 import type { Lead } from '@/lib/types'
@@ -97,6 +101,13 @@ export async function getNewOutreachSettings(db: SupabaseClient): Promise<{
  * Compare lastRunDate (YYYY-MM-DD) with today's date in Central Time.
  * Returns true if already run today.
  */
+export async function isInitialOutreachReady(db: SupabaseClient): Promise<boolean> {
+  const template = await getInitialOutreachTemplate(db)
+  const probeUrl = 'https://process.direct/p/test-biz'
+  const probe = buildInitialOutreachMessage('TEST BIZ', probeUrl, 'Austin', template)
+  return isInitialSmsCompliant(probe, probeUrl)
+}
+
 export function hasRunToday(lastRunDate: string): boolean {
   if (!lastRunDate) return false
   return lastRunDate === todayInCT()
@@ -214,15 +225,12 @@ export async function sendInitialOutreach(
     return { ok: false, error: 'suppressed' }
   }
 
-  // 3. Get / create proposal slug
-  const businessName = lead.display_name || lead.outlet_name || lead.taxpayer_name || 'your business'
-  const slug = await ensureProposalSlug(db, lead.id, businessName)
-
-  // 4. Get proposal URL
-  const proposalUrl = getProposalUrl(slug)
-
-  // 5. Build message
-  const message = buildOutreachMessage(businessName, proposalUrl, lead.outlet_city ?? null)
+  // 3–5. Proposal slug + the one Initial SMS template (same string as preview)
+  const rendered = await renderInitialSmsForLead(db, lead)
+  const message = rendered.message
+  if (!rendered.compliant) {
+    return { ok: false, error: 'initial_sms_not_compliant' }
+  }
 
   // 6. Attempt to send SMS via QUO — isolated try-catch so ONLY send failures
   //    prevent the status update. Any later DB error cannot mask a real send.
@@ -320,6 +328,11 @@ export async function processBatch(
     errors: [],
   }
 
+  if (!(await isInitialOutreachReady(db))) {
+    result.errors.push('Initial SMS template is not compliant. Batch send is blocked.')
+    return result
+  }
+
   const leads = await getEligibleNewLeads(db, batchSize)
   result.requested = batchSize
 
@@ -388,6 +401,10 @@ export async function maybeRunScheduledBatch(
 
   if (currentMinutes < scheduledMinutes) {
     return { ran: false, reason: 'not_yet_time' }
+  }
+
+  if (!(await isInitialOutreachReady(db))) {
+    return { ran: false, reason: 'initial_sms_not_compliant' }
   }
 
   // 5. Run the batch
