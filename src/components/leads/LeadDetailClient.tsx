@@ -236,6 +236,18 @@ export function LeadDetailClient({ lead: initialLead, contacts: initialContacts,
             <dd className="text-gray-900">{lead.proposal_status ?? 'not_sent'}</dd>
           </div>
           <div className="flex gap-2">
+            <dt className="text-gray-500 w-36 shrink-0">Accepts payments</dt>
+            <dd className="text-gray-900">
+              {lead.proposal_payment_acceptance === 'in_person'
+                ? 'In Person / POS'
+                : lead.proposal_payment_acceptance === 'online'
+                  ? 'Online / Website'
+                  : lead.proposal_payment_acceptance === 'both'
+                    ? 'Both'
+                    : 'Not specified'}
+            </dd>
+          </div>
+          <div className="flex gap-2">
             <dt className="text-gray-500 w-36 shrink-0">Proposal views</dt>
             <dd className="text-gray-900">{lead.proposal_view_count ?? 0}</dd>
           </div>

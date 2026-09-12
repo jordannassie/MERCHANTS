@@ -183,6 +183,7 @@ export interface Lead {
   // Proposal calculator (migration 027)
   proposal_selected_option?:   'wholesale' | 'customer_pay' | null
   proposal_calc_snapshot?:     Record<string, unknown> | null
+  proposal_payment_acceptance?: 'in_person' | 'online' | 'both' | null
   // DNC / opt-out tracking (migration 028)
   opted_out_at?:    string | null
   opt_out_reason?:  string | null

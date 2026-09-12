@@ -203,11 +203,27 @@ export function ProposalEditor({ lead, onUpdate }: Props) {
       {/* ── Customer response — read-only ───────────────────────────────── */}
       {(lead.proposal_selected_option ||
         lead.estimated_monthly_card_sales ||
-        lead.proposal_calc_snapshot) && (
+        lead.proposal_calc_snapshot ||
+        lead.proposal_payment_acceptance) && (
         <div className="border-t border-gray-100 pt-4 space-y-3">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
             Customer Response
           </p>
+
+          <div className="bg-gray-50 border border-gray-100 rounded-lg px-3 py-3">
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">
+              Payment Acceptance
+            </p>
+            <p className="text-sm font-semibold text-gray-900">
+              {lead.proposal_payment_acceptance === 'in_person'
+                ? 'In Person / POS'
+                : lead.proposal_payment_acceptance === 'online'
+                  ? 'Online / Website'
+                  : lead.proposal_payment_acceptance === 'both'
+                    ? 'Both'
+                    : 'Not specified'}
+            </p>
+          </div>
 
           {/* 3-stat summary row */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

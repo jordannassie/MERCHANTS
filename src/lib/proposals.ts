@@ -18,6 +18,26 @@ export function slugifyBusinessName(name: string): string {
  * Get the full public proposal URL for a slug.
  * Uses NEXT_PUBLIC_SITE_URL, falls back to 'https://process.direct'.
  */
+export type PaymentAcceptance = 'in_person' | 'online' | 'both'
+
+export const PAYMENT_ACCEPTANCE_OPTIONS: Array<{
+  value: PaymentAcceptance
+  label: string
+}> = [
+  { value: 'in_person', label: 'In Person / POS' },
+  { value: 'online',    label: 'Online / Website' },
+  { value: 'both',      label: 'Both' },
+]
+
+export function isPaymentAcceptance(value: unknown): value is PaymentAcceptance {
+  return value === 'in_person' || value === 'online' || value === 'both'
+}
+
+export function paymentAcceptanceLabel(value: string | null | undefined): string {
+  const match = PAYMENT_ACCEPTANCE_OPTIONS.find(o => o.value === value)
+  return match?.label ?? 'Not specified'
+}
+
 export function getProposalUrl(slug: string): string {
   const base =
     (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://process.direct').replace(/\/$/, '')

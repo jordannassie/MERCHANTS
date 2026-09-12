@@ -27,6 +27,7 @@ export const PENDING_MIGRATIONS: PendingMigration[] = [
   { id: '027', file: '027_proposal_calculator.sql', probe: { table: 'leads', column: 'proposal_selected_option' } },
   { id: '028', file: '028_dnc_optin.sql', probe: { table: 'leads', column: 'opted_out_at' } },
   { id: '029', file: '029_perf_indexes.sql', probe: { table: 'leads', column: 'status' }, alwaysApply: true },
+  { id: '030', file: '030_proposal_payment_acceptance.sql', probe: { table: 'leads', column: 'proposal_payment_acceptance' } },
 ]
 
 export function readMigrationSql(filename: string): string | null {

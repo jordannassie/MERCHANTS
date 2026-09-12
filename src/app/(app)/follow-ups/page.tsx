@@ -41,11 +41,22 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
   // ── A. NEEDS ATTENTION ────────────────────────────────────────────────────
 
   // 1. Agreement Requests
-  const { data: agreementLeads } = await db
+  const AGREEMENT_SELECT =
+    'id,display_name,outlet_name,outlet_city,permit_phone,primary_phone,proposal_contact_name,proposal_contact_phone,proposal_payment_acceptance,agreement_requested_at,status'
+  const agreementQuery = await db
     .from('leads')
-    .select('id,display_name,outlet_name,outlet_city,permit_phone,primary_phone,proposal_contact_name,proposal_contact_phone,agreement_requested_at,status')
+    .select(AGREEMENT_SELECT)
     .in('proposal_status', ['agreement_requested', 'accepted'])
     .order('agreement_requested_at', { ascending: false })
+  let agreementLeads: Array<Record<string, unknown>> | null = agreementQuery.data
+  if (agreementQuery.error) {
+    const retry = await db
+      .from('leads')
+      .select('id,display_name,outlet_name,outlet_city,permit_phone,primary_phone,proposal_contact_name,proposal_contact_phone,agreement_requested_at,status')
+      .in('proposal_status', ['agreement_requested', 'accepted'])
+      .order('agreement_requested_at', { ascending: false })
+    agreementLeads = retry.data
+  }
 
   // 2. Replies (sms_needs_reply = true)
   const { data: replyLeads } = await db
@@ -142,7 +153,7 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
               {showAgreements && (agreementLeads ?? []).map(lead => {
                 const phone = (lead.proposal_contact_phone || lead.permit_phone || lead.primary_phone) as string | null
                 return (
-                  <div key={lead.id} className="bg-white rounded-xl border border-green-200 p-4 shadow-sm">
+                  <div key={String(lead.id)} className="bg-white rounded-xl border border-green-200 p-4 shadow-sm">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 mb-1">
@@ -161,6 +172,15 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
                           {lead.agreement_requested_at
                             ? ` · ${timeAgo(lead.agreement_requested_at as string)}`
                             : ''}
+                          {` · ${
+                            lead.proposal_payment_acceptance === 'in_person'
+                              ? 'In Person / POS'
+                              : lead.proposal_payment_acceptance === 'online'
+                                ? 'Online / Website'
+                                : lead.proposal_payment_acceptance === 'both'
+                                  ? 'Both'
+                                  : 'Not specified'
+                          }`}
                         </p>
                       </div>
                       <div className="flex gap-1.5 shrink-0">

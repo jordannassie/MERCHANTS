@@ -2,7 +2,11 @@
 
 import { useState, useRef } from 'react'
 import Image from 'next/image'
-import { X, User, Mail, Phone as PhoneIcon, Check, CreditCard } from 'lucide-react'
+import { X, User, Mail, Phone as PhoneIcon, Check, CreditCard, MonitorSmartphone } from 'lucide-react'
+import {
+  PAYMENT_ACCEPTANCE_OPTIONS,
+  type PaymentAcceptance,
+} from '@/lib/proposals'
 
 const LOGO_URL =
   'https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/logos/Blacklogo.png'
@@ -42,7 +46,7 @@ interface Props {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function ProposalTemplate({ data }: Props) {
-  const { businessName, slug, equipment, calcSettings } = data
+  const { businessName, slug, calcSettings } = data
   const {
     compareRate,
     wholesaleCost,
@@ -76,6 +80,7 @@ export function ProposalTemplate({ data }: Props) {
   const [name,  setName]  = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+  const [paymentAcceptance, setPaymentAcceptance] = useState<PaymentAcceptance | null>(null)
 
   // ── Derived calculator values ────────────────────────────────────────────────
   const effectiveRate    = wholesaleCost + markupRate                       // e.g. 2.35%
@@ -120,6 +125,7 @@ export function ProposalTemplate({ data }: Props) {
   // ── Form validation ──────────────────────────────────────────────────────────
   function validate() {
     const errs: Record<string, string> = {}
+    if (!paymentAcceptance) errs.paymentAcceptance = 'Please choose how you want to accept payments.'
     if (!name.trim())  errs.name  = 'Name is required.'
     if (!email.trim()) errs.email = 'Email is required.'
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))
@@ -147,6 +153,7 @@ export function ProposalTemplate({ data }: Props) {
       monthly_savings:             Math.round(monthlySavings),
       yearly_savings:              Math.round(yearlySavings),
       selected_option:             selectedOption,
+      payment_acceptance:          paymentAcceptance,
     }
 
     try {
@@ -158,6 +165,7 @@ export function ProposalTemplate({ data }: Props) {
           email:          email.trim(),
           phone:          phone.trim(),
           selectedOption,
+          paymentAcceptance,
           calcSnapshot,
         }),
       })
@@ -388,29 +396,20 @@ export function ProposalTemplate({ data }: Props) {
           {/* ── Section 5: Feature cards ─────────────────────────────────────── */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
 
-            {/* Free Terminal */}
+            {/* Payments your way */}
             <div className="border border-gray-200 rounded-xl p-5 flex items-start gap-4">
-              <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-gray-50 flex items-center justify-center">
-                <img
-                  src="https://phhczohqidgrvcmszets.supabase.co/storage/v1/object/public/MERCHANT/images/images/a920pro-pci-7-secondary-display.webp"
-                  alt="FREE POS Terminal"
-                  className="w-full h-full object-contain"
-                />
+              <div className="flex-shrink-0 w-16 h-16 rounded-xl bg-blue-50 flex items-center justify-center">
+                <MonitorSmartphone className="w-8 h-8 text-blue-600" strokeWidth={1.75} />
               </div>
               <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <p className="text-xs font-semibold tracking-widest text-gray-400 uppercase">
-                    Free Terminal*
-                  </p>
-                  <span className="inline-block bg-green-500 text-white text-xs font-black px-2 py-0.5 rounded-full tracking-wide">
-                    FREE
-                  </span>
-                </div>
-                <p className="text-lg font-bold text-gray-900">
-                  {equipment || 'POS System'}
+                <p className="text-xs font-semibold tracking-widest text-gray-400 uppercase mb-1">
+                  Payments Your Way
                 </p>
-                <p className="text-sm text-green-600 font-semibold mt-0.5">
-                  Included at no cost
+                <p className="text-lg font-bold text-gray-900">
+                  In-Person POS + Online Payments
+                </p>
+                <p className="text-sm text-slate-500 mt-0.5">
+                  Accept cards at the counter, on your website, by payment link, or invoice.
                 </p>
               </div>
             </div>
@@ -547,6 +546,8 @@ export function ProposalTemplate({ data }: Props) {
               monthlySavings={monthlySavings}
               yearlySavings={yearlySavings}
               selectedOption={selectedOption}
+              paymentAcceptance={paymentAcceptance}
+              setPaymentAcceptance={setPaymentAcceptance}
               onAccept={handleAccept}
             />
             </div>
@@ -620,6 +621,8 @@ export function ProposalTemplate({ data }: Props) {
                   monthlySavings={monthlySavings}
                   yearlySavings={yearlySavings}
                   selectedOption={selectedOption}
+                  paymentAcceptance={paymentAcceptance}
+                  setPaymentAcceptance={setPaymentAcceptance}
                   chrome={false}
                   onAccept={async () => {
                     await handleAccept()
@@ -652,6 +655,7 @@ function CtaSection({
   accepted, loading, errors,
   name, setName, email, setEmail, phone, setPhone,
   selectedPlanName, cardSales, monthlySavings, yearlySavings, selectedOption: _selectedOption,
+  paymentAcceptance, setPaymentAcceptance,
   onAccept,
   chrome = true,
 }: {
@@ -666,6 +670,8 @@ function CtaSection({
   monthlySavings:   number
   yearlySavings:    number
   selectedOption:   'wholesale' | 'customer_pay'
+  paymentAcceptance: PaymentAcceptance | null
+  setPaymentAcceptance: (v: PaymentAcceptance) => void
   onAccept:         () => void
   chrome?:          boolean
 }) {
@@ -717,6 +723,39 @@ function CtaSection({
             Est. savings {fmtD(monthlySavings)}/mo · {fmtD(yearlySavings)}/yr
           </span>
         </p>
+      </div>
+
+      <div>
+        <p className="text-sm font-semibold text-[#0B1B33] text-center mb-2">
+          How do you want to accept payments?
+        </p>
+        <div className="grid grid-cols-3 gap-2">
+          {PAYMENT_ACCEPTANCE_OPTIONS.map(opt => {
+            const selected = paymentAcceptance === opt.value
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setPaymentAcceptance(opt.value)}
+                className={`rounded-xl border px-2 py-2.5 text-[11px] sm:text-xs font-semibold leading-tight text-center transition-colors ${
+                  selected
+                    ? 'bg-blue-600 border-blue-600 text-white'
+                    : errors.paymentAcceptance
+                      ? 'bg-white border-red-300 text-slate-700'
+                      : 'bg-white border-gray-200 text-slate-700 hover:border-blue-300'
+                }`}
+              >
+                {opt.label}
+              </button>
+            )
+          })}
+        </div>
+        <p className="text-[11px] text-slate-400 text-center mt-1.5">
+          We&apos;ll recommend the right setup for your business.
+        </p>
+        {errors.paymentAcceptance && (
+          <p className="mt-1 text-xs text-red-500 text-center">{errors.paymentAcceptance}</p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

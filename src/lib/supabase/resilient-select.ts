@@ -163,6 +163,7 @@ export const LEAD_OPTIONAL_COLUMNS = [
   'estimated_monthly_card_sales',
   'proposal_selected_option',
   'proposal_calc_snapshot',
+  'proposal_payment_acceptance',
   'opted_out_at',
   'opt_out_reason',
   'opt_out_source',
