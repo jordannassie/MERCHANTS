@@ -580,7 +580,7 @@ export function ProposalTemplate({ data }: Props) {
             onClick={() => setSheetOpen(true)}
             className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-bold text-base py-4 rounded-xl transition-all"
           >
-            Request My Service Agreement →
+            Get Started →
           </button>
           <p className="text-center text-xs text-gray-500 mt-2">
             No obligation until you review and sign.
@@ -706,7 +706,7 @@ function CtaSection({
       }
     >
       <h2 className="text-[22px] md:text-[26px] font-extrabold text-[#0B1B33] text-center tracking-tight leading-tight">
-        Get a FREE Service Agreement Today
+        Ready to Get Started?
       </h2>
 
       <div className="flex flex-col items-center gap-1.5">
@@ -808,6 +808,10 @@ function CtaSection({
         <p className="text-center text-sm text-red-600">{errors.form}</p>
       )}
 
+      <p className="text-center text-xs text-slate-500 leading-relaxed">
+        We&apos;ll send you a Service Agreement and help choose the right payment setup.
+      </p>
+
       <button
         type="button"
         onClick={onAccept}
@@ -820,7 +824,7 @@ function CtaSection({
             Sending…
           </>
         ) : (
-          'Request My Service Agreement →'
+          'Get Started →'
         )}
       </button>
 
